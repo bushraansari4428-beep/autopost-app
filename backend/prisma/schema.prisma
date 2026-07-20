@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  password         String?
+  googleId         String?   @unique
+  resetToken       String?   @unique
+  resetTokenExpiry DateTime?
+  role             Role      @default(USER)
+  createdAt        DateTime  @default(now())
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model FacebookPage {
+  id           String    @id @default(uuid())
+  pageId       String    @unique
+  name         String
+  accessToken  String
+  tokenExpiry  DateTime?
+  status       Status    @default(ACTIVE)
+  mappings     Mapping[]
+  uploads      UploadHistory[]
+  createdAt    DateTime  @default(now())
+}
+
+model Source {
+  id           String    @id @default(uuid())
+  platform     Platform
+  url          String
+  name         String
+  status       Status    @default(ACTIVE)
+  lastChecked  DateTime?
+  mappings     Mapping[]
+  videos       Video[]
+  createdAt    DateTime  @default(now())
+}
+
+enum Platform {
+  YOUTUBE
+  INSTAGRAM
+  TIKTOK
+}
+
+enum Status {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+model Mapping {
+  id             String       @id @default(uuid())
+  sourceId       String
+  facebookPageId String
+  source         Source       @relation(fields: [sourceId], references: [id])
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id])
+
+  @@unique([sourceId, facebookPageId])
+}
+
+model Video {
+  id           String          @id @default(uuid())
+  sourceId     String
+  originalId   String
+  title        String
+  description  String?
+  publishedAt  DateTime
+  url          String
+  source       Source          @relation(fields: [sourceId], references: [id])
+  uploads      UploadHistory[]
+  createdAt    DateTime        @default(now())
+
+  @@unique([sourceId, originalId])
+}
+
+model UploadHistory {
+  id             String       @id @default(uuid())
+  videoId        String
+  facebookPageId String
+  status         UploadStatus @default(PENDING)
+  facebookPostId String?
+  attempts       Int          @default(0)
+  errorMessage   String?
+  video          Video        @relation(fields: [videoId], references: [id])
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Log {
+  id        String   @id @default(uuid())
+  level     String
+  message   String
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+model Settings {
+  id                 String @id @default(uuid())
+  monitoringInterval Int    @default(15) // minutes
+  uploadRetries      Int    @default(3)
+  defaultCaption     String @default("{{title}}")
+  timeZone           String @default("UTC")
+  language           String @default("en")
+}
