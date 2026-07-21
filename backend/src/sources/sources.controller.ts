@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query } from '@nestjs/common';
 import { SourcesService } from './sources.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -15,6 +15,17 @@ export class SourcesController {
   @Get()
   findAll() {
     return this.sourcesService.findAll();
+  }
+
+  @Get('debug-ytdlp')
+  async debugYtdlp(@Query('url') url: string) {
+    const { execPromise } = require('../utils/exec.util');
+    try {
+      const { stdout, stderr } = await execPromise(`yt-dlp -v --dump-json --playlist-end 1 "${url}"`);
+      return { stdout: stdout.substring(0, 500), stderr };
+    } catch (e) {
+      return { error: e.message, stderr: e.stderr };
+    }
   }
 
   @Get(':id')
