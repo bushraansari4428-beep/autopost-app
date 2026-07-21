@@ -1,12 +1,39 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+interface SystemLog {
+  id: string;
+  level: string;
+  message: string;
+  createdAt: string;
+}
 
 export default function LogsPage() {
-  const [logs, setLogs] = useState([
-    { id: '1', level: 'INFO', message: 'Monitoring job started for Source ID: 1', time: '14:35:01' },
-    { id: '2', level: 'WARN', message: 'Rate limit approaching for Facebook Page ID: 1029', time: '14:32:15' },
-    { id: '3', level: 'ERROR', message: 'Failed to download video from YouTube', time: '14:30:00' },
-  ]);
+  const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchLogs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/logs', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setLogs(await res.json());
+      }
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+    // Auto-refresh every 5 seconds
+    const interval = setInterval(fetchLogs, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 h-full flex flex-col">
@@ -20,22 +47,35 @@ export default function LogsPage() {
           <div className="w-3 h-3 rounded-full bg-red-500"></div>
           <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            <span className="text-xs text-green-500 font-bold">LIVE</span>
+          </div>
         </div>
         <div className="p-6 flex-1 overflow-y-auto space-y-2">
-          {logs.map(log => (
-            <div key={log.id} className="flex gap-4">
-              <span className="text-gray-500 shrink-0">[{log.time}]</span>
-              <span className={`shrink-0 font-bold ${
-                log.level === 'INFO' ? 'text-blue-400' :
-                log.level === 'WARN' ? 'text-yellow-400' : 'text-red-400'
-              }`}>
-                [{log.level}]
-              </span>
-              <span className="text-gray-300">{log.message}</span>
-            </div>
-          ))}
-          <div className="flex gap-4 animate-pulse">
-            <span className="text-gray-600">[Waiting...]</span>
+          {loading && logs.length === 0 ? (
+            <div className="text-gray-500">Loading live logs...</div>
+          ) : logs.length === 0 ? (
+            <div className="text-gray-500">No system logs recorded yet.</div>
+          ) : (
+            logs.map(log => (
+              <div key={log.id} className="flex gap-4">
+                <span className="text-gray-500 shrink-0">[{new Date(log.createdAt).toLocaleTimeString()}]</span>
+                <span className={`shrink-0 font-bold ${
+                  log.level === 'INFO' ? 'text-blue-400' :
+                  log.level === 'WARN' ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  [{log.level}]
+                </span>
+                <span className="text-gray-300">{log.message}</span>
+              </div>
+            ))
+          )}
+          <div className="flex gap-4 animate-pulse mt-4">
+            <span className="text-gray-600">[Waiting for new events...]</span>
           </div>
         </div>
       </div>
