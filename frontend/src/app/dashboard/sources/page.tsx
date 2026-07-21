@@ -15,7 +15,7 @@ export default function SourcesPage() {
   const fetchSources = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/sources', {
+      const res = await fetch('/api/sources', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -37,7 +37,7 @@ export default function SourcesPage() {
 
   const deleteSource = async (id: string) => {
     const token = localStorage.getItem('token');
-    await fetch((process.env.NEXT_PUBLIC_API_URL || '') + `/api/sources/${id}`, {
+    await fetch(`/api/sources/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -52,7 +52,7 @@ export default function SourcesPage() {
     setErrorMsg('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/sources', {
+      const res = await fetch('/api/sources', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
