@@ -13,6 +13,7 @@ export default function MappingsPage() {
   const [sourceId, setSourceId] = useState('');
   const [facebookPageId, setFacebookPageId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const fetchMappings = async () => {
     try {
