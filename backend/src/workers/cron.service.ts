@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { SyncService } from './sync.service';
 
 @Injectable()
 export class CronService implements OnModuleInit, OnModuleDestroy {
@@ -10,7 +9,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    @InjectQueue('monitor-sources') private readonly monitorQueue: Queue,
+    private readonly syncService: SyncService,
   ) {}
 
   onModuleInit() {
@@ -43,20 +42,14 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
 
       let count = 0;
       for (const source of sources) {
-        // Add job to monitoring queue
-        await this.monitorQueue.add(
-          'monitor',
-          { sourceId: source.id },
-          {
-            jobId: `monitor-${source.id}-${Date.now()}`,
-            removeOnComplete: true,
-            removeOnFail: false,
-          },
-        );
+        await this.syncService.monitorSource(source.id);
         count++;
       }
 
-      this.logger.log(`Queued ${count} sources for monitoring.`);
+      this.logger.log(`Checked ${count} sources for monitoring.`);
+
+      // After checking sources, process any pending uploads
+      await this.syncService.processPendingUploads();
     } catch (error) {
       this.logger.error(`Error in scheduled monitoring: ${error.message}`);
     }
