@@ -39,7 +39,7 @@ export class SyncService {
 
       let allLines: string[] = [];
       for (const url of urlsToScan) {
-        const cmd = `yt-dlp --dump-json --playlist-end 5 "${url}"`;
+        const cmd = `./yt-dlp --dump-json --playlist-end 5 "${url}"`;
         this.logger.log(`Running yt-dlp for ${url}`);
         try {
           const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
@@ -160,7 +160,7 @@ export class SyncService {
     
     // 1. Download
     this.logger.log(`Downloading video for upload ${uploadHistory.id}...`);
-    const cmd = `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
+    const cmd = `./yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
     await execPromise(cmd);
 
     const files = fs.readdirSync(downloadsDir);
