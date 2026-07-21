@@ -66,7 +66,6 @@ export default function FacebookPagesPage() {
         setPageId('');
         setAccessToken('');
         fetchPages();
-      }
       } else {
         const errText = await res.text();
         setErrorMsg('Error: ' + errText);
