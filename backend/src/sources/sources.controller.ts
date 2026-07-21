@@ -17,6 +17,11 @@ export class SourcesController {
     return this.sourcesService.findAll();
   }
 
+  @Get('debug-env')
+  getEnv() {
+    return { db: process.env.DATABASE_URL };
+  }
+
   @Get('debug-ytdlp')
   async debugYtdlp(@Query('url') url: string) {
     const { execPromise } = require('../utils/exec.util');
