@@ -15,7 +15,7 @@ export default function FacebookPagesPage() {
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/pages', {
+      const res = await fetch('/api/pages', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -37,19 +37,22 @@ export default function FacebookPagesPage() {
 
   const deletePage = async (id: string) => {
     const token = localStorage.getItem('token');
-    await fetch((process.env.NEXT_PUBLIC_API_URL || '') + `/api/pages/${id}`, {
+    await fetch(`/api/pages/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
     fetchPages();
   };
 
+  const [errorMsg, setErrorMsg] = useState('');
+
   const handleAddPage = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMsg('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/pages', {
+      const res = await fetch('/api/pages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,8 +67,13 @@ export default function FacebookPagesPage() {
         setAccessToken('');
         fetchPages();
       }
-    } catch (err) {
+      } else {
+        const errText = await res.text();
+        setErrorMsg('Error: ' + errText);
+      }
+    } catch (err: any) {
       console.error('Failed to add facebook page', err);
+      setErrorMsg('Network error: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -123,6 +131,11 @@ export default function FacebookPagesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-6">Connect Facebook Page</h2>
+            {errorMsg && (
+              <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm">
+                {errorMsg}
+              </div>
+            )}
             <form onSubmit={handleAddPage} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Page Name</label>

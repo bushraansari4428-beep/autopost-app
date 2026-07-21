@@ -17,7 +17,7 @@ export default function MappingsPage() {
   const fetchMappings = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/mappings', {
+      const res = await fetch('/api/mappings', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) setMappings(await res.json());
@@ -32,8 +32,8 @@ export default function MappingsPage() {
     try {
       const token = localStorage.getItem('token');
       const [resSources, resPages] = await Promise.all([
-        fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/sources', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/pages', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch('/api/sources', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('/api/pages', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
       if (resSources.ok) setSources(await resSources.json());
       if (resPages.ok) setPages(await resPages.json());
@@ -49,21 +49,22 @@ export default function MappingsPage() {
 
   const deleteMapping = async (id: string) => {
     const token = localStorage.getItem('token');
-    await fetch((process.env.NEXT_PUBLIC_API_URL || '') + `/api/mappings/${id}`, {
+    await fetch(`/api/mappings/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
     fetchMappings();
   };
 
-  const handleCreateMapping = async (e: React.FormEvent) => {
+  const handleAddMapping = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sourceId || !facebookPageId) return;
     
     setIsSubmitting(true);
+    setErrorMsg('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/mappings', {
+      const res = await fetch('/api/mappings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,9 +77,13 @@ export default function MappingsPage() {
         setSourceId('');
         setFacebookPageId('');
         fetchMappings();
+      } else {
+        const errText = await res.text();
+        setErrorMsg('Error: ' + errText);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add mapping', err);
+      setErrorMsg('Network error: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -141,8 +146,13 @@ export default function MappingsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-6">Create New Mapping</h2>
-            <form onSubmit={handleCreateMapping} className="space-y-4">
+            <h2 className="text-2xl font-bold text-white mb-6">Create New Route</h2>
+            {errorMsg && (
+              <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm">
+                {errorMsg}
+              </div>
+            )}
+            <form onSubmit={handleAddMapping} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Select Source</label>
                 <select 

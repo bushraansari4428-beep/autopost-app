@@ -21,7 +21,7 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/users', {
+      const res = await fetch('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -44,7 +44,7 @@ export default function UsersPage() {
     setError('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/users', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ export default function UsersPage() {
     if (!confirm('Are you sure you want to delete this user?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + `/api/users/${id}`, {
+      const res = await fetch(`/api/users/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
