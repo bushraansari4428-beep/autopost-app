@@ -89,7 +89,7 @@ export default function FacebookPagesPage() {
           onClick={() => setShowModal(true)}
           className="px-6 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold shadow-lg shadow-[#1877F2]/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
         >
-          Connect Facebook
+          + Add FB Page
         </button>
       </div>
 
@@ -99,7 +99,7 @@ export default function FacebookPagesPage() {
         ) : pages.length === 0 ? (
           <div className="col-span-full text-center py-12 text-gray-500">
             <p className="text-lg mb-2">No Facebook Pages connected.</p>
-            <p className="text-sm">Click "Connect Facebook" to authorize.</p>
+            <p className="text-sm">Click "+ Add FB Page" to authorize.</p>
           </div>
         ) : (
           pages.map(page => (
@@ -129,7 +129,7 @@ export default function FacebookPagesPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-6">Connect Facebook Page</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">Link Facebook Page</h2>
             {errorMsg && (
               <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm">
                 {errorMsg}
