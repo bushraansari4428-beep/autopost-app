@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncService } from './sync.service';
+import { LogsService } from '../logs/logs.service';
 
 @Injectable()
 export class CronService implements OnModuleInit, OnModuleDestroy {
@@ -10,6 +11,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly syncService: SyncService,
+    private readonly logsService: LogsService,
   ) {}
 
   onModuleInit() {
@@ -31,12 +33,11 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
   }
 
   async handleCron() {
-    console.log('==== CRON handleCron CALLED ====');
-    this.logger.log('Starting scheduled source monitoring...');
+    this.logsService.log('INFO', 'Starting scheduled source monitoring...');
     try {
       const sources = await this.prisma.source.findMany();
       if (sources.length === 0) {
-        this.logger.log('No sources found to monitor.');
+        this.logsService.log('INFO', 'No sources found to monitor.');
         return;
       }
 
@@ -46,12 +47,12 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
         count++;
       }
 
-      this.logger.log(`Checked ${count} sources for monitoring.`);
+      this.logsService.log('INFO', `Checked ${count} sources for monitoring.`);
 
       // After checking sources, process any pending uploads
       await this.syncService.processPendingUploads();
     } catch (error) {
-      this.logger.error(`Error in scheduled monitoring: ${error.message}`);
+      this.logsService.log('ERROR', `Error in scheduled monitoring: ${error.message}`);
     }
   }
 }

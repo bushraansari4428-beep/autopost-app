@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FacebookService } from '../facebook/facebook.service';
+import { LogsService } from '../logs/logs.service';
 import { execPromise } from '../utils/exec.util';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,6 +14,7 @@ export class SyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly facebookService: FacebookService,
+    private readonly logsService: LogsService,
   ) {}
 
   async monitorSource(sourceId: string) {
@@ -65,7 +67,7 @@ export class SyncService {
           });
 
           if (!existing) {
-            this.logger.log(`Found new video: ${videoData.title}`);
+            this.logsService.log('INFO', `Found new video: ${videoData.title}`);
             const publishedAt = videoData.timestamp ? new Date(videoData.timestamp * 1000) : new Date();
             const newVideo = await this.prisma.video.create({
               data: {
@@ -134,7 +136,7 @@ export class SyncService {
       try {
         await this.downloadAndUpload(pendingUpload);
       } catch (err) {
-        this.logger.error(`Upload failed: ${err.message}`);
+        this.logsService.log('ERROR', `Upload failed for ${pendingUpload.video.title}: ${err.message}`);
         await this.prisma.uploadHistory.update({
           where: { id: pendingUpload.id },
           data: { status: 'FAILED', errorMessage: err.message }
@@ -159,7 +161,7 @@ export class SyncService {
     const outputTemplate = path.join(downloadsDir, `${video.originalId}.%(ext)s`);
     
     // 1. Download
-    this.logger.log(`Downloading video for upload ${uploadHistory.id}...`);
+    this.logsService.log('INFO', `Downloading video ${video.title} from YouTube...`);
     const cmd = `./yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
     await execPromise(cmd);
 
@@ -171,7 +173,7 @@ export class SyncService {
     const localPath = path.join(downloadsDir, downloadedFile);
 
     // 2. Upload
-    this.logger.log(`Uploading to Facebook Page...`);
+    this.logsService.log('INFO', `Uploading ${video.title} to Facebook Page...`);
     const stat = fs.statSync(localPath);
     const fileSize = stat.size;
 
@@ -204,7 +206,7 @@ export class SyncService {
         facebookPostId: result.id || result.video_id
       }
     });
-    this.logger.log(`Upload completed successfully: FB Video ID ${result.id || result.video_id}`);
+    this.logsService.log('INFO', `Upload completed successfully: FB Video ID ${result.id || result.video_id} for ${video.title}`);
 
     // Optional: Delete the file after successful upload to save disk space immediately!
     try {
