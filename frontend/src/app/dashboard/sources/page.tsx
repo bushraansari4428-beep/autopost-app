@@ -44,9 +44,12 @@ export default function SourcesPage() {
     fetchSources();
   };
 
+  const [errorMsg, setErrorMsg] = useState('');
+
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMsg('');
     try {
       const token = localStorage.getItem('token');
       const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + '/api/sources', {
@@ -57,15 +60,21 @@ export default function SourcesPage() {
         },
         body: JSON.stringify({ name, platform, url })
       });
+      
       if (res.ok) {
         setShowModal(false);
         setName('');
         setUrl('');
         setPlatform('YOUTUBE');
         fetchSources();
+      } else {
+        const errText = await res.text();
+        console.error('Failed response:', errText);
+        setErrorMsg('Error: ' + errText);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add source', err);
+      setErrorMsg('Network error: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -145,6 +154,11 @@ export default function SourcesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-6">Add New Source</h2>
+            {errorMsg && (
+              <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm">
+                {errorMsg}
+              </div>
+            )}
             <form onSubmit={handleAddSource} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Source Name</label>
