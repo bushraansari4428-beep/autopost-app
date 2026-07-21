@@ -28,11 +28,29 @@ export class SyncService {
     }
 
     try {
-      const cmd = `yt-dlp --dump-json --playlist-end 5 "${source.url}"`;
-      this.logger.log(`Running yt-dlp for ${source.url}`);
+      let urlsToScan = [source.url];
+      if (source.platform === 'YOUTUBE' && !source.url.includes('/shorts') && !source.url.includes('/videos') && source.url.includes('@')) {
+        // Automatically check both videos and shorts tabs for YouTube channels
+        urlsToScan = [
+          source.url.replace(/\/$/, '') + '/videos',
+          source.url.replace(/\/$/, '') + '/shorts'
+        ];
+      }
+
+      let allLines: string[] = [];
+      for (const url of urlsToScan) {
+        const cmd = `yt-dlp --dump-json --playlist-end 5 "${url}"`;
+        this.logger.log(`Running yt-dlp for ${url}`);
+        try {
+          const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+          const lines = stdout.split('\n').filter(line => line.trim() !== '');
+          allLines = allLines.concat(lines);
+        } catch (e) {
+          this.logger.warn(`Failed to scan ${url}, might not exist or be empty.`);
+        }
+      }
       
-      const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-      const lines = stdout.split('\n').filter(line => line.trim() !== '');
+      const lines = allLines;
       
       for (const line of lines) {
         try {
