@@ -112,6 +112,20 @@ export class SourcesController {
     }
   }
 
+  @Get('debug-curl')
+  async debugCurl(@Query('url') url: string) {
+    try {
+      const { exec } = require('child_process');
+      return new Promise((resolve) => {
+        exec(`curl -sL "${url}" | head -c 500`, (error, stdout, stderr) => {
+          resolve({ stdout, stderr, error: error?.message });
+        });
+      });
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.sourcesService.findOne(id);
