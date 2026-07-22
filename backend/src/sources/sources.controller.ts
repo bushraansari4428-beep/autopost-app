@@ -83,6 +83,20 @@ export class SourcesController {
     }
   }
 
+  @Get('debug-rss')
+  async debugRss(@Query('channelId') channelId: string) {
+    try {
+      const response = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
+      if (!response.ok) {
+        return { error: `HTTP ${response.status}` };
+      }
+      const text = await response.text();
+      return { success: true, length: text.length, snippet: text.substring(0, 500) };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.sourcesService.findOne(id);
