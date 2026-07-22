@@ -17,6 +17,78 @@ export class SyncService {
     private readonly logsService: LogsService,
   ) {}
 
+  async testMapping(mappingId: string) {
+    const mapping = await this.prisma.mapping.findUnique({
+      where: { id: mappingId },
+      include: { source: true }
+    });
+    if (!mapping) return { success: false, message: 'Mapping not found' };
+
+    this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.id}`);
+    
+    let urlsToScan = [mapping.source.url];
+    if (mapping.source.platform === 'YOUTUBE' && !mapping.source.url.includes('/shorts') && !mapping.source.url.includes('/videos') && mapping.source.url.includes('@')) {
+      urlsToScan = [
+        mapping.source.url.replace(/\/$/, '') + '/videos',
+        mapping.source.url.replace(/\/$/, '') + '/shorts'
+      ];
+    }
+
+    try {
+      let latestVideo = null;
+      for (const url of urlsToScan) {
+        const cmd = `./yt-dlp --cookies cookies.txt --extractor-args "youtube:player_client=android" --dump-json --playlist-end 1 "${url}"`;
+        try {
+          const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+          const lines = stdout.split('\n').filter(line => line.trim() !== '');
+          if (lines.length > 0) {
+            latestVideo = JSON.parse(lines[0]);
+            break;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (!latestVideo) {
+        this.logsService.log('ERROR', `Test failed: No videos found at source ${mapping.source.url}`);
+        return { success: false, message: 'No videos found' };
+      }
+
+      this.logsService.log('INFO', `Test: Found video ${latestVideo.title}. Queuing for upload.`);
+      
+      const publishedAt = latestVideo.timestamp ? new Date(latestVideo.timestamp * 1000) : new Date();
+      
+      // Use random ID for test to avoid unique constraint
+      const newVideo = await this.prisma.video.create({
+        data: {
+          title: '[TEST] ' + latestVideo.title,
+          description: latestVideo.description || '',
+          originalId: 'test_' + latestVideo.id + '_' + Date.now(),
+          publishedAt: publishedAt,
+          url: latestVideo.webpage_url || latestVideo.url || '',
+          sourceId: mapping.source.id,
+        }
+      });
+
+      await this.prisma.uploadHistory.create({
+        data: {
+          videoId: newVideo.id,
+          facebookPageId: mapping.facebookPageId,
+          status: 'PENDING'
+        }
+      });
+
+      // Run uploads async
+      this.processPendingUploads().catch(e => console.error(e));
+
+      return { success: true, message: 'Test video found and queued for processing. Check Logs for progress.' };
+
+    } catch (e) {
+      return { success: false, message: e.message };
+    }
+  }
+
   async monitorSource(sourceId: string) {
     this.logger.log(`Processing monitoring job for source: ${sourceId}`);
     

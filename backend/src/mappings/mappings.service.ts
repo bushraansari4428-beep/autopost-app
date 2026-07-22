@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SyncService } from '../workers/sync.service';
 
 @Injectable()
 export class MappingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private syncService: SyncService
+  ) {}
 
   create(createMappingDto: any) {
     return this.prisma.mapping.create({
@@ -24,5 +28,9 @@ export class MappingsService {
     return this.prisma.mapping.delete({
       where: { id },
     });
+  }
+
+  async testMapping(id: string) {
+    return this.syncService.testMapping(id);
   }
 }

@@ -15,5 +15,6 @@ import { LogsModule } from '../logs/logs.module';
     SyncService,
     CronService,
   ],
+  exports: [SyncService],
 })
 export class WorkersModule {}

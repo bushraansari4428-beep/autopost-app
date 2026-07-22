@@ -21,4 +21,9 @@ export class MappingsController {
   remove(@Param('id') id: string) {
     return this.mappingsService.remove(id);
   }
+
+  @Post(':id/test')
+  testMapping(@Param('id') id: string) {
+    return this.mappingsService.testMapping(id);
+  }
 }
