@@ -38,7 +38,7 @@ export class SourcesController {
   async debugYtdlp(@Query('url') url: string) {
     const { execPromise } = require('../utils/exec.util');
     try {
-      const { stdout, stderr } = await execPromise(`./yt-dlp -v --dump-json --playlist-end 1 "${url}"`);
+      const { stdout, stderr } = await execPromise(`./yt-dlp --cookies cookies.txt -v --dump-json --playlist-end 1 "${url}"`);
       return { stdout: stdout.substring(0, 500), stderr };
     } catch (e) {
       return { error: e.message, stderr: e.stderr };
