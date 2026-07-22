@@ -22,28 +22,16 @@ export class SourcesController {
     return { db: process.env.DATABASE_URL };
   }
 
-  @Get('debug-cobalt')
-  async debugCobalt() {
-    const instances = [
-      'https://co.wuk.sh/api/json',
-      'https://cobalt.acab.dev/api/json',
-      'https://api.cobalt.best/api/json',
-    ];
-    const results = [];
-    for (const api of instances) {
-      try {
-        const res = await fetch(api, {
-          method: 'POST',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: 'https://www.youtube.com/watch?v=oY45BsUygCc' })
-        });
-        const data = await res.json();
-        results.push({ api, status: res.status, data });
-      } catch (e) {
-        results.push({ api, error: e.message });
-      }
+  @Get('debug-loader')
+  async debugLoader() {
+    try {
+      const url = encodeURIComponent('https://www.youtube.com/watch?v=oY45BsUygCc');
+      const res = await fetch(`https://loader.to/ajax/download.php?format=720&url=${url}`);
+      const data = await res.json();
+      return { status: res.status, data };
+    } catch (e) {
+      return { error: e.message };
     }
-    return results;
   }
 
   @Get('debug-ytdlp')
