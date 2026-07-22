@@ -98,14 +98,15 @@ export class SourcesController {
   }
 
   @Get('debug-invidious')
-  async debugInvidious(@Query('id') id: string) {
+  async debugInvidious(@Query('id') id: string, @Query('api') api: string) {
     try {
-      const response = await fetch(`https://inv.tux.pizza/api/v1/videos/${id}`);
+      const baseUrl = api || 'https://inv.tux.pizza';
+      const response = await fetch(`${baseUrl}/api/v1/videos/${id}`);
       if (!response.ok) {
         return { error: `HTTP ${response.status}` };
       }
       const data = await response.json();
-      return { success: true, title: data.title, formats: data.formatStreams.length };
+      return { success: true, title: data.title, formats: data.formatStreams?.length };
     } catch (e) {
       return { error: e.message };
     }
