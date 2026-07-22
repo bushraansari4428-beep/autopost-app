@@ -46,6 +46,28 @@ export class SourcesController {
     }
   }
 
+  @Get('debug-cobalt')
+  async debugCobalt(@Query('url') url: string) {
+    try {
+      const response = await fetch('https://cobalt-api.kwiatekm.cloud/api/json', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: url,
+          vCodec: 'h264',
+          vQuality: '720'
+        })
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return { error: error.message };
+    }
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.sourcesService.findOne(id);
