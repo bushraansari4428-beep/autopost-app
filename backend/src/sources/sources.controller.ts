@@ -97,6 +97,20 @@ export class SourcesController {
     }
   }
 
+  @Get('debug-invidious')
+  async debugInvidious(@Query('id') id: string) {
+    try {
+      const response = await fetch(`https://inv.tux.pizza/api/v1/videos/${id}`);
+      if (!response.ok) {
+        return { error: `HTTP ${response.status}` };
+      }
+      const data = await response.json();
+      return { success: true, title: data.title, formats: data.formatStreams.length };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.sourcesService.findOne(id);
