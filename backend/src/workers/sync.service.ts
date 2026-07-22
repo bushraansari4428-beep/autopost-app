@@ -36,17 +36,36 @@ export class SyncService {
 
     try {
       let latestVideo = null;
-      for (const url of urlsToScan) {
-        const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
-        try {
-          const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-          const lines = stdout.split('\n').filter(line => line.trim() !== '');
-          if (lines.length > 0) {
-            latestVideo = JSON.parse(lines[0]);
-            break;
+      
+      const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
+      if (workerUrl) {
+        this.logger.log(`Using Cloudflare Worker for metadata extraction: ${mapping.source.url}`);
+        const infoUrl = `${workerUrl}?url=${encodeURIComponent(mapping.source.url)}&action=info`;
+        const res = await fetch(infoUrl);
+        if (res.ok) {
+          const data = await res.json();
+          latestVideo = {
+            id: data.id,
+            title: data.title,
+            url: `https://www.youtube.com/watch?v=${data.id}`,
+            timestamp: Math.floor(Date.now() / 1000)
+          };
+        } else {
+          this.logger.error(`Cloudflare worker info failed: ${await res.text()}`);
+        }
+      } else {
+        for (const url of urlsToScan) {
+          const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+          try {
+            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+            const lines = stdout.split('\n').filter(line => line.trim() !== '');
+            if (lines.length > 0) {
+              latestVideo = JSON.parse(lines[0]);
+              break;
+            }
+          } catch (e) {
+            // ignore
           }
-        } catch (e) {
-          // ignore
         }
       }
 
@@ -111,24 +130,46 @@ export class SyncService {
         ];
       }
 
-      let allLines: string[] = [];
-      for (const url of urlsToScan) {
-        const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 5 "${url}"`;
-        this.logger.log(`Running yt-dlp for ${url}`);
-        try {
-          const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-          const lines = stdout.split('\n').filter(line => line.trim() !== '');
-          allLines = allLines.concat(lines);
-        } catch (e) {
-          this.logger.warn(`Failed to scan ${url}, might not exist or be empty.`);
+      let latestVideos = [];
+      const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
+      
+      if (workerUrl) {
+        this.logger.log(`Using Cloudflare Worker for metadata extraction: ${source.url}`);
+        const infoUrl = `${workerUrl}?url=${encodeURIComponent(source.url)}&action=info`;
+        const res = await fetch(infoUrl);
+        if (res.ok) {
+          const data = await res.json();
+          latestVideos.push({
+            id: data.id,
+            title: data.title,
+            url: `https://www.youtube.com/watch?v=${data.id}`,
+            timestamp: Math.floor(Date.now() / 1000)
+          });
+        }
+      } else {
+        for (const url of urlsToScan) {
+          const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 5 "${url}"`;
+          this.logger.log(`Running yt-dlp for ${url}`);
+          try {
+            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+            const lines = stdout.split('\n').filter(line => line.trim() !== '');
+            const parsed = lines.map(line => {
+              try {
+                return JSON.parse(line);
+              } catch (e) {
+                return null;
+              }
+            }).filter(Boolean);
+            
+            latestVideos = latestVideos.concat(parsed);
+          } catch (e) {
+            this.logger.error(`Error running yt-dlp for ${url}: ${e.message}`);
+          }
         }
       }
       
-      const lines = allLines;
-      
-      for (const line of lines) {
+      for (const videoData of latestVideos) {
         try {
-          const videoData = JSON.parse(line);
           const platformVideoId = videoData.id;
           
           const existing = await this.prisma.video.findFirst({
@@ -152,7 +193,6 @@ export class SyncService {
               }
             });
 
-            // Instead of queuing download, we just create PENDING upload histories
             for (const mapping of source.mappings) {
               await this.prisma.uploadHistory.create({
                 data: {
@@ -164,7 +204,7 @@ export class SyncService {
             }
           }
         } catch (e) {
-          this.logger.error(`Error parsing yt-dlp output line: ${e.message}`);
+          this.logger.error(`Error parsing video data: ${e.message}`);
         }
       }
 
@@ -186,7 +226,6 @@ export class SyncService {
     
     this.isProcessing = true;
     try {
-      // Find one pending upload to process at a time
       const pendingUpload = await this.prisma.uploadHistory.findFirst({
         where: { status: 'PENDING' },
         include: { video: true, facebookPage: true },
@@ -194,12 +233,11 @@ export class SyncService {
       });
 
       if (!pendingUpload) {
-        return; // Nothing to process
+        return;
       }
 
       this.logger.log(`Processing upload: ${pendingUpload.id} for video: ${pendingUpload.video.title}`);
       
-      // Mark as PROCESSING
       await this.prisma.uploadHistory.update({
         where: { id: pendingUpload.id },
         data: { status: 'PROCESSING' }
@@ -220,6 +258,20 @@ export class SyncService {
     }
   }
 
+  private async downloadVideo(video: any, outputTemplate: string): Promise<string> {
+    const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
+    if (workerUrl) {
+      this.logger.log(`Downloading via Cloudflare Worker: ${video.url}`);
+      const cmd = `curl -sL "${workerUrl}?url=${encodeURIComponent(video.url)}&action=download" -o "${outputTemplate}"`;
+      await execPromise(cmd);
+      return outputTemplate;
+    }
+
+    const cmd = `./yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
+    await execPromise(cmd);
+    return outputTemplate;
+  }
+
   private async downloadAndUpload(uploadHistory: any) {
     const video = uploadHistory.video;
     const pageId = uploadHistory.facebookPage.pageId;
@@ -234,8 +286,7 @@ export class SyncService {
     
     // 1. Download
     this.logsService.log('INFO', `Downloading video ${video.title} from YouTube...`);
-    const cmd = `./yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
-    await execPromise(cmd);
+    await this.downloadVideo(video, outputTemplate);
 
     const files = fs.readdirSync(downloadsDir);
     const downloadedFile = files.find(f => f.startsWith(video.originalId));
