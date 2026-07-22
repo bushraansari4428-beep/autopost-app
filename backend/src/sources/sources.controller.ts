@@ -47,9 +47,9 @@ export class SourcesController {
   }
 
   @Get('debug-cobalt')
-  async debugCobalt(@Query('url') url: string) {
+  async debugCobalt(@Query('url') url: string, @Query('api') api: string) {
     try {
-      const response = await fetch('https://cobalt-api.kwiatekm.cloud/api/json', {
+      const response = await fetch(api || 'https://cobalt-api.kwiatekm.cloud/api/json', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
