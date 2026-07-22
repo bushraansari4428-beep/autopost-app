@@ -17,15 +17,37 @@ export default function MappingsPage() {
 
   const fetchMappings = async () => {
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch('/api/mappings', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
-      if (res.ok) setMappings(await res.json());
-    } catch (err) {
-      console.error('Failed to fetch mappings:', err);
+      const data = await res.json();
+      setMappings(data);
+    } catch (error) {
+      console.error('Failed to fetch mappings:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const testMapping = async (id: string) => {
+    try {
+      const res = await fetch(`/api/mappings/${id}/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert('Test started! ' + data.message);
+      } else {
+        alert('Test failed: ' + (data.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to test mapping:', error);
+      alert('Error triggering test.');
     }
   };
   
@@ -137,6 +159,7 @@ export default function MappingsPage() {
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <span className="text-xs font-bold text-green-400">ACTIVE</span>
                 </div>
+                <button onClick={() => testMapping(mapping.id)} className="text-blue-400 hover:text-blue-300 font-medium px-2">Test</button>
                 <button onClick={() => deleteMapping(mapping.id)} className="text-red-400 hover:text-red-300">Remove</button>
               </div>
             </div>
