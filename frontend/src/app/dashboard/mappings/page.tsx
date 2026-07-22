@@ -14,6 +14,7 @@ export default function MappingsPage() {
   const [facebookPageId, setFacebookPageId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   const fetchMappings = async () => {
     try {
@@ -32,6 +33,7 @@ export default function MappingsPage() {
   };
 
   const testMapping = async (id: string) => {
+    setTestingId(id);
     try {
       const res = await fetch(`/api/mappings/${id}/test`, {
         method: 'POST',
@@ -48,6 +50,8 @@ export default function MappingsPage() {
     } catch (error) {
       console.error('Failed to test mapping:', error);
       alert('Error triggering test.');
+    } finally {
+      setTestingId(null);
     }
   };
   
@@ -159,7 +163,13 @@ export default function MappingsPage() {
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <span className="text-xs font-bold text-green-400">ACTIVE</span>
                 </div>
-                <button onClick={() => testMapping(mapping.id)} className="text-blue-400 hover:text-blue-300 font-medium px-2">Test</button>
+                <button 
+                  onClick={() => testMapping(mapping.id)} 
+                  disabled={testingId === mapping.id}
+                  className="text-blue-400 hover:text-blue-300 font-medium px-2 disabled:opacity-50"
+                >
+                  {testingId === mapping.id ? 'Testing...' : 'Test'}
+                </button>
                 <button onClick={() => deleteMapping(mapping.id)} className="text-red-400 hover:text-red-300">Remove</button>
               </div>
             </div>
