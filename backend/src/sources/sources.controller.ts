@@ -68,6 +68,21 @@ export class SourcesController {
     }
   }
 
+  @Get('debug-ytdl-core')
+  async debugYtdlCore(@Query('url') url: string) {
+    try {
+      const ytdl = require('@distube/ytdl-core');
+      const info = await ytdl.getInfo(url);
+      return { 
+        title: info.videoDetails.title,
+        id: info.videoDetails.videoId,
+        formats: info.formats.length 
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.sourcesService.findOne(id);
