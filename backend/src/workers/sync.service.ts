@@ -41,7 +41,7 @@ export class SyncService {
 
       let allLines: string[] = [];
       for (const url of urlsToScan) {
-        const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 5 "${url}"`;
+        const cmd = `./yt-dlp --cookies cookies.txt --extractor-args "youtube:player_client=android" --dump-json --playlist-end 5 "${url}"`;
         this.logger.log(`Running yt-dlp for ${url}`);
         try {
           const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
@@ -162,7 +162,7 @@ export class SyncService {
     
     // 1. Download
     this.logsService.log('INFO', `Downloading video ${video.title} from YouTube...`);
-    const cmd = `./yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
+    const cmd = `./yt-dlp --cookies cookies.txt --extractor-args "youtube:player_client=android" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
     await execPromise(cmd);
 
     const files = fs.readdirSync(downloadsDir);
