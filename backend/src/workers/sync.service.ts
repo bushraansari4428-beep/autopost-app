@@ -357,36 +357,50 @@ export class SyncService {
     const targetUrl = video.url ? video.url : `https://www.youtube.com/watch?v=${ytId}`;
     const encodedUrl = encodeURIComponent(targetUrl);
     
-    this.logger.log(`Requesting loader.to for ${ytId}`);
-    const loaderRes = await fetch(`https://loader.to/ajax/download.php?format=720&url=${encodedUrl}`);
-    const loaderData = await loaderRes.json();
-    
-    if (!loaderData || !loaderData.id) {
-      throw new Error(`Failed to initialize loader.to download. Response: ${JSON.stringify(loaderData)}`);
-    }
-    
-    const downloadId = loaderData.id;
-    this.logsService.log('INFO', `Waiting for loader.to processing (ID: ${downloadId})...`);
-    
     let videoUrl = null;
-    // Poll for up to 60 seconds
-    for (let i = 0; i < 30; i++) {
-      await this.delay(2000);
-      const progRes = await fetch(`https://lto2.affadaffa.com/api/progress?id=${downloadId}`);
-      try {
-        const progData = await progRes.json();
-        this.logger.log(`Loader status: ${progData.text}`);
-        if (progData.success === 1 || progData.success === '1') {
-          videoUrl = progData.download_url;
-          break;
+
+    if (targetUrl.includes('tiktok.com')) {
+      this.logger.log(`Requesting tikwm for TikTok video: ${targetUrl}`);
+      const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodedUrl}`);
+      const tikwmData = await tikwmRes.json();
+      
+      if (tikwmData && tikwmData.code === 0 && tikwmData.data && tikwmData.data.play) {
+        videoUrl = tikwmData.data.play;
+        this.logsService.log('INFO', `Successfully got TikTok video URL from tikwm.`);
+      } else {
+        throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
+      }
+    } else {
+      this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
+      const loaderRes = await fetch(`https://loader.to/ajax/download.php?format=720&url=${encodedUrl}`);
+      const loaderData = await loaderRes.json();
+      
+      if (!loaderData || !loaderData.id) {
+        throw new Error(`Failed to initialize loader.to download. Response: ${JSON.stringify(loaderData)}`);
+      }
+      
+      const downloadId = loaderData.id;
+      this.logsService.log('INFO', `Waiting for loader.to processing (ID: ${downloadId})...`);
+      
+      // Poll for up to 60 seconds
+      for (let i = 0; i < 30; i++) {
+        await this.delay(2000);
+        const progRes = await fetch(`https://lto2.affadaffa.com/api/progress?id=${downloadId}`);
+        try {
+          const progData = await progRes.json();
+          this.logger.log(`Loader status: ${progData.text}`);
+          if (progData.success === 1 || progData.success === '1') {
+            videoUrl = progData.download_url;
+            break;
+          }
+        } catch (e) {
+          this.logger.error(`Error parsing progress: ${e.message}`);
         }
-      } catch (e) {
-        this.logger.error(`Error parsing progress: ${e.message}`);
       }
     }
     
     if (!videoUrl) {
-      throw new Error('Timed out waiting for loader.to to process the video.');
+      throw new Error('Timed out waiting for video processing to complete.');
     }
     
     this.logsService.log('INFO', `Successfully got direct video URL! Sending to Facebook...`);
