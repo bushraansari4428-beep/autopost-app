@@ -1,0 +1,85 @@
+name: Post YouTube Short to Facebook
+
+on:
+  workflow_dispatch:
+    inputs:
+      videoId:
+        description: 'YouTube Video ID'
+        required: true
+      pageId:
+        description: 'Facebook Page ID'
+        required: true
+      pageAccessToken:
+        description: 'Facebook Page Access Token'
+        required: true
+      uploadHistoryId:
+        description: 'Upload History ID for Webhook'
+        required: true
+      webhookUrl:
+        description: 'Webhook URL to report status'
+        required: true
+      title:
+        description: 'Video Title'
+        required: false
+        default: 'Auto-posted Video'
+
+jobs:
+  download_and_upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install yt-dlp and ffmpeg
+        run: |
+          pip install -U --pre yt-dlp
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Download YouTube Video
+        run: |
+          echo "Downloading video: ${{ github.event.inputs.videoId }}"
+          yt-dlp "https://www.youtube.com/watch?v=${{ github.event.inputs.videoId }}" \
+            -f "18/best[ext=mp4]" \
+            --extractor-args "youtube:player_client=android,ios" \
+            -o out.mp4
+
+      - name: Upload to Facebook
+        id: fb_upload
+        run: |
+          echo "Uploading to Facebook Graph API..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://graph-video.facebook.com/v19.0/${{ github.event.inputs.pageId }}/videos" \
+            -F "access_token=${{ github.event.inputs.pageAccessToken }}" \
+            -F "source=@out.mp4" \
+            -F "description=${{ github.event.inputs.title }}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response Body: $BODY"
+          
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            POST_ID=$(echo "$BODY" | jq -r '.id')
+            echo "Success! Facebook Post ID: $POST_ID"
+            echo "post_id=$POST_ID" >> $GITHUB_OUTPUT
+            echo "status=COMPLETED" >> $GITHUB_OUTPUT
+          else
+            echo "Failed to upload to Facebook."
+            echo "error=$(echo $BODY | jq -c '.')" >> $GITHUB_OUTPUT
+            echo "status=FAILED" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Call Backend Webhook
+        if: always()
+        run: |
+          STATUS="${{ steps.fb_upload.outputs.status }}"
+          if [ -z "$STATUS" ]; then STATUS="FAILED"; fi
+          POST_ID="${{ steps.fb_upload.outputs.post_id }}"
+          ERROR_MSG="${{ steps.fb_upload.outputs.error }}"
+
+          echo "Reporting to backend: Status=$STATUS"
+          curl -X POST "${{ github.event.inputs.webhookUrl }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"uploadHistoryId\": \"${{ github.event.inputs.uploadHistoryId }}\", \"status\": \"$STATUS\", \"facebookPostId\": \"$POST_ID\", \"errorMessage\": \"$ERROR_MSG\"}"

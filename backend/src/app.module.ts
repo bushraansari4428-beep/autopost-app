@@ -9,6 +9,7 @@ import { MappingsModule } from './mappings/mappings.module';
 import { HistoryModule } from './history/history.module';
 import { WorkersModule } from './workers/workers.module';
 import { LogsModule } from './logs/logs.module';
+import { WebhooksController } from './webhooks.controller';
 
 import { FacebookModule } from './facebook/facebook.module';
 import { MailModule } from './mail/mail.module';
@@ -28,7 +29,7 @@ import { UsersModule } from './users/users.module';
     LogsModule,
     WorkersModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, WebhooksController],
   providers: [AppService],
 })
 export class AppModule {}

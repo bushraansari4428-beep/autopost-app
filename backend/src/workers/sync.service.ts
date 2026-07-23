@@ -258,85 +258,51 @@ export class SyncService {
     }
   }
 
-  private async downloadVideo(video: any, outputTemplate: string): Promise<string> {
-    const workerUrl = process.env.CLOUDFLARE_WORKER_URL || 'https://gentle-grass-709d.bushraansari4428.workers.dev';
-    if (workerUrl) {
-      this.logger.log(`Downloading via Cloudflare Worker: ${video.url}`);
-      const cmd = `curl -sL "${workerUrl}?url=${encodeURIComponent(video.url)}&action=download" -o "${outputTemplate}"`;
-      await execPromise(cmd);
-      return outputTemplate;
-    }
-
-    const cmd = `./yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputTemplate}" "${video.url}"`;
-    await execPromise(cmd);
-    return outputTemplate;
-  }
-
-  private async downloadAndUpload(uploadHistory: any) {
+  private async triggerGitHubAction(uploadHistory: any) {
     const video = uploadHistory.video;
     const pageId = uploadHistory.facebookPage.pageId;
     const accessToken = uploadHistory.facebookPage.accessToken;
-
-    const downloadsDir = path.join(process.cwd(), 'downloads');
-    if (!fs.existsSync(downloadsDir)) {
-      fs.mkdirSync(downloadsDir, { recursive: true });
-    }
-
-    const outputTemplate = path.join(downloadsDir, `${video.originalId}.%(ext)s`);
     
-    // 1. Download
-    this.logsService.log('INFO', `Downloading video ${video.title} from YouTube...`);
-    await this.downloadVideo(video, outputTemplate);
+    this.logsService.log('INFO', `Triggering GitHub Action to download and upload ${video.title}...`);
 
-    const files = fs.readdirSync(downloadsDir);
-    const downloadedFile = files.find(f => f.startsWith(video.originalId));
-    if (!downloadedFile) {
-      throw new Error('Downloaded file not found on disk');
-    }
-    const localPath = path.join(downloadsDir, downloadedFile);
-
-    // 2. Upload
-    this.logsService.log('INFO', `Uploading ${video.title} to Facebook Page...`);
-    const stat = fs.statSync(localPath);
-    const fileSize = stat.size;
-
-    const { uploadSessionId } = await this.facebookService.initializeUpload(pageId, accessToken, fileSize);
-    const chunkSize = 10 * 1024 * 1024; 
-    let startOffset = 0;
-    const fd = fs.openSync(localPath, 'r');
-
-    try {
-      while (startOffset < fileSize) {
-        const buffer = Buffer.alloc(Math.min(chunkSize, fileSize - startOffset));
-        fs.readSync(fd, buffer, 0, buffer.length, startOffset);
-        
-        await this.facebookService.uploadChunk(pageId, accessToken, uploadSessionId, startOffset, buffer);
-        startOffset += buffer.length;
-        
-        this.logger.log(`Uploaded chunk... ${startOffset}/${fileSize} bytes`);
-      }
-    } finally {
-      fs.closeSync(fd);
+    const ghPat = process.env.GH_PAT;
+    if (!ghPat) {
+      throw new Error('GH_PAT environment variable is not set. Cannot trigger GitHub Action.');
     }
 
-    const result = await this.facebookService.finishUpload(pageId, accessToken, uploadSessionId, video.title, video.description || undefined);
-    
-    // 3. Mark Completed
-    await this.prisma.uploadHistory.update({
-      where: { id: uploadHistory.id },
-      data: { 
-        status: 'COMPLETED',
-        facebookPostId: result.id || result.video_id
-      }
+    const repo = "bushraansari4428-beep/autopost-app";
+    const webhookUrl = "https://autopost-app-1.onrender.com/webhooks/github-action";
+
+    const response = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/post-video.yml/dispatches`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': `Bearer ${ghPat}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: {
+          videoId: video.originalId.replace('test_', '').split('_')[0],
+          pageId: pageId,
+          pageAccessToken: accessToken,
+          uploadHistoryId: uploadHistory.id,
+          webhookUrl: webhookUrl,
+          title: video.title
+        }
+      })
     });
-    this.logsService.log('INFO', `Upload completed successfully: FB Video ID ${result.id || result.video_id} for ${video.title}`);
 
-    // Optional: Delete the file after successful upload to save disk space immediately!
-    try {
-      fs.unlinkSync(localPath);
-      this.logger.log(`Cleaned up local file: ${localPath}`);
-    } catch(e) {
-      this.logger.warn(`Failed to clean up file: ${e.message}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to trigger GitHub Action: ${response.status} ${errorText}`);
     }
+
+    this.logger.log(`Successfully triggered GitHub Action for video ${video.originalId}`);
+    // Status remains PROCESSING, GitHub action will update it to COMPLETED via webhook
+  }
+
+  private async downloadAndUpload(uploadHistory: any) {
+    await this.triggerGitHubAction(uploadHistory);
   }
 }
