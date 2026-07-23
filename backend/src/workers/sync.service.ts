@@ -75,36 +75,63 @@ export class SyncService {
       }
 
       if (!latestVideo) {
-        for (const url of urlsToScan) {
-          let cmd: string;
-          if (mapping.source.platform === 'TIKTOK') {
-            cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
-          } else {
-            cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
-          }
-
+        if (mapping.source.platform === 'INSTAGRAM' && workerUrl) {
           try {
-            const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-            
-            if (stdout && stdout.trim()) {
-              if (mapping.source.platform === 'TIKTOK') {
-                const videoId = stdout.trim().split('\n')[0].trim();
-                if (videoId) {
-                  latestVideo = {
-                    id: videoId,
-                    url: `${url}/video/${videoId}`,
-                    title: `TikTok Video ${videoId}`,
-                    timestamp: Math.floor(Date.now() / 1000)
-                  };
-                  break;
+            const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0];
+            if (username) {
+              const res = await fetch(`${workerUrl}?username=${username}`);
+              if (res.ok) {
+                const result = await res.json();
+                const userMedia = result?.data?.user?.edge_owner_to_timeline_media?.edges;
+                if (userMedia && userMedia.length > 0) {
+                  const latestVideoNode = userMedia.find((edge: any) => edge.node.is_video);
+                  if (latestVideoNode) {
+                    const shortcode = latestVideoNode.node.shortcode;
+                    latestVideo = {
+                      id: shortcode,
+                      url: `https://www.instagram.com/reel/${shortcode}/`,
+                      title: latestVideoNode.node.edge_media_to_caption?.edges[0]?.node?.text || `Instagram Reel ${shortcode}`,
+                      timestamp: latestVideoNode.node.taken_at_timestamp || Math.floor(Date.now() / 1000)
+                    };
+                  }
                 }
-              } else {
-                latestVideo = JSON.parse(stdout);
-                break;
               }
             }
           } catch (e) {
-            // ignore
+            this.logger.warn(`Instagram worker test failed: ${e.message}`);
+          }
+        } else {
+          for (const url of urlsToScan) {
+            let cmd: string;
+            if (mapping.source.platform === 'TIKTOK') {
+              cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
+            } else {
+              cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+            }
+
+            try {
+              const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+              
+              if (stdout && stdout.trim()) {
+                if (mapping.source.platform === 'TIKTOK') {
+                  const videoId = stdout.trim().split('\n')[0].trim();
+                  if (videoId) {
+                    latestVideo = {
+                      id: videoId,
+                      url: `${url}/video/${videoId}`,
+                      title: `TikTok Video ${videoId}`,
+                      timestamp: Math.floor(Date.now() / 1000)
+                    };
+                    break;
+                  }
+                } else {
+                  latestVideo = JSON.parse(stdout);
+                  break;
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
           }
         }
       }
@@ -198,19 +225,49 @@ export class SyncService {
       }
 
       if (latestVideos.length === 0 && workerUrl) {
-        this.logger.log(`Using Cloudflare Worker for metadata extraction: ${source.url}`);
-        const infoUrl = `${workerUrl}?url=${encodeURIComponent(source.url)}&action=info`;
-        const res = await fetch(infoUrl);
-        if (res.ok) {
-          const data = await res.json();
-          latestVideos.push({
-            id: data.id,
-            title: data.title,
-            url: `https://www.youtube.com/watch?v=${data.id}`,
-            timestamp: Math.floor(Date.now() / 1000)
-          });
+        if (source.platform === 'INSTAGRAM') {
+          try {
+            const username = source.url.split('instagram.com/')[1]?.split('/')[0];
+            if (username) {
+              this.logger.log(`Using Cloudflare Worker for INSTAGRAM extraction: ${username}`);
+              const res = await fetch(`${workerUrl}?username=${username}`);
+              if (res.ok) {
+                const result = await res.json();
+                const userMedia = result?.data?.user?.edge_owner_to_timeline_media?.edges;
+                if (userMedia && userMedia.length > 0) {
+                  const latestVideoNode = userMedia.find((edge: any) => edge.node.is_video);
+                  if (latestVideoNode) {
+                    const shortcode = latestVideoNode.node.shortcode;
+                    latestVideos.push({
+                      id: shortcode,
+                      url: `https://www.instagram.com/reel/${shortcode}/`,
+                      title: latestVideoNode.node.edge_media_to_caption?.edges[0]?.node?.text || `Instagram Reel ${shortcode}`,
+                      timestamp: latestVideoNode.node.taken_at_timestamp || Math.floor(Date.now() / 1000)
+                    });
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            this.logger.warn(`Instagram cron worker failed: ${e.message}`);
+          }
+        } else if (source.platform === 'YOUTUBE') {
+          this.logger.log(`Using Cloudflare Worker for YouTube metadata extraction: ${source.url}`);
+          const infoUrl = `${workerUrl}?url=${encodeURIComponent(source.url)}&action=info`;
+          const res = await fetch(infoUrl);
+          if (res.ok) {
+            const data = await res.json();
+            latestVideos.push({
+              id: data.id,
+              title: data.title,
+              url: `https://www.youtube.com/watch?v=${data.id}`,
+              timestamp: Math.floor(Date.now() / 1000)
+            });
+          }
         }
-      } else if (latestVideos.length === 0) {
+      }
+      
+      if (latestVideos.length === 0) {
         for (const url of urlsToScan) {
           let cmd: string;
           if (source.platform === 'TIKTOK') {
@@ -369,6 +426,37 @@ export class SyncService {
         this.logsService.log('INFO', `Successfully got TikTok video URL from tikwm.`);
       } else {
         throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
+      }
+    } else if (targetUrl.includes('instagram.com')) {
+      this.logger.log(`Requesting Cloudflare Worker for INSTAGRAM video URL: ${targetUrl}`);
+      const shortcodeMatch = targetUrl.match(/reel\/([^\/]+)/) || targetUrl.match(/p\/([^\/]+)/);
+      const shortcode = shortcodeMatch ? shortcodeMatch[1] : null;
+      
+      if (!shortcode) {
+        throw new Error(`Failed to extract shortcode from Instagram URL: ${targetUrl}`);
+      }
+      
+      const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
+      if (!workerUrl) {
+        throw new Error(`CLOUDFLARE_WORKER_URL is not set for Instagram download.`);
+      }
+      
+      const workerRes = await fetch(`${workerUrl}?shortcode=${shortcode}`);
+      const igData = await workerRes.json();
+      
+      // Try different JSON structures returned by __a=1
+      if (igData?.graphql?.shortcode_media?.video_url) {
+        videoUrl = igData.graphql.shortcode_media.video_url;
+      } else if (igData?.items && igData.items.length > 0 && igData.items[0].video_versions && igData.items[0].video_versions.length > 0) {
+        videoUrl = igData.items[0].video_versions[0].url;
+      } else if (igData?.video_url) {
+        videoUrl = igData.video_url;
+      }
+      
+      if (videoUrl) {
+        this.logsService.log('INFO', `Successfully got Instagram video URL from worker.`);
+      } else {
+        throw new Error(`Failed to extract video_url from Instagram response: ${JSON.stringify(igData).substring(0, 200)}`);
       }
     } else {
       this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
