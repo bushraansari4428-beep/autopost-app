@@ -24,6 +24,24 @@ export default function HistoryPage() {
     }
   };
 
+  const handleRetry = async (id: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/history/${id}/retry`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        // Refresh the list
+        fetchHistory();
+      }
+    } catch (err) {
+      console.error('Failed to retry:', err);
+    }
+  };
+
   useEffect(() => {
     fetchHistory();
   }, []);
@@ -76,7 +94,11 @@ export default function HistoryPage() {
                   </td>
                   <td className="px-6 py-5 text-right">
                     {item.status === 'FAILED' && (
-                      <button className="text-blue-400 hover:text-blue-300 transition-colors font-medium">Retry</button>
+                      <button 
+                        onClick={() => handleRetry(item.id)}
+                        className="text-blue-400 hover:text-blue-300 transition-colors font-medium">
+                        Retry
+                      </button>
                     )}
                     {item.status === 'COMPLETED' && (
                       <button className="text-gray-500 hover:text-gray-300 transition-colors">View Post</button>

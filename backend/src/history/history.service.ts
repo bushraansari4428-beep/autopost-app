@@ -19,4 +19,14 @@ export class HistoryService {
       }
     });
   }
+
+  async retry(id: string) {
+    return this.prisma.uploadHistory.update({
+      where: { id },
+      data: {
+        status: 'PENDING',
+        errorMessage: null,
+      }
+    });
+  }
 }
