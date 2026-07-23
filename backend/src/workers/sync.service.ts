@@ -37,7 +37,7 @@ export class SyncService {
     try {
       let latestVideo = null;
       
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
+      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || 'https://gentle-grass-709d.bushraansari4428.workers.dev';
       if (workerUrl) {
         this.logger.log(`Using Cloudflare Worker for metadata extraction: ${mapping.source.url}`);
         const infoUrl = `${workerUrl}?url=${encodeURIComponent(mapping.source.url)}&action=info`;
@@ -131,7 +131,7 @@ export class SyncService {
       }
 
       let latestVideos = [];
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
+      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || 'https://gentle-grass-709d.bushraansari4428.workers.dev';
       
       if (workerUrl) {
         this.logger.log(`Using Cloudflare Worker for metadata extraction: ${source.url}`);
@@ -259,7 +259,7 @@ export class SyncService {
   }
 
   private async downloadVideo(video: any, outputTemplate: string): Promise<string> {
-    const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
+    const workerUrl = process.env.CLOUDFLARE_WORKER_URL || 'https://gentle-grass-709d.bushraansari4428.workers.dev';
     if (workerUrl) {
       this.logger.log(`Downloading via Cloudflare Worker: ${video.url}`);
       const cmd = `curl -sL "${workerUrl}?url=${encodeURIComponent(video.url)}&action=download" -o "${outputTemplate}"`;
