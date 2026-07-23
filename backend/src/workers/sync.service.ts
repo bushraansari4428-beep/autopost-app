@@ -79,36 +79,76 @@ export class SyncService {
           try {
             const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0];
             if (username) {
-              this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
-              const query = `site:instagram.com "${username}"`;
-              const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
               
-              const res = await fetch(searchUrl, {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-                }
-              });
-              
-              if (res.ok) {
-                const html = await res.text();
-                const match = html.match(/https?:\/\/(www\.)?instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/?/);
-                if (match) {
-                  const latestReelUrl = match[0];
-                  const shortcodeMatch = latestReelUrl.match(/(reel|p)\/([^\/]+)/);
-                  if (shortcodeMatch) {
-                    latestVideo = {
-                      id: shortcodeMatch[2],
-                      url: latestReelUrl,
-                      title: `Instagram Post`,
-                      timestamp: Math.floor(Date.now() / 1000)
-                    };
-                    this.logsService.log('INFO', `Found reel from DuckDuckGo: ${latestReelUrl}`);
+              if (braveApiKey) {
+                this.logsService.log('INFO', `Searching Brave API for latest Reel by ${username}...`);
+                const query = `site:instagram.com "${username}"`;
+                const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+                
+                const res = await fetch(searchUrl, {
+                  headers: {
+                    'Accept': 'application/json',
+                    'X-Subscription-Token': braveApiKey
+                  }
+                });
+                
+                if (res.ok) {
+                  const data = await res.json();
+                  const results = data.web?.results || [];
+                  for (const result of results) {
+                    if (result.url && result.url.includes('instagram.com/')) {
+                      const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
+                      if (shortcodeMatch) {
+                        latestVideo = {
+                          id: shortcodeMatch[2],
+                          url: result.url,
+                          title: `Instagram Post`,
+                          timestamp: Math.floor(Date.now() / 1000)
+                        };
+                        this.logsService.log('INFO', `Found post from Brave Search: ${result.url}`);
+                        break;
+                      }
+                    }
                   }
                 } else {
-                  this.logsService.log('ERROR', `DuckDuckGo found no reels for ${username}`);
+                  this.logsService.log('ERROR', `Brave Search request failed with status: ${res.status}`);
                 }
-              } else {
-                this.logsService.log('ERROR', `DuckDuckGo request failed with status: ${res.status}`);
+              }
+
+              // Fallback to DuckDuckGo if Brave API key is missing or failed
+              if (!latestVideo) {
+                this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
+                const query = `site:instagram.com "${username}"`;
+                const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+                
+                const res = await fetch(searchUrl, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+                  }
+                });
+                
+                if (res.ok) {
+                  const html = await res.text();
+                  const match = html.match(/https?:\/\/(www\.)?instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/?/);
+                  if (match) {
+                    const latestReelUrl = match[0];
+                    const shortcodeMatch = latestReelUrl.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideo = {
+                        id: shortcodeMatch[2],
+                        url: latestReelUrl,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      };
+                      this.logsService.log('INFO', `Found reel from DuckDuckGo: ${latestReelUrl}`);
+                    }
+                  } else {
+                    this.logsService.log('ERROR', `DuckDuckGo found no reels for ${username}`);
+                  }
+                } else {
+                  this.logsService.log('ERROR', `DuckDuckGo request failed with status: ${res.status}`);
+                }
               }
             }
           } catch (e) {
@@ -244,36 +284,76 @@ export class SyncService {
           try {
             const username = source.url.split('instagram.com/')[1]?.split('/')[0];
             if (username) {
-              this.logger.log(`Using DuckDuckGo HTML Search for INSTAGRAM extraction: ${username}`);
-              const query = `site:instagram.com "${username}"`;
-              const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+              let foundVideo = false;
               
-              const res = await fetch(searchUrl, {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-                }
-              });
-              
-              if (res.ok) {
-                const html = await res.text();
-                // Simple regex to find the first instagram reel/post URL in the duckduckgo search results
-                const match = html.match(/https?:\/\/(www\.)?instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/?/);
-                if (match) {
-                  const latestReelUrl = match[0];
-                  const shortcodeMatch = latestReelUrl.match(/(reel|p)\/([^\/]+)/);
-                  if (shortcodeMatch) {
-                    latestVideos.push({
-                      id: shortcodeMatch[2],
-                      url: latestReelUrl,
-                      title: `Instagram Post`,
-                      timestamp: Math.floor(Date.now() / 1000)
-                    });
+              if (braveApiKey) {
+                this.logger.log(`Using Brave API Search for INSTAGRAM extraction: ${username}`);
+                const query = `site:instagram.com "${username}"`;
+                const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+                
+                const res = await fetch(searchUrl, {
+                  headers: {
+                    'Accept': 'application/json',
+                    'X-Subscription-Token': braveApiKey
+                  }
+                });
+                
+                if (res.ok) {
+                  const data = await res.json();
+                  const results = data.web?.results || [];
+                  for (const result of results) {
+                    if (result.url && result.url.includes('instagram.com/')) {
+                      const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
+                      if (shortcodeMatch) {
+                        latestVideos.push({
+                          id: shortcodeMatch[2],
+                          url: result.url,
+                          title: `Instagram Post`,
+                          timestamp: Math.floor(Date.now() / 1000)
+                        });
+                        foundVideo = true;
+                        break;
+                      }
+                    }
                   }
                 } else {
-                   this.logger.warn(`No Instagram video URL found in DuckDuckGo HTML for ${username}`);
+                  this.logger.warn(`Brave Search request failed with status: ${res.status}`);
                 }
-              } else {
-                this.logger.warn(`DuckDuckGo returned status ${res.status}`);
+              }
+
+              if (!foundVideo) {
+                this.logger.log(`Using DuckDuckGo HTML Search for INSTAGRAM extraction: ${username}`);
+                const query = `site:instagram.com "${username}"`;
+                const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+                
+                const res = await fetch(searchUrl, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+                  }
+                });
+                
+                if (res.ok) {
+                  const html = await res.text();
+                  // Simple regex to find the first instagram reel/post URL in the duckduckgo search results
+                  const match = html.match(/https?:\/\/(www\.)?instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/?/);
+                  if (match) {
+                    const latestReelUrl = match[0];
+                    const shortcodeMatch = latestReelUrl.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideos.push({
+                        id: shortcodeMatch[2],
+                        url: latestReelUrl,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      });
+                    }
+                  } else {
+                     this.logger.warn(`No Instagram video URL found in DuckDuckGo HTML for ${username}`);
+                  }
+                } else {
+                  this.logger.warn(`DuckDuckGo returned status ${res.status}`);
+                }
               }
             }
           } catch (e) {
