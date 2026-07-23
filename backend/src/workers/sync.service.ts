@@ -76,13 +76,32 @@ export class SyncService {
 
       if (!latestVideo && workerUrl) {
         for (const url of urlsToScan) {
-          const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+          let cmd: string;
+          if (mapping.source.platform === 'TIKTOK') {
+            cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
+          } else {
+            cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+          }
+
           try {
-            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-            const lines = stdout.split('\n').filter(line => line.trim() !== '');
-            if (lines.length > 0) {
-              latestVideo = JSON.parse(lines[0]);
-              break;
+            const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+            
+            if (stdout && stdout.trim()) {
+              if (mapping.source.platform === 'TIKTOK') {
+                const videoId = stdout.trim().split('\n')[0].trim();
+                if (videoId) {
+                  latestVideo = {
+                    id: videoId,
+                    url: `${url}/video/${videoId}`,
+                    title: `TikTok Video ${videoId}`,
+                    timestamp: Math.floor(Date.now() / 1000)
+                  };
+                  break;
+                }
+              } else {
+                latestVideo = JSON.parse(stdout);
+                break;
+              }
             }
           } catch (e) {
             // ignore
