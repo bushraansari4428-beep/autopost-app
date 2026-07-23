@@ -44,10 +44,14 @@ export class SyncService {
         const channelId = mapping.source.url.split('/channel/')[1].split('/')[0].split('?')[0];
         const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         this.logger.log(`Trying RSS feed for channel: ${channelId}`);
+        await this.logsService.log('INFO', `Trying RSS feed for channel: ${channelId}`);
         try {
-          const rssRes = await fetch(rssUrl);
+          const rssRes = await fetch(rssUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          });
           if (rssRes.ok) {
             const xml = await rssRes.text();
+            await this.logsService.log('INFO', `RSS feed fetched successfully. Length: ${xml.length}`);
             const videoIdMatch = xml.match(/<yt:videoId>(.*?)<\/yt:videoId>/);
             const titleMatch = xml.match(/<title>(.*?)<\/title>/g); // Second match is usually the first video
             if (videoIdMatch && videoIdMatch[1]) {
@@ -57,10 +61,16 @@ export class SyncService {
                 url: `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,
                 timestamp: Math.floor(Date.now() / 1000)
               };
+              await this.logsService.log('INFO', `Extracted video ID: ${videoIdMatch[1]}`);
+            } else {
+              await this.logsService.log('ERROR', `RSS feed XML did not contain <yt:videoId>. Sample: ${xml.substring(0, 100)}`);
             }
+          } else {
+            await this.logsService.log('ERROR', `RSS feed HTTP error: ${rssRes.status} ${rssRes.statusText}`);
           }
         } catch(e) {
           this.logger.warn(`RSS feed failed: ${e.message}`);
+          await this.logsService.log('ERROR', `RSS feed fetch failed: ${e.message}`);
         }
       }
 
