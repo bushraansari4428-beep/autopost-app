@@ -9,11 +9,17 @@ export class SourcesService {
     if (createSourceDto.url && createSourceDto.url.includes('@')) {
       try {
         const handle = createSourceDto.url.split('@')[1].split('/')[0].split('?')[0];
-        const res = await fetch(`https://yt.lemnoslife.com/channels?handle=@${handle}`);
+        const res = await fetch(`https://www.youtube.com/@${handle}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        });
         if (res.ok) {
-          const data = await res.json();
-          if (data && data.items && data.items.length > 0 && data.items[0].id) {
-            createSourceDto.url = `https://www.youtube.com/channel/${data.items[0].id}`;
+          const html = await res.text();
+          const match = html.match(/"channelId":"(UC[^"]+)"/) || html.match(/<meta itemprop="identifier" content="(UC[^"]+)"/);
+          if (match && match[1]) {
+            createSourceDto.url = `https://www.youtube.com/channel/${match[1]}`;
           }
         }
       } catch (e) {

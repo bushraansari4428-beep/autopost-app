@@ -32,18 +32,32 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install yt-dlp and ffmpeg
-        run: |
-          pip install -U --pre yt-dlp
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-
       - name: Download YouTube Video
         run: |
           echo "Downloading video: ${{ github.event.inputs.videoId }}"
-          yt-dlp "https://www.youtube.com/watch?v=${{ github.event.inputs.videoId }}" \
-            -f "18/best[ext=mp4]" \
-            --extractor-args "youtube:player_client=android,ios" \
-            -o out.mp4
+          # Request Cobalt API
+          COBALT_RES=$(curl -s -X POST "https://cobalt-api.kwiatekm.cloud/api/json" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d "{\"url\":\"https://www.youtube.com/watch?v=${{ github.event.inputs.videoId }}\", \"vCodec\":\"h264\", \"vQuality\":\"720\", \"isAudioOnly\":false, \"isNoTTWatermark\":true}")
+          
+          echo "Cobalt response: $COBALT_RES"
+          
+          # Extract video URL
+          VIDEO_URL=$(echo $COBALT_RES | jq -r '.url')
+          
+          if [ "$VIDEO_URL" = "null" ] || [ -z "$VIDEO_URL" ]; then
+            echo "Failed to get video URL from Cobalt"
+            exit 1
+          fi
+          
+          echo "Downloading from: $VIDEO_URL"
+          curl -sL "$VIDEO_URL" -o out.mp4
+          
+          if [ ! -f out.mp4 ]; then
+            echo "Failed to download out.mp4"
+            exit 1
+          fi
 
       - name: Upload to Facebook
         id: fb_upload
