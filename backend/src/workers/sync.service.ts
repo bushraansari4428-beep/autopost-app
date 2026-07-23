@@ -37,23 +37,34 @@ export class SyncService {
     try {
       let latestVideo = null;
       
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || 'https://gentle-grass-709d.bushraansari4428.workers.dev';
-      if (workerUrl) {
-        this.logger.log(`Using Cloudflare Worker for metadata extraction: ${mapping.source.url}`);
-        const infoUrl = `${workerUrl}?url=${encodeURIComponent(mapping.source.url)}&action=info`;
-        const res = await fetch(infoUrl);
-        if (res.ok) {
-          const data = await res.json();
-          latestVideo = {
-            id: data.id,
-            title: data.title,
-            url: `https://www.youtube.com/watch?v=${data.id}`,
-            timestamp: Math.floor(Date.now() / 1000)
-          };
-        } else {
-          this.logger.error(`Cloudflare worker info failed: ${await res.text()}`);
+      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
+      
+      // Try RSS feed first if it's a channel URL
+      if (mapping.source.url.includes('/channel/UC')) {
+        const channelId = mapping.source.url.split('/channel/')[1].split('/')[0].split('?')[0];
+        const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+        this.logger.log(`Trying RSS feed for channel: ${channelId}`);
+        try {
+          const rssRes = await fetch(rssUrl);
+          if (rssRes.ok) {
+            const xml = await rssRes.text();
+            const videoIdMatch = xml.match(/<yt:videoId>(.*?)<\/yt:videoId>/);
+            const titleMatch = xml.match(/<title>(.*?)<\/title>/g); // Second match is usually the first video
+            if (videoIdMatch && videoIdMatch[1]) {
+              latestVideo = {
+                id: videoIdMatch[1],
+                title: titleMatch && titleMatch.length > 1 ? titleMatch[1].replace(/<[^>]+>/g, '') : 'New Video',
+                url: `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,
+                timestamp: Math.floor(Date.now() / 1000)
+              };
+            }
+          }
+        } catch(e) {
+          this.logger.warn(`RSS feed failed: ${e.message}`);
         }
-      } else {
+      }
+
+      if (!latestVideo && workerUrl) {
         for (const url of urlsToScan) {
           const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
           try {
@@ -131,9 +142,33 @@ export class SyncService {
       }
 
       let latestVideos = [];
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || 'https://gentle-grass-709d.bushraansari4428.workers.dev';
-      
-      if (workerUrl) {
+      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
+
+      if (source.url.includes('/channel/UC')) {
+        const channelId = source.url.split('/channel/')[1].split('/')[0].split('?')[0];
+        const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+        this.logger.log(`Cron: Trying RSS feed for channel: ${channelId}`);
+        try {
+          const rssRes = await fetch(rssUrl);
+          if (rssRes.ok) {
+            const xml = await rssRes.text();
+            const videoIdMatch = xml.match(/<yt:videoId>(.*?)<\/yt:videoId>/);
+            const titleMatch = xml.match(/<title>(.*?)<\/title>/g); // Second match is usually the first video
+            if (videoIdMatch && videoIdMatch[1]) {
+              latestVideos.push({
+                id: videoIdMatch[1],
+                title: titleMatch && titleMatch.length > 1 ? titleMatch[1].replace(/<[^>]+>/g, '') : 'New Video',
+                url: `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,
+                timestamp: Math.floor(Date.now() / 1000)
+              });
+            }
+          }
+        } catch(e) {
+          this.logger.warn(`Cron RSS feed failed: ${e.message}`);
+        }
+      }
+
+      if (latestVideos.length === 0 && workerUrl) {
         this.logger.log(`Using Cloudflare Worker for metadata extraction: ${source.url}`);
         const infoUrl = `${workerUrl}?url=${encodeURIComponent(source.url)}&action=info`;
         const res = await fetch(infoUrl);
@@ -146,7 +181,7 @@ export class SyncService {
             timestamp: Math.floor(Date.now() / 1000)
           });
         }
-      } else {
+      } else if (latestVideos.length === 0) {
         for (const url of urlsToScan) {
           const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 5 "${url}"`;
           this.logger.log(`Running yt-dlp for ${url}`);
