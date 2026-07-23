@@ -76,37 +76,45 @@ export class SyncService {
 
       if (!latestVideo) {
         if (mapping.source.platform === 'INSTAGRAM') {
-          const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-          const cx = process.env.GOOGLE_SEARCH_CX;
-          if (apiKey && cx) {
-            try {
-              const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0];
-              if (username) {
-                const query = `site:instagram.com/reel "${username}"`;
-                const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&sort=date`;
-                const res = await fetch(searchUrl);
-                if (res.ok) {
-                  const data = await res.json();
-                  if (data.items && data.items.length > 0) {
-                    const latestReelUrl = data.items[0].link;
-                    const shortcodeMatch = latestReelUrl.match(/reel\/([^\/]+)/);
-                    if (shortcodeMatch) {
-                      latestVideo = {
-                        id: shortcodeMatch[1],
-                        url: latestReelUrl,
-                        title: data.items[0].title || `Instagram Reel`,
-                        timestamp: Math.floor(Date.now() / 1000)
-                      };
-                    }
-                  }
+          try {
+            const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0];
+            if (username) {
+              this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
+              const query = `site:instagram.com/reel "${username}"`;
+              const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
                 }
+              });
+              
+              if (res.ok) {
+                const html = await res.text();
+                const match = html.match(/https?:\/\/(www\.)?instagram\.com\/reel\/[A-Za-z0-9_-]+\/?/);
+                if (match) {
+                  const latestReelUrl = match[0];
+                  const shortcodeMatch = latestReelUrl.match(/reel\/([^\/]+)/);
+                  if (shortcodeMatch) {
+                    latestVideo = {
+                      id: shortcodeMatch[1],
+                      url: latestReelUrl,
+                      title: `Instagram Reel`,
+                      timestamp: Math.floor(Date.now() / 1000)
+                    };
+                    this.logsService.log('INFO', `Found reel from DuckDuckGo: ${latestReelUrl}`);
+                  }
+                } else {
+                  this.logsService.log('ERROR', `DuckDuckGo found no reels for ${username}`);
+                }
+              } else {
+                this.logsService.log('ERROR', `DuckDuckGo request failed with status: ${res.status}`);
               }
-            } catch (e) {
-              this.logger.warn(`Instagram Google Search failed: ${e.message}`);
             }
-          } else {
-            this.logger.warn(`GOOGLE_SEARCH_API_KEY or CX not configured for Instagram.`);
+          } catch (e) {
+            this.logger.warn(`Instagram DuckDuckGo Search failed: ${e.message}`);
           }
+
         } else {
           for (const url of urlsToScan) {
             let cmd: string;
@@ -233,36 +241,45 @@ export class SyncService {
 
       if (latestVideos.length === 0) {
         if (source.platform === 'INSTAGRAM') {
-          const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-          const cx = process.env.GOOGLE_SEARCH_CX;
-          if (apiKey && cx) {
-            try {
-              const username = source.url.split('instagram.com/')[1]?.split('/')[0];
-              if (username) {
-                this.logger.log(`Using Google Search for INSTAGRAM extraction: ${username}`);
-                const query = `site:instagram.com/reel "${username}"`;
-                const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&sort=date`;
-                const res = await fetch(searchUrl);
-                if (res.ok) {
-                  const data = await res.json();
-                  if (data.items && data.items.length > 0) {
-                    const latestReelUrl = data.items[0].link;
-                    const shortcodeMatch = latestReelUrl.match(/reel\/([^\/]+)/);
-                    if (shortcodeMatch) {
-                      latestVideos.push({
-                        id: shortcodeMatch[1],
-                        url: latestReelUrl,
-                        title: data.items[0].title || `Instagram Reel`,
-                        timestamp: Math.floor(Date.now() / 1000)
-                      });
-                    }
-                  }
+          try {
+            const username = source.url.split('instagram.com/')[1]?.split('/')[0];
+            if (username) {
+              this.logger.log(`Using DuckDuckGo HTML Search for INSTAGRAM extraction: ${username}`);
+              const query = `site:instagram.com/reel "${username}"`;
+              const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
                 }
+              });
+              
+              if (res.ok) {
+                const html = await res.text();
+                // Simple regex to find the first instagram reel URL in the duckduckgo search results
+                const match = html.match(/https?:\/\/(www\.)?instagram\.com\/reel\/[A-Za-z0-9_-]+\/?/);
+                if (match) {
+                  const latestReelUrl = match[0];
+                  const shortcodeMatch = latestReelUrl.match(/reel\/([^\/]+)/);
+                  if (shortcodeMatch) {
+                    latestVideos.push({
+                      id: shortcodeMatch[1],
+                      url: latestReelUrl,
+                      title: `Instagram Reel`,
+                      timestamp: Math.floor(Date.now() / 1000)
+                    });
+                  }
+                } else {
+                   this.logger.warn(`No Instagram reel URL found in DuckDuckGo HTML for ${username}`);
+                }
+              } else {
+                this.logger.warn(`DuckDuckGo returned status ${res.status}`);
               }
-            } catch (e) {
-              this.logger.warn(`Instagram cron Google Search failed: ${e.message}`);
             }
+          } catch (e) {
+            this.logger.warn(`Instagram cron DuckDuckGo Search failed: ${e.message}`);
           }
+
         } else if (source.platform === 'YOUTUBE' && workerUrl) {
           this.logger.log(`Using Cloudflare Worker for YouTube metadata extraction: ${source.url}`);
           const infoUrl = `${workerUrl}?url=${encodeURIComponent(source.url)}&action=info`;
