@@ -116,17 +116,13 @@ export class SyncService {
                 }
               }
 
-              // Fallback to DuckDuckGo if Brave API key is missing or failed
+              // Fallback to Bing via Cloudflare Worker if Brave API key is missing or failed
               if (!latestVideo) {
-                this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
-                const query = `site:instagram.com "${username}"`;
-                const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+                this.logsService.log('INFO', `Searching Bing for latest Reel by ${username}...`);
+                const workerUrl = 'https://instaproxy.bushraansari4428.workers.dev';
+                const bingTarget = `https://www.bing.com/search?q=site:instagram.com "${username}"`;
                 
-                const res = await fetch(searchUrl, {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-                  }
-                });
+                const res = await fetch(`${workerUrl}?url=${encodeURIComponent(bingTarget)}`);
                 
                 if (res.ok) {
                   const html = await res.text();
@@ -141,13 +137,13 @@ export class SyncService {
                         title: `Instagram Post`,
                         timestamp: Math.floor(Date.now() / 1000)
                       };
-                      this.logsService.log('INFO', `Found reel from DuckDuckGo: ${latestReelUrl}`);
+                      this.logsService.log('INFO', `Found reel from Bing: ${latestReelUrl}`);
                     }
                   } else {
-                    this.logsService.log('ERROR', `DuckDuckGo found no reels for ${username}`);
+                    this.logsService.log('ERROR', `Bing found no reels for ${username}`);
                   }
                 } else {
-                  this.logsService.log('ERROR', `DuckDuckGo request failed with status: ${res.status}`);
+                  this.logsService.log('ERROR', `Bing request failed with status: ${res.status}`);
                 }
               }
             }
@@ -323,19 +319,15 @@ export class SyncService {
               }
 
               if (!foundVideo) {
-                this.logger.log(`Using DuckDuckGo HTML Search for INSTAGRAM extraction: ${username}`);
-                const query = `site:instagram.com "${username}"`;
-                const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+                this.logger.log(`Using Bing HTML Search for INSTAGRAM extraction: ${username}`);
+                const workerUrl = 'https://instaproxy.bushraansari4428.workers.dev';
+                const bingTarget = `https://www.bing.com/search?q=site:instagram.com "${username}"`;
                 
-                const res = await fetch(searchUrl, {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-                  }
-                });
+                const res = await fetch(`${workerUrl}?url=${encodeURIComponent(bingTarget)}`);
                 
                 if (res.ok) {
                   const html = await res.text();
-                  // Simple regex to find the first instagram reel/post URL in the duckduckgo search results
+                  // Simple regex to find the first instagram reel/post URL in the Bing search results
                   const match = html.match(/https?:\/\/(www\.)?instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/?/);
                   if (match) {
                     const latestReelUrl = match[0];
@@ -349,10 +341,10 @@ export class SyncService {
                       });
                     }
                   } else {
-                     this.logger.warn(`No Instagram video URL found in DuckDuckGo HTML for ${username}`);
+                     this.logger.warn(`No Instagram video URL found in Bing HTML for ${username}`);
                   }
                 } else {
-                  this.logger.warn(`DuckDuckGo returned status ${res.status}`);
+                  this.logger.warn(`Bing returned status ${res.status}`);
                 }
               }
             }
