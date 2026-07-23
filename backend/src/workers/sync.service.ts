@@ -74,7 +74,7 @@ export class SyncService {
         }
       }
 
-      if (!latestVideo && workerUrl) {
+      if (!latestVideo) {
         for (const url of urlsToScan) {
           let cmd: string;
           if (mapping.source.platform === 'TIKTOK') {
