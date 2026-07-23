@@ -354,7 +354,8 @@ export class SyncService {
     this.logsService.log('INFO', `Starting native direct upload for ${video.title}...`);
     
     const ytId = video.originalId.replace('test_', '').split('_')[0];
-    const encodedUrl = encodeURIComponent(`https://www.youtube.com/watch?v=${ytId}`);
+    const targetUrl = video.url ? video.url : `https://www.youtube.com/watch?v=${ytId}`;
+    const encodedUrl = encodeURIComponent(targetUrl);
     
     this.logger.log(`Requesting loader.to for ${ytId}`);
     const loaderRes = await fetch(`https://loader.to/ajax/download.php?format=720&url=${encodedUrl}`);
