@@ -116,34 +116,49 @@ export class SyncService {
                 }
               }
 
-              // Fallback to Bing via Cloudflare Worker if Brave API key is missing or failed
+              // Fallback to RapidAPI RockSolid if Brave failed or wasn't used
               if (!latestVideo) {
-                this.logsService.log('INFO', `Searching Bing for latest Reel by ${username}...`);
-                const workerUrl = 'https://instaproxy.bushraansari4428.workers.dev';
-                const bingTarget = `https://www.bing.com/search?q=site:instagram.com "${username}"`;
-                
-                const res = await fetch(`${workerUrl}?url=${encodeURIComponent(bingTarget)}`);
-                
-                if (res.ok) {
-                  const html = await res.text();
-                  const match = html.match(/https?:\/\/(www\.)?instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/?/);
-                  if (match) {
-                    const latestReelUrl = match[0];
-                    const shortcodeMatch = latestReelUrl.match(/(reel|p)\/([^\/]+)/);
-                    if (shortcodeMatch) {
-                      latestVideo = {
-                        id: shortcodeMatch[2],
-                        url: latestReelUrl,
-                        title: `Instagram Post`,
-                        timestamp: Math.floor(Date.now() / 1000)
-                      };
-                      this.logsService.log('INFO', `Found reel from Bing: ${latestReelUrl}`);
+                const rapidApiKey = process.env.RAPIDAPI_KEY;
+                if (!rapidApiKey) {
+                  this.logsService.log('ERROR', `RAPIDAPI_KEY missing. Cannot fallback to RapidAPI.`);
+                } else {
+                  this.logsService.log('INFO', `Searching RapidAPI (RockSolid) for latest Reel by ${username}...`);
+                  
+                  const searchUrl = `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_reels.php`;
+                  const res = await fetch(searchUrl, {
+                    method: 'POST',
+                    headers: {
+                      'content-type': 'application/x-www-form-urlencoded',
+                      'x-rapidapi-host': 'instagram-scraper-stable-api.p.rapidapi.com',
+                      'x-rapidapi-key': rapidApiKey,
+                    },
+                    body: `username_or_url=${encodeURIComponent(username)}&amount=12`
+                  });
+                  
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.reels && data.reels.length > 0) {
+                      const latestReel = data.reels[0];
+                      const code = latestReel?.node?.media?.code;
+                      
+                      if (code) {
+                        const latestReelUrl = `https://www.instagram.com/reel/${code}/`;
+                        latestVideo = {
+                          id: code,
+                          url: latestReelUrl,
+                          title: `Instagram Post`,
+                          timestamp: Math.floor(Date.now() / 1000)
+                        };
+                        this.logsService.log('INFO', `Found latest reel via RapidAPI: ${latestReelUrl}`);
+                      } else {
+                        this.logsService.log('ERROR', `RapidAPI returned reels but missing 'code' field for ${username}`);
+                      }
+                    } else {
+                      this.logsService.log('ERROR', `RapidAPI found no reels for ${username}`);
                     }
                   } else {
-                    this.logsService.log('ERROR', `Bing found no reels for ${username}`);
+                    this.logsService.log('ERROR', `RapidAPI request failed with status: ${res.status}`);
                   }
-                } else {
-                  this.logsService.log('ERROR', `Bing request failed with status: ${res.status}`);
                 }
               }
             }
