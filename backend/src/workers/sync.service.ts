@@ -303,51 +303,88 @@ export class SyncService {
     }
   }
 
-  private async triggerGitHubAction(uploadHistory: any) {
+  private async delay(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async nativeDownloadAndUpload(uploadHistory: any) {
     const video = uploadHistory.video;
     const pageId = uploadHistory.facebookPage.pageId;
     const accessToken = uploadHistory.facebookPage.accessToken;
     
-    this.logsService.log('INFO', `Triggering GitHub Action to download and upload ${video.title}...`);
-
-    const ghPat = process.env.GH_PAT;
-    if (!ghPat) {
-      throw new Error('GH_PAT environment variable is not set. Cannot trigger GitHub Action.');
+    this.logsService.log('INFO', `Starting native direct upload for ${video.title}...`);
+    
+    const ytId = video.originalId.replace('test_', '').split('_')[0];
+    const encodedUrl = encodeURIComponent(`https://www.youtube.com/watch?v=${ytId}`);
+    
+    this.logger.log(`Requesting loader.to for ${ytId}`);
+    const loaderRes = await fetch(`https://loader.to/ajax/download.php?format=720&url=${encodedUrl}`);
+    const loaderData = await loaderRes.json();
+    
+    if (!loaderData || !loaderData.id) {
+      throw new Error(`Failed to initialize loader.to download. Response: ${JSON.stringify(loaderData)}`);
     }
-
-    const repo = "bushraansari4428-beep/autopost-app";
-    const webhookUrl = "https://autopost-app-1.onrender.com/webhooks/github-action";
-
-    const response = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/post-video.yml/dispatches`, {
+    
+    const downloadId = loaderData.id;
+    this.logsService.log('INFO', `Waiting for loader.to processing (ID: ${downloadId})...`);
+    
+    let videoUrl = null;
+    // Poll for up to 60 seconds
+    for (let i = 0; i < 30; i++) {
+      await this.delay(2000);
+      const progRes = await fetch(`https://lto2.affadaffa.com/api/progress?id=${downloadId}`);
+      try {
+        const progData = await progRes.json();
+        this.logger.log(`Loader status: ${progData.text}`);
+        if (progData.success === 1 || progData.success === '1') {
+          videoUrl = progData.download_url;
+          break;
+        }
+      } catch (e) {
+        this.logger.error(`Error parsing progress: ${e.message}`);
+      }
+    }
+    
+    if (!videoUrl) {
+      throw new Error('Timed out waiting for loader.to to process the video.');
+    }
+    
+    this.logsService.log('INFO', `Successfully got direct video URL! Sending to Facebook...`);
+    this.logger.log(`Direct URL: ${videoUrl}`);
+    
+    // Upload to Facebook using file_url
+    const fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
       method: 'POST',
       headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `Bearer ${ghPat}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        ref: 'main',
-        inputs: {
-          videoId: video.originalId.replace('test_', '').split('_')[0],
-          pageId: pageId,
-          pageAccessToken: accessToken,
-          uploadHistoryId: uploadHistory.id,
-          webhookUrl: webhookUrl,
-          title: video.title
-        }
+        access_token: accessToken,
+        file_url: videoUrl,
+        description: video.title
       })
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to trigger GitHub Action: ${response.status} ${errorText}`);
+    
+    const fbData = await fbRes.json();
+    
+    if (!fbRes.ok || fbData.error) {
+      throw new Error(`Facebook API Error: ${JSON.stringify(fbData.error || fbData)}`);
     }
-
-    this.logger.log(`Successfully triggered GitHub Action for video ${video.originalId}`);
-    // Status remains PROCESSING, GitHub action will update it to COMPLETED via webhook
+    
+    this.logsService.log('INFO', `Success! Facebook Post ID: ${fbData.id}`);
+    
+    // Update DB
+    await this.prisma.uploadHistory.update({
+      where: { id: uploadHistory.id },
+      data: { 
+        status: 'COMPLETED',
+        facebookPostId: fbData.id,
+        errorMessage: null
+      }
+    });
   }
 
   private async downloadAndUpload(uploadHistory: any) {
-    await this.triggerGitHubAction(uploadHistory);
+    await this.nativeDownloadAndUpload(uploadHistory);
   }
 }
