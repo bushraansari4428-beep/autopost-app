@@ -117,7 +117,7 @@ export class SourcesController {
     try {
       const { exec } = require('child_process');
       return new Promise((resolve) => {
-        exec(`curl -sL "${url}" | head -c 500`, (error, stdout, stderr) => {
+        exec(`curl -sL "${url}" | head -c 500`, (error: any, stdout: any, stderr: any) => {
           resolve({ stdout, stderr, error: error?.message });
         });
       });
