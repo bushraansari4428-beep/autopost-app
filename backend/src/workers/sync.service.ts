@@ -151,7 +151,7 @@ export class SyncService {
         ];
       }
 
-      let latestVideos = [];
+      let latestVideos: any[] = [];
       const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
 
       if (source.url.includes('/channel/UC')) {
