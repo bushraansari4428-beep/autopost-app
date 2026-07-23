@@ -193,22 +193,42 @@ export class SyncService {
         }
       } else if (latestVideos.length === 0) {
         for (const url of urlsToScan) {
-          const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 5 "${url}"`;
-          this.logger.log(`Running yt-dlp for ${url}`);
+          let cmd: string;
+          if (source.platform === 'TIKTOK') {
+            cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
+          } else {
+            cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+          }
+
           try {
-            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-            const lines = stdout.split('\n').filter(line => line.trim() !== '');
-            const parsed = lines.map(line => {
-              try {
-                return JSON.parse(line);
-              } catch (e) {
-                return null;
+            this.logger.log(`Scanning URL: ${url}`);
+            const { stdout, stderr } = await execPromise(cmd, {
+              maxBuffer: 1024 * 1024 * 50,
+            });
+
+            if (stdout && stdout.trim()) {
+              if (source.platform === 'TIKTOK') {
+                const videoId = stdout.trim().split('\n')[0].trim();
+                if (videoId) {
+                  latestVideos.push({
+                    id: videoId,
+                    url: `${url}/video/${videoId}`,
+                    title: `TikTok Video ${videoId}`,
+                    timestamp: Math.floor(Date.now() / 1000)
+                  });
+                  this.logger.log(`Found TikTok video: ${videoId}`);
+                  break;
+                }
+              } else {
+                latestVideos.push(JSON.parse(stdout));
+                this.logger.log(`Found YouTube video: ${latestVideos[0].title}`);
+                break;
               }
-            }).filter(Boolean);
-            
-            latestVideos = latestVideos.concat(parsed);
-          } catch (e) {
-            this.logger.error(`Error running yt-dlp for ${url}: ${e.message}`);
+            } else if (stderr) {
+              this.logger.warn(`yt-dlp stderr for ${url}: ${stderr}`);
+            }
+          } catch (error) {
+            this.logger.warn(`Failed to scan ${url}: ${error.message}`);
           }
         }
       }
