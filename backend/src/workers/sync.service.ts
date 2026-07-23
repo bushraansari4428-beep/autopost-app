@@ -75,30 +75,37 @@ export class SyncService {
       }
 
       if (!latestVideo) {
-        if (mapping.source.platform === 'INSTAGRAM' && workerUrl) {
-          try {
-            const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0];
-            if (username) {
-              const res = await fetch(`${workerUrl}?username=${username}`);
-              if (res.ok) {
-                const result = await res.json();
-                const userMedia = result?.data?.user?.edge_owner_to_timeline_media?.edges;
-                if (userMedia && userMedia.length > 0) {
-                  const latestVideoNode = userMedia.find((edge: any) => edge.node.is_video);
-                  if (latestVideoNode) {
-                    const shortcode = latestVideoNode.node.shortcode;
-                    latestVideo = {
-                      id: shortcode,
-                      url: `https://www.instagram.com/reel/${shortcode}/`,
-                      title: latestVideoNode.node.edge_media_to_caption?.edges[0]?.node?.text || `Instagram Reel ${shortcode}`,
-                      timestamp: latestVideoNode.node.taken_at_timestamp || Math.floor(Date.now() / 1000)
-                    };
+        if (mapping.source.platform === 'INSTAGRAM') {
+          const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
+          const cx = process.env.GOOGLE_SEARCH_CX;
+          if (apiKey && cx) {
+            try {
+              const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0];
+              if (username) {
+                const query = `site:instagram.com/reel "${username}"`;
+                const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&sort=date`;
+                const res = await fetch(searchUrl);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.items && data.items.length > 0) {
+                    const latestReelUrl = data.items[0].link;
+                    const shortcodeMatch = latestReelUrl.match(/reel\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideo = {
+                        id: shortcodeMatch[1],
+                        url: latestReelUrl,
+                        title: data.items[0].title || `Instagram Reel`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      };
+                    }
                   }
                 }
               }
+            } catch (e) {
+              this.logger.warn(`Instagram Google Search failed: ${e.message}`);
             }
-          } catch (e) {
-            this.logger.warn(`Instagram worker test failed: ${e.message}`);
+          } else {
+            this.logger.warn(`GOOGLE_SEARCH_API_KEY or CX not configured for Instagram.`);
           }
         } else {
           for (const url of urlsToScan) {
@@ -224,34 +231,39 @@ export class SyncService {
         }
       }
 
-      if (latestVideos.length === 0 && workerUrl) {
+      if (latestVideos.length === 0) {
         if (source.platform === 'INSTAGRAM') {
-          try {
-            const username = source.url.split('instagram.com/')[1]?.split('/')[0];
-            if (username) {
-              this.logger.log(`Using Cloudflare Worker for INSTAGRAM extraction: ${username}`);
-              const res = await fetch(`${workerUrl}?username=${username}`);
-              if (res.ok) {
-                const result = await res.json();
-                const userMedia = result?.data?.user?.edge_owner_to_timeline_media?.edges;
-                if (userMedia && userMedia.length > 0) {
-                  const latestVideoNode = userMedia.find((edge: any) => edge.node.is_video);
-                  if (latestVideoNode) {
-                    const shortcode = latestVideoNode.node.shortcode;
-                    latestVideos.push({
-                      id: shortcode,
-                      url: `https://www.instagram.com/reel/${shortcode}/`,
-                      title: latestVideoNode.node.edge_media_to_caption?.edges[0]?.node?.text || `Instagram Reel ${shortcode}`,
-                      timestamp: latestVideoNode.node.taken_at_timestamp || Math.floor(Date.now() / 1000)
-                    });
+          const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
+          const cx = process.env.GOOGLE_SEARCH_CX;
+          if (apiKey && cx) {
+            try {
+              const username = source.url.split('instagram.com/')[1]?.split('/')[0];
+              if (username) {
+                this.logger.log(`Using Google Search for INSTAGRAM extraction: ${username}`);
+                const query = `site:instagram.com/reel "${username}"`;
+                const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&sort=date`;
+                const res = await fetch(searchUrl);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.items && data.items.length > 0) {
+                    const latestReelUrl = data.items[0].link;
+                    const shortcodeMatch = latestReelUrl.match(/reel\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideos.push({
+                        id: shortcodeMatch[1],
+                        url: latestReelUrl,
+                        title: data.items[0].title || `Instagram Reel`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      });
+                    }
                   }
                 }
               }
+            } catch (e) {
+              this.logger.warn(`Instagram cron Google Search failed: ${e.message}`);
             }
-          } catch (e) {
-            this.logger.warn(`Instagram cron worker failed: ${e.message}`);
           }
-        } else if (source.platform === 'YOUTUBE') {
+        } else if (source.platform === 'YOUTUBE' && workerUrl) {
           this.logger.log(`Using Cloudflare Worker for YouTube metadata extraction: ${source.url}`);
           const infoUrl = `${workerUrl}?url=${encodeURIComponent(source.url)}&action=info`;
           const res = await fetch(infoUrl);
@@ -428,7 +440,20 @@ export class SyncService {
         throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
       }
     } else if (targetUrl.includes('instagram.com')) {
-      this.logger.log(`Requesting Cloudflare Worker for INSTAGRAM video URL: ${targetUrl}`);
+      this.logger.log(`Requesting RapidAPI for INSTAGRAM video URL: ${targetUrl}`);
+      const rapidApiKey = process.env.RAPIDAPI_KEY;
+      if (!rapidApiKey) {
+        throw new Error(`RAPIDAPI_KEY is not set for Instagram download.`);
+      }
+      
+      const options = {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-key': rapidApiKey,
+          'x-rapidapi-host': 'instagram-scraper-api2.p.rapidapi.com'
+        }
+      };
+      
       const shortcodeMatch = targetUrl.match(/reel\/([^\/]+)/) || targetUrl.match(/p\/([^\/]+)/);
       const shortcode = shortcodeMatch ? shortcodeMatch[1] : null;
       
@@ -436,27 +461,14 @@ export class SyncService {
         throw new Error(`Failed to extract shortcode from Instagram URL: ${targetUrl}`);
       }
       
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL;
-      if (!workerUrl) {
-        throw new Error(`CLOUDFLARE_WORKER_URL is not set for Instagram download.`);
-      }
+      const res = await fetch(`https://instagram-scraper-api2.p.rapidapi.com/v1/post_info?code_or_id_or_url=${shortcode}`, options);
+      const igData = await res.json();
       
-      const workerRes = await fetch(`${workerUrl}?shortcode=${shortcode}`);
-      const igData = await workerRes.json();
-      
-      // Try different JSON structures returned by __a=1
-      if (igData?.graphql?.shortcode_media?.video_url) {
-        videoUrl = igData.graphql.shortcode_media.video_url;
-      } else if (igData?.items && igData.items.length > 0 && igData.items[0].video_versions && igData.items[0].video_versions.length > 0) {
-        videoUrl = igData.items[0].video_versions[0].url;
-      } else if (igData?.video_url) {
-        videoUrl = igData.video_url;
-      }
-      
-      if (videoUrl) {
-        this.logsService.log('INFO', `Successfully got Instagram video URL from worker.`);
+      if (igData?.data?.video_versions?.length > 0) {
+        videoUrl = igData.data.video_versions[0].url;
+        this.logsService.log('INFO', `Successfully got Instagram video URL from RapidAPI.`);
       } else {
-        throw new Error(`Failed to extract video_url from Instagram response: ${JSON.stringify(igData).substring(0, 200)}`);
+        throw new Error(`Failed to extract video_url from RapidAPI response: ${JSON.stringify(igData).substring(0, 200)}`);
       }
     } else {
       this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
