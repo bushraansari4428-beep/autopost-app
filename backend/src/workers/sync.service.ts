@@ -447,25 +447,31 @@ export class SyncService {
       }
       
       const options = {
-        method: 'GET',
+        method: 'POST',
         headers: {
+          'content-type': 'application/json',
           'x-rapidapi-key': rapidApiKey,
-          'x-rapidapi-host': 'instagram-scraper-api2.p.rapidapi.com'
-        }
+          'x-rapidapi-host': 'instagram120.p.rapidapi.com'
+        },
+        body: JSON.stringify({ url: targetUrl })
       };
       
-      const shortcodeMatch = targetUrl.match(/reel\/([^\/]+)/) || targetUrl.match(/p\/([^\/]+)/);
-      const shortcode = shortcodeMatch ? shortcodeMatch[1] : null;
-      
-      if (!shortcode) {
-        throw new Error(`Failed to extract shortcode from Instagram URL: ${targetUrl}`);
-      }
-      
-      const res = await fetch(`https://instagram-scraper-api2.p.rapidapi.com/v1/post_info?code_or_id_or_url=${shortcode}`, options);
+      const res = await fetch(`https://instagram120.p.rapidapi.com/api/instagram/links`, options);
       const igData = await res.json();
       
-      if (igData?.data?.video_versions?.length > 0) {
-        videoUrl = igData.data.video_versions[0].url;
+      if (Array.isArray(igData)) {
+        for (const item of igData) {
+          if (item.urls && Array.isArray(item.urls)) {
+            const mp4Obj = item.urls.find((u: any) => u.extension === 'mp4' || u.name === 'MP4' || u.url.includes('.mp4'));
+            if (mp4Obj && mp4Obj.url) {
+              videoUrl = mp4Obj.url.startsWith('/') ? `https://instagram120.p.rapidapi.com${mp4Obj.url}` : mp4Obj.url;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (videoUrl) {
         this.logsService.log('INFO', `Successfully got Instagram video URL from RapidAPI.`);
       } else {
         throw new Error(`Failed to extract video_url from RapidAPI response: ${JSON.stringify(igData).substring(0, 200)}`);
