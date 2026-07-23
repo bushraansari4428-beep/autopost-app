@@ -126,6 +126,20 @@ export class SourcesController {
     }
   }
 
+  @Get('debug-tiktok')
+  async debugTiktok(@Query('url') url: string) {
+    try {
+      const { exec } = require('child_process');
+      return new Promise((resolve) => {
+        exec(`./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`, (error: any, stdout: any, stderr: any) => {
+          resolve({ stdout, stderr, error: error?.message });
+        });
+      });
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.sourcesService.findOne(id);
