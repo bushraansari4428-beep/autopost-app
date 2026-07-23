@@ -35,27 +35,44 @@ jobs:
       - name: Download YouTube Video
         run: |
           echo "Downloading video: ${{ github.event.inputs.videoId }}"
-          # Request Cobalt API
-          COBALT_RES=$(curl -s -X POST "https://cobalt-api.kwiatekm.cloud/api/json" \
-            -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            -d "{\"url\":\"https://www.youtube.com/watch?v=${{ github.event.inputs.videoId }}\", \"vCodec\":\"h264\", \"vQuality\":\"720\", \"isAudioOnly\":false, \"isNoTTWatermark\":true}")
+          URL="https://www.youtube.com/watch?v=${{ github.event.inputs.videoId }}"
           
-          echo "Cobalt response: $COBALT_RES"
+          # Request loader.to API
+          RES=$(curl -s "https://loader.to/ajax/download.php?format=720&url=$URL")
+          ID=$(echo $RES | jq -r '.id')
           
-          # Extract video URL
-          VIDEO_URL=$(echo $COBALT_RES | jq -r '.url')
+          if [ "$ID" = "null" ] || [ -z "$ID" ]; then
+            echo "Failed to initialize download from loader.to"
+            exit 1
+          fi
           
-          if [ "$VIDEO_URL" = "null" ] || [ -z "$VIDEO_URL" ]; then
-            echo "Failed to get video URL from Cobalt"
+          echo "Waiting for video to process (ID: $ID)..."
+          
+          VIDEO_URL=""
+          for i in {1..40}; do
+            PROG=$(curl -s "https://lto2.affadaffa.com/api/progress?id=$ID")
+            SUCCESS=$(echo $PROG | jq -r '.success')
+            TEXT=$(echo $PROG | jq -r '.text')
+            
+            echo "Status: $TEXT"
+            
+            if [ "$SUCCESS" = "1" ]; then
+              VIDEO_URL=$(echo $PROG | jq -r '.download_url')
+              break
+            fi
+            sleep 2
+          done
+          
+          if [ -z "$VIDEO_URL" ] || [ "$VIDEO_URL" = "null" ]; then
+            echo "Timed out waiting for video processing."
             exit 1
           fi
           
           echo "Downloading from: $VIDEO_URL"
           curl -sL "$VIDEO_URL" -o out.mp4
           
-          if [ ! -f out.mp4 ]; then
-            echo "Failed to download out.mp4"
+          if [ ! -s out.mp4 ]; then
+            echo "Failed to download out.mp4 or file is empty"
             exit 1
           fi
 
