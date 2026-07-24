@@ -8,8 +8,16 @@ export class SourcesController {
   constructor(private readonly sourcesService: SourcesService) {}
 
   @Post()
-  create(@Body() createSourceDto: any) {
-    return this.sourcesService.create(createSourceDto);
+  async create(@Body() createSourceDto: any) {
+    try {
+      return await this.sourcesService.create(createSourceDto);
+    } catch (error: any) {
+      console.error('Source creation error:', error);
+      throw new (require('@nestjs/common').HttpException)(
+        `Failed to create source: ${error.message || error}`,
+        500
+      );
+    }
   }
 
   @Get()
@@ -31,6 +39,17 @@ export class SourcesController {
       return { status: res.status, data };
     } catch (e) {
       return { error: e.message };
+    }
+  }
+
+  @Get('debug-prisma')
+  async debugPrisma() {
+    const { execSync } = require('child_process');
+    try {
+      const result = execSync('npx prisma db push --accept-data-loss').toString();
+      return { success: true, result };
+    } catch (error: any) {
+      return { success: false, error: error.message, stdout: error.stdout?.toString(), stderr: error.stderr?.toString() };
     }
   }
 
