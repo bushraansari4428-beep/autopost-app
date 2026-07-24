@@ -745,6 +745,7 @@ export class SyncService {
   }
 
   private async scrapeLatestFromSSR(platform: string, profileUrl: string, userId: string): Promise<string | null> {
+    const proxyUrl = process.env.CLOUDFLARE_PROXY_URL; // e.g. https://autopost-proxy.yourname.workers.dev
     try {
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -753,7 +754,10 @@ export class SyncService {
       };
 
       if (platform === 'XIAOHONGSHU') {
-        const response = await fetch(`https://www.xiaohongshu.com/user/profile/${userId}`, { headers });
+        const targetUrl = `https://www.xiaohongshu.com/user/profile/${userId}`;
+        const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}` : targetUrl;
+        
+        const response = await fetch(finalUrl, { headers });
         const html = await response.text();
         
         // Extract __INITIAL_STATE__
@@ -770,10 +774,13 @@ export class SyncService {
              this.logger.warn(`Failed to parse XHS JSON state: ${e}`);
           }
         } else {
-           this.logger.warn(`Could not find __INITIAL_STATE__ in XHS HTML (length: ${html.length})`);
+           this.logger.warn(`Could not find __INITIAL_STATE__ in XHS HTML`);
         }
       } else if (platform === 'KUAISHOU') {
-        const response = await fetch(`https://www.kuaishou.com/profile/3x${userId.replace(/^3x/, '')}`, { 
+        const targetUrl = `https://www.kuaishou.com/profile/3x${userId.replace(/^3x/, '')}`;
+        const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}` : targetUrl;
+
+        const response = await fetch(finalUrl, { 
            headers: { ...headers, 'Referer': 'https://www.kuaishou.com/' } 
         });
         const html = await response.text();
@@ -792,7 +799,7 @@ export class SyncService {
              this.logger.warn(`Failed to parse Kuaishou JSON data: ${e}`);
           }
         } else {
-           this.logger.warn(`Could not find __NEXT_DATA__ in Kuaishou HTML (length: ${html.length})`);
+           this.logger.warn(`Could not find __NEXT_DATA__ in Kuaishou HTML`);
         }
       }
     } catch (error: any) {
