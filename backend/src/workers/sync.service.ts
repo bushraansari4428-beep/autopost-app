@@ -643,6 +643,47 @@ export class SyncService {
       } else {
         throw new Error(`Failed to extract video_url from RapidAPI response: ${JSON.stringify(igData).substring(0, 200)}`);
       }
+    } else if (targetUrl.includes('kuaishou.com')) {
+      this.logger.log(`Extracting Kuaishou MP4 from mobile endpoint for URL: ${targetUrl}`);
+      const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+      
+      const ksId = targetUrl.split('/').filter(Boolean).pop();
+      const mobileKsUrl = `https://c.kuaishou.com/fw/photo/${ksId}`;
+      const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(mobileKsUrl)}` : mobileKsUrl;
+      
+      const res = await fetch(finalUrl, { 
+           headers: { 
+             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+           } 
+      });
+      const html = await res.text();
+      
+      const mp4Match = html.match(/(https?:\/\/[^"]+\.mp4[^"]*)/);
+      if (mp4Match && mp4Match[1]) {
+        videoUrl = mp4Match[1];
+        this.logsService.log('INFO', `Successfully got Kuaishou MP4 video URL via Cloudflare Mobile Proxy.`);
+      } else {
+        throw new Error(`Failed to extract MP4 URL from Kuaishou HTML.`);
+      }
+    } else if (targetUrl.includes('xiaohongshu.com')) {
+       this.logger.log(`Xiaohongshu download bypass for URL: ${targetUrl}`);
+       const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+       const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}` : targetUrl;
+       
+       const res = await fetch(finalUrl, { 
+           headers: { 
+             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+           } 
+       });
+       const html = await res.text();
+       const mp4Match = html.match(/(https?:\/\/[^"]+\.mp4[^"]*)/);
+       if (mp4Match && mp4Match[1]) {
+           videoUrl = mp4Match[1];
+           this.logsService.log('INFO', `Successfully got Xiaohongshu MP4 video URL via Cloudflare Proxy.`);
+       } else {
+           throw new Error(`Failed to extract MP4 URL from Xiaohongshu HTML. Post might be images only or rate limited.`);
+       }
     } else {
       this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
       const loaderRes = await fetch(`https://loader.to/ajax/download.php?format=720&url=${encodedUrl}`);
