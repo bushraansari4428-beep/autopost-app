@@ -191,16 +191,16 @@ export class SyncService {
           const urlParts = mapping.source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
           
-          this.logsService.log('INFO', `Searching Hugging Face Microservice for latest ${mapping.source.platform} video for user ${userId}...`);
-          const hfUrl = await this.fetchLatestFromHuggingFace(mapping.source.platform, mapping.source.url);
+          this.logsService.log('INFO', `Scraping SSR HTML for latest ${mapping.source.platform} video for user ${userId}...`);
+          const ssrUrl = await this.scrapeLatestFromSSR(mapping.source.platform, mapping.source.url, userId);
           
-          if (!hfUrl) {
-             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via Hugging Face`);
+          if (!ssrUrl) {
+             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via SSR`);
           } else {
-             this.logsService.log('INFO', `Found latest video via Hugging Face: ${hfUrl}`);
+             this.logsService.log('INFO', `Found latest video via SSR: ${ssrUrl}`);
              latestVideo = {
-               id: 'hf_' + Date.now(),
-               url: hfUrl,
+               id: 'ssr_' + Date.now(),
+               url: ssrUrl,
                title: `${mapping.source.platform} Video`,
                timestamp: Math.floor(Date.now() / 1000)
              };
@@ -419,12 +419,12 @@ export class SyncService {
           const urlParts = source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1];
           
-          this.logger.log(`Searching Hugging Face for latest ${source.platform} video for user ${userId}...`);
-          const hfUrl = await this.fetchLatestFromHuggingFace(source.platform, source.url);
-          if (hfUrl) {
+          this.logger.log(`Scraping SSR HTML for latest ${source.platform} video for user ${userId}...`);
+          const ssrUrl = await this.scrapeLatestFromSSR(source.platform, source.url, userId);
+          if (ssrUrl) {
              latestVideos.push({
-               id: 'hf_' + Date.now(),
-               url: hfUrl,
+               id: 'ssr_' + Date.now(),
+               url: ssrUrl,
                title: `${source.platform} Video`,
                timestamp: Math.floor(Date.now() / 1000)
              });
@@ -744,31 +744,59 @@ export class SyncService {
     return null;
   }
 
-  private async fetchLatestFromHuggingFace(platform: string, profileUrl: string): Promise<string | null> {
-    const hfApiUrl = process.env.HUGGINGFACE_API_URL;
-    if (!hfApiUrl) {
-      this.logger.error('HUGGINGFACE_API_URL is not set in environment variables');
-      return null;
-    }
-
+  private async scrapeLatestFromSSR(platform: string, profileUrl: string, userId: string): Promise<string | null> {
     try {
-      const platformParam = platform === 'XIAOHONGSHU' ? 'xiaohongshu' : 'kuaishou';
-      const response = await fetch(
-        `${hfApiUrl.replace(/\/$/, '')}/scrape?url=${encodeURIComponent(profileUrl)}&platform=${platformParam}`,
-        {
-          headers: {
-            'Accept': 'application/json',
-          },
-        },
-      );
-      const result = await response.json();
-      if (result && result.success && result.url) {
-        return result.url;
-      } else {
-        this.logger.error(`Hugging Face API returned error: ${result.error || 'Unknown error'}`);
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      };
+
+      if (platform === 'XIAOHONGSHU') {
+        const response = await fetch(`https://www.xiaohongshu.com/user/profile/${userId}`, { headers });
+        const html = await response.text();
+        
+        // Extract __INITIAL_STATE__
+        const match = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s) || html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\})<\/script>/s);
+        if (match && match[1]) {
+          try {
+             const state = JSON.parse(match[1]);
+             const notes = state?.user?.notes ?? state?.user?.noteList ?? state?.user?.profile?.notes ?? [];
+             if (notes && notes.length > 0) {
+                const latestNoteId = notes[0].noteId ?? notes[0].id;
+                return `https://www.xiaohongshu.com/explore/${latestNoteId}`;
+             }
+          } catch (e) {
+             this.logger.warn(`Failed to parse XHS JSON state: ${e}`);
+          }
+        } else {
+           this.logger.warn(`Could not find __INITIAL_STATE__ in XHS HTML (length: ${html.length})`);
+        }
+      } else if (platform === 'KUAISHOU') {
+        const response = await fetch(`https://www.kuaishou.com/profile/3x${userId.replace(/^3x/, '')}`, { 
+           headers: { ...headers, 'Referer': 'https://www.kuaishou.com/' } 
+        });
+        const html = await response.text();
+        
+        // Extract __NEXT_DATA__
+        const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
+        if (match && match[1]) {
+          try {
+             const nextData = JSON.parse(match[1]);
+             const videos = nextData?.props?.pageProps?.videoList ?? nextData?.props?.initialState?.video?.list ?? [];
+             if (videos && videos.length > 0) {
+                const latestVideoId = videos[0].videoId ?? videos[0].id ?? videos[0].photo?.id;
+                return `https://www.kuaishou.com/short-video/${latestVideoId}`;
+             }
+          } catch (e) {
+             this.logger.warn(`Failed to parse Kuaishou JSON data: ${e}`);
+          }
+        } else {
+           this.logger.warn(`Could not find __NEXT_DATA__ in Kuaishou HTML (length: ${html.length})`);
+        }
       }
     } catch (error: any) {
-      this.logger.error(`Hugging Face fetch error: ${error.message}`);
+      this.logger.error(`SSR Scrape error: ${error.message}`);
     }
     return null;
   }
