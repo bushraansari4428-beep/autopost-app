@@ -16,7 +16,8 @@ export class InstagramWebhookController {
     @Headers('x-webhook-secret') secret: string,
     @Body() payload: { username: string; shortcode: string; reelUrl: string; caption: string },
   ) {
-    if (!secret || secret !== process.env.WEBHOOK_SECRET) {
+    const expectedSecret = process.env.WEBHOOK_SECRET || 'Pakistan@92';
+    if (!secret || secret !== expectedSecret) {
       throw new UnauthorizedException('Invalid Secret Key');
     }
 

@@ -22,9 +22,6 @@ jobs:
         run: pip install instaloader requests
 
       - name: Check Instagram Profile & Trigger Webhook
-        env:
-          NESTJS_WEBHOOK_URL: ${{ secrets.NESTJS_WEBHOOK_URL }}
-          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           python - << 'EOF'
           import os
@@ -34,8 +31,8 @@ jobs:
           # Hardcoded for now based on user requirements. Can be fetched dynamically later if needed.
           TARGET_USERNAMES = ["moromorotv"]
           
-          WEBHOOK_URL = os.getenv("NESTJS_WEBHOOK_URL")
-          SECRET = os.getenv("WEBHOOK_SECRET")
+          WEBHOOK_URL = "https://autopost-app-1.onrender.com/api/webhooks/instagram-reel"
+          SECRET = "Pakistan@92"
 
           if not WEBHOOK_URL or not SECRET:
               print("Missing Webhook URL or Secret. Exiting.")
