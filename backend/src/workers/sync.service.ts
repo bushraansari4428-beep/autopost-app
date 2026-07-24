@@ -606,7 +606,7 @@ export class SyncService {
     } else if (targetUrl.includes('instagram.com')) {
       this.logsService.log('INFO', `Requesting yt-dlp for INSTAGRAM download: ${targetUrl}`);
       try {
-        const cmd = `./yt-dlp --cookies cookies.txt --dump-json "${targetUrl}"`;
+        const cmd = `./yt-dlp --dump-json "${targetUrl}"`;
         const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
         if (stdout && stdout.trim()) {
           const videoData = JSON.parse(stdout.trim());
