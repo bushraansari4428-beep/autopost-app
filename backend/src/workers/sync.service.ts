@@ -134,25 +134,15 @@ export class SyncService {
             }
             
             if (!latestVideo) {
-              this.logsService.log('INFO', `Fetching IG internal API via Cloudflare Proxy for latest Reel by ${username}...`);
-              const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+              this.logsService.log('INFO', `Fetching IG internal API via Cloudflare Worker for latest Reel by ${username}...`);
+              const igWorkerUrl = process.env.IG_WORKER_URL;
               
-              if (!proxyUrl) {
-                this.logsService.log('ERROR', `CLOUDFLARE_PROXY_URL missing. Cannot poll Instagram internal API.`);
+              if (!igWorkerUrl) {
+                this.logsService.log('ERROR', `IG_WORKER_URL missing. Cannot poll Instagram internal API. Please create the Cloudflare Worker and add the URL to Render.`);
               } else {
-                const targetUrl = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`;
-                const searchUrl = `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}`;
+                const searchUrl = `${igWorkerUrl.replace(/\/$/, '')}?username=${username}`;
                 
-                const res = await fetch(searchUrl, {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'X-IG-App-ID': '936619743392459',
-                    'Accept': '*/*',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin'
-                  }
-                });
+                const res = await fetch(searchUrl);
                 
                 if (res.ok) {
                   const data = await res.json();
@@ -160,7 +150,6 @@ export class SyncService {
                   const edges = user?.edge_owner_to_timeline_media?.edges;
                   
                   if (edges && edges.length > 0) {
-                    // Find first video/reel
                     const latestMedia = edges.find((e: any) => e.node && e.node.is_video)?.node;
                     
                     if (latestMedia) {
@@ -372,25 +361,15 @@ export class SyncService {
             }
 
             if (!foundVideo) {
-              this.logger.log(`Fetching IG internal API via Cloudflare Proxy for latest Reel by ${username}...`);
-              const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+              this.logger.log(`Fetching IG internal API via Cloudflare Worker for latest Reel by ${username}...`);
+              const igWorkerUrl = process.env.IG_WORKER_URL;
               
-              if (!proxyUrl) {
-                this.logger.error(`CLOUDFLARE_PROXY_URL missing. Cannot poll Instagram internal API.`);
+              if (!igWorkerUrl) {
+                this.logger.error(`IG_WORKER_URL missing. Cannot poll Instagram internal API.`);
               } else {
-                const targetUrl = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`;
-                const searchUrl = `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}`;
+                const searchUrl = `${igWorkerUrl.replace(/\/$/, '')}?username=${username}`;
                 
-                const res = await fetch(searchUrl, {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'X-IG-App-ID': '936619743392459',
-                    'Accept': '*/*',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin'
-                  }
-                });
+                const res = await fetch(searchUrl);
                 
                 if (res.ok) {
                   const data = await res.json();
