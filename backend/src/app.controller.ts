@@ -12,10 +12,14 @@ export class AppController {
 
   @Get('debug-prisma')
   async debugPrisma() {
-    const { execSync } = require('child_process');
+    const util = require('util');
+    const exec = util.promisify(require('child_process').exec);
     try {
-      const result = execSync('npx prisma db push --accept-data-loss').toString();
-      return { success: true, result };
+      const { stdout, stderr } = await exec('npx prisma db push --accept-data-loss', { 
+        timeout: 15000,
+        env: { ...process.env, CI: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' } 
+      });
+      return { success: true, stdout, stderr };
     } catch (error: any) {
       return { success: false, error: error.message, stdout: error.stdout?.toString(), stderr: error.stderr?.toString() };
     }
