@@ -101,7 +101,9 @@ export class SyncService {
             
             this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
             const query = `site:instagram.com "${username}"`;
-            const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+            const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+            const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+            const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
             
             const res = await fetch(searchUrl, {
               headers: {
@@ -289,7 +291,9 @@ export class SyncService {
             
             this.logger.log(`Searching DuckDuckGo for latest Reel by ${username}...`);
             const query = `site:instagram.com "${username}"`;
-            const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+            const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+            const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+            const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
             
             const res = await fetch(searchUrl, {
               headers: {
