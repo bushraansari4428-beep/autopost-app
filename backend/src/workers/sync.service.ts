@@ -778,44 +778,36 @@ export class SyncService {
            this.logger.warn(`Could not find __INITIAL_STATE__ in XHS HTML`);
         }
       } else if (platform === 'KUAISHOU') {
-        const targetUrl = `https://www.kuaishou.com/profile/3x${userId.replace(/^3x/, '')}`;
+        const targetUrl = `https://c.kuaishou.com/fw/user/3x${userId.replace(/^3x/, '')}`;
         const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}` : targetUrl;
 
         const response = await fetch(finalUrl, { 
-           headers: { ...headers, 'Referer': 'https://www.kuaishou.com/' } 
+           headers: { 
+             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+           } 
         });
         const html = await response.text();
         
-        // Extract __NEXT_DATA__
-        const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
+        // Extract INIT_STATE
         const matchInit = html.match(/window\.INIT_STATE\s*=\s*(\{.*?\});/s);
-        if (match && match[1]) {
-          try {
-             const nextData = JSON.parse(match[1]);
-             const videos = nextData?.props?.pageProps?.videoList ?? nextData?.props?.initialState?.video?.list ?? [];
-             if (videos && videos.length > 0) {
-                const latestVideoId = videos[0].videoId ?? videos[0].id ?? videos[0].photo?.id;
-                return `https://www.kuaishou.com/short-video/${latestVideoId}`;
-             }
-          } catch (e) {
-             this.logger.warn(`Failed to parse Kuaishou JSON data: ${e}`);
-          }
-        } else if (matchInit && matchInit[1]) {
+        
+        if (matchInit && matchInit[1]) {
           try {
              const jsonStr = matchInit[1].replace(/undefined/g, 'null');
-             const initState = JSON.parse(jsonStr);
-             const feeds = initState?.profile?.profileFeed ?? [];
-             if (feeds && feeds.length > 0) {
-                const latestVideoId = feeds[0].photoId ?? feeds[0].id;
+             // The state JSON can be malformed, so we use regex to extract photoIds directly
+             const photoIdMatch = jsonStr.match(/"photoId":"([0-9a-zA-Z]+)"/);
+             if (photoIdMatch && photoIdMatch[1]) {
+                const latestVideoId = photoIdMatch[1];
                 return `https://www.kuaishou.com/short-video/${latestVideoId}`;
              } else {
-                this.logger.warn(`No feeds found in Kuaishou INIT_STATE. Might be rate limited.`);
+                this.logger.warn(`No photoId found in Kuaishou INIT_STATE.`);
              }
           } catch(e) {
              this.logger.warn(`Failed to parse Kuaishou INIT_STATE: ${e}`);
           }
         } else {
-           this.logger.warn(`Could not find __NEXT_DATA__ or INIT_STATE in Kuaishou HTML`);
+           this.logger.warn(`Could not find INIT_STATE in Kuaishou HTML`);
         }
       }
     } catch (error: any) {
