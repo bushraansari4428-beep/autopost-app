@@ -604,37 +604,53 @@ export class SyncService {
         throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
       }
     } else if (targetUrl.includes('instagram.com')) {
-      this.logsService.log('INFO', `Requesting Cobalt API for INSTAGRAM download: ${targetUrl}`);
-      
-      const cobaltInstances = [
-        'https://api.cobalt.tools/api/json',
-        'https://cobalt.kwiatektv.me/api/json',
-        'https://cobalt.catterall.sh/api/json',
-        'https://cobalt.shiron.dev/api/json',
-        'https://co.wuk.sh/api/json'
-      ];
-
-      for (const instance of cobaltInstances) {
-        if (videoUrl) break;
-        try {
-          const res = await fetch(instance, {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ url: targetUrl })
-          });
-          
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.url) {
-              videoUrl = data.url;
-              this.logsService.log('INFO', `Successfully got Instagram MP4 from Cobalt API (${instance}).`);
-            }
+      this.logsService.log('INFO', `Requesting yt-dlp for INSTAGRAM download: ${targetUrl}`);
+      try {
+        const cmd = `./yt-dlp --cookies cookies.txt --dump-json "${targetUrl}"`;
+        const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+        if (stdout && stdout.trim()) {
+          const videoData = JSON.parse(stdout.trim());
+          if (videoData && videoData.url) {
+            videoUrl = videoData.url;
+            this.logsService.log('INFO', `Successfully got Instagram MP4 from yt-dlp.`);
           }
-        } catch (e) {
-          this.logger.warn(`Cobalt instance ${instance} failed: ${e.message}`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`yt-dlp download failed for IG: ${e.message.substring(0, 200)}...`);
+      }
+
+      if (!videoUrl) {
+        this.logsService.log('WARN', `yt-dlp failed. Falling back to Cobalt API for INSTAGRAM...`);
+        const cobaltInstances = [
+          'https://api.cobalt.tools/api/json',
+          'https://cobalt.kwiatektv.me/api/json',
+          'https://cobalt.catterall.sh/api/json',
+          'https://cobalt.shiron.dev/api/json',
+          'https://co.wuk.sh/api/json'
+        ];
+
+        for (const instance of cobaltInstances) {
+          if (videoUrl) break;
+          try {
+            const res = await fetch(instance, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ url: targetUrl })
+            });
+            
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.url) {
+                videoUrl = data.url;
+                this.logsService.log('INFO', `Successfully got Instagram MP4 from Cobalt API (${instance}).`);
+              }
+            }
+          } catch (e) {
+            this.logger.warn(`Cobalt instance ${instance} failed: ${e.message}`);
+          }
         }
       }
       
