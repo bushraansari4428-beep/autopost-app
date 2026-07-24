@@ -191,8 +191,6 @@ export class SyncService {
             let cmd: string;
             if (mapping.source.platform === 'TIKTOK') {
               cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
-            } else if (mapping.source.platform === 'KUAISHOU' || mapping.source.platform === 'XIAOHONGSHU') {
-              cmd = `./yt-dlp --flat-playlist --dump-json --playlist-end 1 --no-check-certificate --user-agent "Mozilla/5.0 (Linux; Android 10; K)" "${url}"`;
             } else {
               cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
             }
@@ -419,8 +417,6 @@ export class SyncService {
           let cmd: string;
           if (source.platform === 'TIKTOK') {
             cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
-          } else if (source.platform === 'KUAISHOU' || source.platform === 'XIAOHONGSHU') {
-            cmd = `./yt-dlp --flat-playlist --dump-json --playlist-end 1 --no-check-certificate --user-agent "Mozilla/5.0 (Linux; Android 10; K)" "${url}"`;
           } else {
             cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
           }
