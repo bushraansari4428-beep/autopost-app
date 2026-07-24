@@ -96,9 +96,49 @@ export class SyncService {
 
       if (!latestVideo) {
         if (mapping.source.platform === 'INSTAGRAM') {
-          // Instagram is now handled separately by GitHub Actions + Webhooks architecture.
-          // This cron job will simply skip Instagram to avoid RapidAPI rate limits.
-          this.logger.log(`Skipping INSTAGRAM check for ${mapping.source.url} (handled by Webhooks)`);
+          try {
+            const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
+            const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+            
+            if (braveApiKey) {
+              this.logsService.log('INFO', `Searching Brave API for latest Reel by ${username}...`);
+              const query = `site:instagram.com "${username}"`;
+              const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'X-Subscription-Token': braveApiKey
+                }
+              });
+              
+              if (res.ok) {
+                const data = await res.json();
+                const results = data.web?.results || [];
+                for (const result of results) {
+                  if (result.url && result.url.includes('instagram.com/')) {
+                    const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideo = {
+                        id: shortcodeMatch[2],
+                        url: result.url,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      };
+                      this.logsService.log('INFO', `Found post from Brave Search: ${result.url}`);
+                      break;
+                    }
+                  }
+                }
+              } else {
+                this.logsService.log('ERROR', `Brave Search request failed with status: ${res.status}`);
+              }
+            } else {
+              this.logsService.log('ERROR', `BRAVE_SEARCH_API_KEY missing. Cannot poll Instagram.`);
+            }
+          } catch (e) {
+            this.logsService.log('ERROR', `Brave Search polling failed: ${e.message}`);
+          }
 
         } else if (mapping.source.platform === 'XIAOHONGSHU' || mapping.source.platform === 'KUAISHOU') {
           // Extract user ID from URL
@@ -245,9 +285,49 @@ export class SyncService {
 
       if (latestVideos.length === 0) {
         if (source.platform === 'INSTAGRAM') {
-          // Instagram is handled by GitHub Actions + Webhooks architecture.
-          // Skipping here to avoid RapidAPI rate limits.
-          this.logger.log(`Skipping INSTAGRAM cron check for ${source.url} (handled by Webhooks)`);
+          try {
+            const username = source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
+            const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+            
+            if (braveApiKey) {
+              this.logger.log(`Searching Brave API for latest Reel by ${username}...`);
+              const query = `site:instagram.com "${username}"`;
+              const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'X-Subscription-Token': braveApiKey
+                }
+              });
+              
+              if (res.ok) {
+                const data = await res.json();
+                const results = data.web?.results || [];
+                for (const result of results) {
+                  if (result.url && result.url.includes('instagram.com/')) {
+                    const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideos.push({
+                        id: shortcodeMatch[2],
+                        url: result.url,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      });
+                      this.logger.log(`Found post from Brave Search: ${result.url}`);
+                      break;
+                    }
+                  }
+                }
+              } else {
+                this.logger.warn(`Brave Search request failed with status: ${res.status}`);
+              }
+            } else {
+              this.logger.error(`BRAVE_SEARCH_API_KEY missing. Cannot poll Instagram.`);
+            }
+          } catch (e) {
+            this.logger.warn(`Brave Search polling failed: ${e.message}`);
+          }
 
         } else if (source.platform === 'XIAOHONGSHU' || source.platform === 'KUAISHOU') {
           const urlParts = source.url.split('/').filter(Boolean);
@@ -441,8 +521,63 @@ export class SyncService {
         throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
       }
     } else if (targetUrl.includes('instagram.com')) {
-       // Should not happen anymore, but fallback just in case
-       throw new Error('Instagram downloads should be processed by the webhook directly.');
+      this.logsService.log('INFO', `Requesting Cobalt API for INSTAGRAM download: ${targetUrl}`);
+      try {
+        const res = await fetch('https://api.cobalt.tools/api/json', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: targetUrl })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.url) {
+            videoUrl = data.url;
+            this.logsService.log('INFO', `Successfully got Instagram MP4 from Cobalt API.`);
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`Cobalt API failed: ${e.message}`);
+      }
+      
+      if (!videoUrl) {
+         this.logsService.log('WARN', `Cobalt API failed. Falling back to RapidAPI RockSolid...`);
+         const rapidApiKey = process.env.RAPIDAPI_KEY;
+         if (!rapidApiKey) {
+           throw new Error('Cobalt API failed and RAPIDAPI_KEY is not set for fallback.');
+         }
+
+         const username = targetUrl.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
+         const searchUrl = `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_reels.php`;
+         const rapidRes = await fetch(searchUrl, {
+           method: 'POST',
+           headers: {
+             'content-type': 'application/x-www-form-urlencoded',
+             'x-rapidapi-host': 'instagram-scraper-stable-api.p.rapidapi.com',
+             'x-rapidapi-key': rapidApiKey,
+           },
+           body: `username_or_url=${encodeURIComponent(username)}&amount=1`
+         });
+         
+         if (rapidRes.ok) {
+           const rapidData = await rapidRes.json();
+           if (rapidData && rapidData.reels && rapidData.reels.length > 0) {
+              const reelNode = rapidData.reels[0].node;
+              if (reelNode && reelNode.video_url) {
+                videoUrl = reelNode.video_url;
+                this.logsService.log('INFO', `Successfully got Instagram MP4 from RapidAPI fallback.`);
+              }
+           }
+         }
+      }
+
+      if (!videoUrl) {
+         this.logsService.log('ERROR', `Failed to get Instagram video URL from both Cobalt API and RapidAPI.`);
+         throw new Error('Both Cobalt API and RapidAPI failed to provide video URL for Instagram');
+      }
     } else if (targetUrl.includes('kuaishou.com')) {
       this.logger.log(`Extracting Kuaishou MP4 from mobile endpoint for URL: ${targetUrl}`);
       const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
