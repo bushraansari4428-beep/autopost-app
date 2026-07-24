@@ -183,6 +183,8 @@ export default function SourcesPage() {
                   <option value="YOUTUBE">YouTube</option>
                   <option value="INSTAGRAM">Instagram</option>
                   <option value="TIKTOK">TikTok</option>
+                  <option value="XIAOHONGSHU">Xiaohongshu (RedNote)</option>
+                  <option value="KUAISHOU">Kuaishou</option>
                 </select>
               </div>
               <div>
