@@ -11,9 +11,23 @@ import Parser from 'rss-parser';
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
   private isProcessing = false;
-  private parser = new Parser();
+  private parser = new Parser({
+    customFields: {
+      item: ['media:content', 'media:thumbnail']
+    },
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/rss+xml, application/xml, text/xml'
+    }
+  });
   private rssHubInstances = [
     'https://rsshub.app',
+    'https://rsshub.199898.xyz',
+    'https://rss.peal.cc',
+    'https://rss.qikaile.tk',
+    'https://rss.shab.fun',
+    'https://rss.wuding.me',
+    'https://rss.nolebase.com',
     'https://rsshub.rss.ink'
   ];
 
@@ -177,7 +191,7 @@ export class SyncService {
           const urlParts = mapping.source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
           const route = mapping.source.platform === 'XIAOHONGSHU' 
-                        ? `/xiaohongshu/user/${userId}` 
+                        ? `/xiaohongshu/user/${userId}/notes` 
                         : `/kuaishou/user/${userId}`;
           
           this.logsService.log('INFO', `Searching RSSHub for latest ${mapping.source.platform} video for user ${userId}...`);
