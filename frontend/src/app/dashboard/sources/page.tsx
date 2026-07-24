@@ -126,6 +126,8 @@ export default function SourcesPage() {
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                       source.platform === 'YOUTUBE' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 
                       source.platform === 'INSTAGRAM' ? 'bg-pink-500/10 text-pink-500 border border-pink-500/20' : 
+                      source.platform === 'XIAOHONGSHU' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 
+                      source.platform === 'KUAISHOU' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' : 
                       'bg-black text-white border border-gray-700'
                     }`}>
                       {source.platform}
@@ -181,6 +183,8 @@ export default function SourcesPage() {
                   <option value="YOUTUBE">YouTube</option>
                   <option value="INSTAGRAM">Instagram</option>
                   <option value="TIKTOK">TikTok</option>
+                  <option value="XIAOHONGSHU">Xiaohongshu (RedNote)</option>
+                  <option value="KUAISHOU">Kuaishou</option>
                 </select>
               </div>
               <div>

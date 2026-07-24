@@ -5,11 +5,17 @@ import { LogsService } from '../logs/logs.service';
 import { execPromise } from '../utils/exec.util';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as Parser from 'rss-parser';
 
 @Injectable()
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
   private isProcessing = false;
+  private parser = new Parser();
+  private rssHubInstances = [
+    'https://rsshub.app',
+    'https://rsshub.rss.ink'
+  ];
 
   constructor(
     private readonly prisma: PrismaService,
@@ -166,6 +172,22 @@ export class SyncService {
             this.logger.warn(`Instagram DuckDuckGo Search failed: ${e.message}`);
           }
 
+        } else if (mapping.source.platform === 'XIAOHONGSHU' || mapping.source.platform === 'KUAISHOU') {
+          // Extract user ID from URL
+          const urlParts = mapping.source.url.split('/').filter(Boolean);
+          const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
+          const route = mapping.source.platform === 'XIAOHONGSHU' 
+                        ? `/xiaohongshu/user/${userId}` 
+                        : `/kuaishou/user/${userId}`;
+          
+          this.logsService.log('INFO', `Searching RSSHub for latest ${mapping.source.platform} video for user ${userId}...`);
+          latestVideo = await this.fetchLatestFromRssHub(route);
+          
+          if (!latestVideo) {
+             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via RSSHub`);
+          } else {
+             this.logsService.log('INFO', `Found latest video via RSSHub: ${latestVideo.url}`);
+          }
         } else {
           for (const url of urlsToScan) {
             let cmd: string;
@@ -334,37 +356,59 @@ export class SyncService {
               }
 
               if (!foundVideo) {
-                this.logger.log(`Using Bing HTML Search for INSTAGRAM extraction: ${username}`);
-                const workerUrl = 'https://instaproxy.bushraansari4428.workers.dev';
-                const bingTarget = `https://www.bing.com/search?q=site:instagram.com "${username}"`;
-                
-                const res = await fetch(`${workerUrl}?url=${encodeURIComponent(bingTarget)}`);
-                
-                if (res.ok) {
-                  const html = await res.text();
-                  // Simple regex to find the first instagram reel/post URL in the Bing search results
-                  const match = html.match(/https?:\/\/(www\.)?instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/?/);
-                  if (match) {
-                    const latestReelUrl = match[0];
-                    const shortcodeMatch = latestReelUrl.match(/(reel|p)\/([^\/]+)/);
-                    if (shortcodeMatch) {
-                      latestVideos.push({
-                        id: shortcodeMatch[2],
-                        url: latestReelUrl,
-                        title: `Instagram Post`,
-                        timestamp: Math.floor(Date.now() / 1000)
-                      });
+                const rapidApiKey = process.env.RAPIDAPI_KEY;
+                if (!rapidApiKey) {
+                  this.logger.error(`RAPIDAPI_KEY missing. Cannot fallback to RapidAPI.`);
+                } else {
+                  this.logger.log(`Searching RapidAPI (RockSolid) for latest Reel by ${username}...`);
+                  
+                  const searchUrl = `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_reels.php`;
+                  const res = await fetch(searchUrl, {
+                    method: 'POST',
+                    headers: {
+                      'content-type': 'application/x-www-form-urlencoded',
+                      'x-rapidapi-host': 'instagram-scraper-stable-api.p.rapidapi.com',
+                      'x-rapidapi-key': rapidApiKey,
+                    },
+                    body: `username_or_url=${encodeURIComponent(username)}&amount=12`
+                  });
+                  
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.reels && data.reels.length > 0) {
+                      const latestReel = data.reels[0];
+                      const code = latestReel?.node?.media?.code;
+                      
+                      if (code) {
+                        latestVideos.push({
+                          id: code,
+                          url: `https://www.instagram.com/reel/${code}/`,
+                          title: `Instagram Post`,
+                          timestamp: Math.floor(Date.now() / 1000)
+                        });
+                      }
                     }
                   } else {
-                     this.logger.warn(`No Instagram video URL found in Bing HTML for ${username}`);
+                    this.logger.warn(`RapidAPI request failed with status: ${res.status}`);
                   }
-                } else {
-                  this.logger.warn(`Bing returned status ${res.status}`);
                 }
               }
             }
           } catch (e) {
-            this.logger.warn(`Instagram cron DuckDuckGo Search failed: ${e.message}`);
+            this.logger.warn(`Instagram cron RapidAPI Search failed: ${e.message}`);
+          }
+
+        } else if (source.platform === 'XIAOHONGSHU' || source.platform === 'KUAISHOU') {
+          const urlParts = source.url.split('/').filter(Boolean);
+          const userId = urlParts[urlParts.length - 1];
+          const route = source.platform === 'XIAOHONGSHU' 
+                        ? `/xiaohongshu/user/${userId}` 
+                        : `/kuaishou/user/${userId}`;
+          
+          this.logger.log(`Searching RSSHub for latest ${source.platform} video for user ${userId}...`);
+          const latestVideo = await this.fetchLatestFromRssHub(route);
+          if (latestVideo) {
+             latestVideos.push(latestVideo);
           }
 
         } else if (source.platform === 'YOUTUBE' && workerUrl) {
@@ -650,5 +694,34 @@ export class SyncService {
 
   private async downloadAndUpload(uploadHistory: any) {
     await this.nativeDownloadAndUpload(uploadHistory);
+  }
+
+  private async fetchLatestFromRssHub(route: string): Promise<any> {
+    for (const instance of this.rssHubInstances) {
+      try {
+        const feedUrl = `${instance}${route}`;
+        this.logger.log(`Trying RSSHub instance: ${feedUrl}`);
+        const feed = await this.parser.parseURL(feedUrl);
+
+        if (feed.items && feed.items.length > 0) {
+          const item = feed.items[0];
+          // Get ID from link
+          let id = item.link;
+          if (item.guid) {
+            id = item.guid;
+          }
+          return {
+            id: id,
+            url: item.link,
+            title: item.title || 'Social Video',
+            timestamp: item.pubDate ? new Date(item.pubDate).getTime() / 1000 : Math.floor(Date.now() / 1000)
+          };
+        }
+      } catch (error: any) {
+        this.logger.warn(`RSSHub instance ${instance} failed for ${route}: ${error.message}`);
+        continue;
+      }
+    }
+    return null;
   }
 }

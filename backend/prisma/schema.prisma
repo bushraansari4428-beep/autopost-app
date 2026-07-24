@@ -53,6 +53,8 @@ enum Platform {
   YOUTUBE
   INSTAGRAM
   TIKTOK
+  XIAOHONGSHU
+  KUAISHOU
 }
 
 enum Status {
