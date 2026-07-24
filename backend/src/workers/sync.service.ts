@@ -252,89 +252,9 @@ export class SyncService {
 
       if (latestVideos.length === 0) {
         if (source.platform === 'INSTAGRAM') {
-          try {
-            const username = source.url.split('instagram.com/')[1]?.split('/')[0];
-            if (username) {
-              const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
-              let foundVideo = false;
-              
-              if (braveApiKey) {
-                this.logger.log(`Using Brave API Search for INSTAGRAM extraction: ${username}`);
-                const query = `site:instagram.com "${username}"`;
-                const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-                
-                const res = await fetch(searchUrl, {
-                  headers: {
-                    'Accept': 'application/json',
-                    'X-Subscription-Token': braveApiKey
-                  }
-                });
-                
-                if (res.ok) {
-                  const data = await res.json();
-                  const results = data.web?.results || [];
-                  for (const result of results) {
-                    if (result.url && result.url.includes('instagram.com/')) {
-                      const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
-                      if (shortcodeMatch) {
-                        latestVideos.push({
-                          id: shortcodeMatch[2],
-                          url: result.url,
-                          title: `Instagram Post`,
-                          timestamp: Math.floor(Date.now() / 1000)
-                        });
-                        foundVideo = true;
-                        break;
-                      }
-                    }
-                  }
-                } else {
-                  this.logger.warn(`Brave Search request failed with status: ${res.status}`);
-                }
-              }
-
-              if (!foundVideo) {
-                const rapidApiKey = process.env.RAPIDAPI_KEY;
-                if (!rapidApiKey) {
-                  this.logger.error(`RAPIDAPI_KEY missing. Cannot fallback to RapidAPI.`);
-                } else {
-                  this.logger.log(`Searching RapidAPI (RockSolid) for latest Reel by ${username}...`);
-                  
-                  const searchUrl = `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_reels.php`;
-                  const res = await fetch(searchUrl, {
-                    method: 'POST',
-                    headers: {
-                      'content-type': 'application/x-www-form-urlencoded',
-                      'x-rapidapi-host': 'instagram-scraper-stable-api.p.rapidapi.com',
-                      'x-rapidapi-key': rapidApiKey,
-                    },
-                    body: `username_or_url=${encodeURIComponent(username)}&amount=12`
-                  });
-                  
-                  if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.reels && data.reels.length > 0) {
-                      const latestReel = data.reels[0];
-                      const code = latestReel?.node?.media?.code;
-                      
-                      if (code) {
-                        latestVideos.push({
-                          id: code,
-                          url: `https://www.instagram.com/reel/${code}/`,
-                          title: `Instagram Post`,
-                          timestamp: Math.floor(Date.now() / 1000)
-                        });
-                      }
-                    }
-                  } else {
-                    this.logger.warn(`RapidAPI request failed with status: ${res.status}`);
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            this.logger.warn(`Instagram cron RapidAPI Search failed: ${e.message}`);
-          }
+          // Instagram is handled by GitHub Actions + Webhooks architecture.
+          // Skipping here to avoid RapidAPI rate limits.
+          this.logger.log(`Skipping INSTAGRAM cron check for ${source.url} (handled by Webhooks)`);
 
         } else if (source.platform === 'XIAOHONGSHU' || source.platform === 'KUAISHOU') {
           const urlParts = source.url.split('/').filter(Boolean);

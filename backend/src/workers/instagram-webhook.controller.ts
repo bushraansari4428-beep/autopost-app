@@ -46,7 +46,7 @@ export class InstagramWebhookController {
       });
 
       if (existing) {
-        this.logger.log(`Video ${payload.shortcode} already processed.`);
+        this.logsService.log('INFO', `Instagram Reel ${payload.shortcode} already processed (found in DB).`);
         return { success: true, message: 'Already processed' };
       }
 
