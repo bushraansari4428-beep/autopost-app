@@ -190,17 +190,20 @@ export class SyncService {
           // Extract user ID from URL
           const urlParts = mapping.source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
-          const route = mapping.source.platform === 'XIAOHONGSHU' 
-                        ? `/xiaohongshu/user/${userId}/notes` 
-                        : `/kuaishou/user/${userId}`;
           
-          this.logsService.log('INFO', `Searching RSSHub for latest ${mapping.source.platform} video for user ${userId}...`);
-          latestVideo = await this.fetchLatestFromRssHub(route);
+          this.logsService.log('INFO', `Searching TikHub for latest ${mapping.source.platform} video for user ${userId}...`);
+          const tikhubUrl = await this.fetchLatestFromTikHub(mapping.source.platform, userId);
           
-          if (!latestVideo) {
-             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via RSSHub`);
+          if (!tikhubUrl) {
+             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via TikHub`);
           } else {
-             this.logsService.log('INFO', `Found latest video via RSSHub: ${latestVideo.url}`);
+             this.logsService.log('INFO', `Found latest video via TikHub: ${tikhubUrl}`);
+             latestVideo = {
+               id: 'tikhub_' + Date.now(),
+               url: tikhubUrl,
+               title: `${mapping.source.platform} Video`,
+               timestamp: Math.floor(Date.now() / 1000)
+             };
           }
         } else {
           for (const url of urlsToScan) {
@@ -415,14 +418,16 @@ export class SyncService {
         } else if (source.platform === 'XIAOHONGSHU' || source.platform === 'KUAISHOU') {
           const urlParts = source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1];
-          const route = source.platform === 'XIAOHONGSHU' 
-                        ? `/xiaohongshu/user/${userId}` 
-                        : `/kuaishou/user/${userId}`;
           
-          this.logger.log(`Searching RSSHub for latest ${source.platform} video for user ${userId}...`);
-          const latestVideo = await this.fetchLatestFromRssHub(route);
-          if (latestVideo) {
-             latestVideos.push(latestVideo);
+          this.logger.log(`Searching TikHub for latest ${source.platform} video for user ${userId}...`);
+          const tikhubUrl = await this.fetchLatestFromTikHub(source.platform, userId);
+          if (tikhubUrl) {
+             latestVideos.push({
+               id: 'tikhub_' + Date.now(),
+               url: tikhubUrl,
+               title: `${source.platform} Video`,
+               timestamp: Math.floor(Date.now() / 1000)
+             });
           }
 
         } else if (source.platform === 'YOUTUBE' && workerUrl) {
@@ -735,6 +740,55 @@ export class SyncService {
         this.logger.warn(`RSSHub instance ${instance} failed for ${route}: ${error.message}`);
         continue;
       }
+    }
+    return null;
+  }
+
+  private async fetchLatestFromTikHub(platform: string, userId: string): Promise<string | null> {
+    const tikhubApiKey = process.env.TIKHUB_API_KEY;
+    if (!tikhubApiKey) {
+      this.logger.error('TIKHUB_API_KEY is not set in environment variables');
+      return null;
+    }
+
+    const baseUrl = 'https://api.tikhub.io/api/v1';
+
+    try {
+      if (platform === 'XIAOHONGSHU') {
+        const response = await fetch(
+          `${baseUrl}/xiaohongshu/web/get_user_notes?user_id=${userId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${tikhubApiKey}`,
+              'Accept': 'application/json',
+            },
+          },
+        );
+        const result = await response.json();
+        const notes = result?.data?.notes || result?.data?.items;
+        if (notes && notes.length > 0) {
+          const latestNoteId = notes[0].note_id || notes[0].id;
+          return `https://www.xiaohongshu.com/explore/${latestNoteId}`;
+        }
+      } else if (platform === 'KUAISHOU') {
+        const response = await fetch(
+          `${baseUrl}/kuaishou/web/get_user_profile_feed?user_id=${userId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${tikhubApiKey}`,
+              'Accept': 'application/json',
+            },
+          },
+        );
+        const result = await response.json();
+        const feeds = result?.data?.list || result?.data?.visionProfilePhotoList;
+        if (feeds && feeds.length > 0) {
+          const latestPhotoId = feeds[0].photo_id || feeds[0].id;
+          return `https://www.kuaishou.com/short-video/${latestPhotoId}`;
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(`TikHub fetch error: ${error.message}`);
     }
     return null;
   }
