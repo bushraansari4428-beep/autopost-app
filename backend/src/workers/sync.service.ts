@@ -764,7 +764,8 @@ export class SyncService {
         const match = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s) || html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\})<\/script>/s);
         if (match && match[1]) {
           try {
-             const state = JSON.parse(match[1]);
+             const jsonStr = match[1].replace(/undefined/g, 'null');
+             const state = JSON.parse(jsonStr);
              const notes = state?.user?.notes ?? state?.user?.noteList ?? state?.user?.profile?.notes ?? [];
              if (notes && notes.length > 0) {
                 const latestNoteId = notes[0].noteId ?? notes[0].id;
@@ -787,6 +788,7 @@ export class SyncService {
         
         // Extract __NEXT_DATA__
         const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
+        const matchInit = html.match(/window\.INIT_STATE\s*=\s*(\{.*?\});/s);
         if (match && match[1]) {
           try {
              const nextData = JSON.parse(match[1]);
@@ -798,8 +800,22 @@ export class SyncService {
           } catch (e) {
              this.logger.warn(`Failed to parse Kuaishou JSON data: ${e}`);
           }
+        } else if (matchInit && matchInit[1]) {
+          try {
+             const jsonStr = matchInit[1].replace(/undefined/g, 'null');
+             const initState = JSON.parse(jsonStr);
+             const feeds = initState?.profile?.profileFeed ?? [];
+             if (feeds && feeds.length > 0) {
+                const latestVideoId = feeds[0].photoId ?? feeds[0].id;
+                return `https://www.kuaishou.com/short-video/${latestVideoId}`;
+             } else {
+                this.logger.warn(`No feeds found in Kuaishou INIT_STATE. Might be rate limited.`);
+             }
+          } catch(e) {
+             this.logger.warn(`Failed to parse Kuaishou INIT_STATE: ${e}`);
+          }
         } else {
-           this.logger.warn(`Could not find __NEXT_DATA__ in Kuaishou HTML`);
+           this.logger.warn(`Could not find __NEXT_DATA__ or INIT_STATE in Kuaishou HTML`);
         }
       }
     } catch (error: any) {
