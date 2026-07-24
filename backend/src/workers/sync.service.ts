@@ -98,47 +98,83 @@ export class SyncService {
         if (mapping.source.platform === 'INSTAGRAM') {
           try {
             const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
-            
-            this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
-            const query = `site:instagram.com "${username}"`;
-            const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-            const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
-            const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
-            
-            const res = await fetch(searchUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-              }
-            });
-            
-            if (res.ok) {
-              const html = await res.text();
-              // DuckDuckGo URL format: //duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.instagram.com%2Freel%2FCODE%2F
-              const matches = [...html.matchAll(/uddg=([^&"']+)/g)];
-              for (const match of matches) {
-                const decoded = decodeURIComponent(match[1]);
-                if (decoded.includes('instagram.com/') && (decoded.includes('/reel/') || decoded.includes('/p/'))) {
-                  const shortcodeMatch = decoded.match(/(reel|p)\/([^\/]+)/);
-                  if (shortcodeMatch) {
-                    latestVideo = {
-                      id: shortcodeMatch[2],
-                      url: decoded,
-                      title: `Instagram Post`,
-                      timestamp: Math.floor(Date.now() / 1000)
-                    };
-                    this.logsService.log('INFO', `Found post from DuckDuckGo: ${decoded}`);
-                    break;
+            const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+
+            if (braveApiKey) {
+              this.logsService.log('INFO', `Searching Brave API for latest Reel by ${username}...`);
+              const query = `site:instagram.com "${username}"`;
+              const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'X-Subscription-Token': braveApiKey
+                }
+              });
+              
+              if (res.ok) {
+                const data = await res.json();
+                const results = data.web?.results || [];
+                for (const result of results) {
+                  if (result.url && result.url.includes('instagram.com/')) {
+                    const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideo = {
+                        id: shortcodeMatch[2],
+                        url: result.url,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      };
+                      this.logsService.log('INFO', `Found post from Brave Search: ${result.url}`);
+                      break;
+                    }
                   }
                 }
               }
-              if (!latestVideo) {
-                 this.logsService.log('WARN', `DuckDuckGo found no valid Instagram reels for ${username}`);
+            }
+            
+            if (!latestVideo) {
+              this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
+              const query = `site:instagram.com "${username}"`;
+              const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+              const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+              });
+              
+              if (res.ok) {
+                const html = await res.text();
+                // DuckDuckGo URL format: //duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.instagram.com%2Freel%2FCODE%2F
+                const matches = [...html.matchAll(/uddg=([^&"']+)/g)];
+                for (const match of matches) {
+                  const decoded = decodeURIComponent(match[1]);
+                  if (decoded.includes('instagram.com/') && (decoded.includes('/reel/') || decoded.includes('/p/'))) {
+                    const shortcodeMatch = decoded.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      latestVideo = {
+                        id: shortcodeMatch[2],
+                        url: decoded,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      };
+                      this.logsService.log('INFO', `Found post from DuckDuckGo: ${decoded}`);
+                      break;
+                    }
+                  }
+                }
+                if (!latestVideo) {
+                   this.logsService.log('WARN', `DuckDuckGo found no valid Instagram reels for ${username}`);
+                }
+              } else {
+                this.logsService.log('ERROR', `DuckDuckGo request failed with status: ${res.status}`);
               }
-            } else {
-              this.logsService.log('ERROR', `DuckDuckGo request failed with status: ${res.status}`);
             }
           } catch (e) {
-            this.logsService.log('ERROR', `DuckDuckGo polling failed: ${e.message}`);
+            this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
           }
 
         } else if (mapping.source.platform === 'XIAOHONGSHU' || mapping.source.platform === 'KUAISHOU') {
@@ -288,43 +324,85 @@ export class SyncService {
         if (source.platform === 'INSTAGRAM') {
           try {
             const username = source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
+            const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
             
-            this.logger.log(`Searching DuckDuckGo for latest Reel by ${username}...`);
-            const query = `site:instagram.com "${username}"`;
-            const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-            const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
-            const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
-            
-            const res = await fetch(searchUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-              }
-            });
-            
-            if (res.ok) {
-              const html = await res.text();
-              const matches = [...html.matchAll(/uddg=([^&"']+)/g)];
-              for (const match of matches) {
-                const decoded = decodeURIComponent(match[1]);
-                if (decoded.includes('instagram.com/') && (decoded.includes('/reel/') || decoded.includes('/p/'))) {
-                  const shortcodeMatch = decoded.match(/(reel|p)\/([^\/]+)/);
-                  if (shortcodeMatch) {
-                    latestVideos.push({
-                      id: shortcodeMatch[2],
-                      url: decoded,
-                      title: `Instagram Post`,
-                      timestamp: Math.floor(Date.now() / 1000)
-                    });
-                    this.logger.log(`Found post from DuckDuckGo Search: ${decoded}`);
-                    break;
+            let foundVideo = null;
+
+            if (braveApiKey) {
+              this.logger.log(`Searching Brave API for latest Reel by ${username}...`);
+              const query = `site:instagram.com "${username}"`;
+              const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'Accept': 'application/json',
+                  'X-Subscription-Token': braveApiKey
+                }
+              });
+              
+              if (res.ok) {
+                const data = await res.json();
+                const results = data.web?.results || [];
+                for (const result of results) {
+                  if (result.url && result.url.includes('instagram.com/')) {
+                    const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      foundVideo = {
+                        id: shortcodeMatch[2],
+                        url: result.url,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      };
+                      this.logger.log(`Found post from Brave Search: ${result.url}`);
+                      break;
+                    }
                   }
                 }
               }
-            } else {
-              this.logger.warn(`DuckDuckGo request failed with status: ${res.status}`);
+            }
+
+            if (!foundVideo) {
+              this.logger.log(`Searching DuckDuckGo for latest Reel by ${username}...`);
+              const query = `site:instagram.com "${username}"`;
+              const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+              const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
+              
+              const res = await fetch(searchUrl, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+              });
+              
+              if (res.ok) {
+                const html = await res.text();
+                const matches = [...html.matchAll(/uddg=([^&"']+)/g)];
+                for (const match of matches) {
+                  const decoded = decodeURIComponent(match[1]);
+                  if (decoded.includes('instagram.com/') && (decoded.includes('/reel/') || decoded.includes('/p/'))) {
+                    const shortcodeMatch = decoded.match(/(reel|p)\/([^\/]+)/);
+                    if (shortcodeMatch) {
+                      foundVideo = {
+                        id: shortcodeMatch[2],
+                        url: decoded,
+                        title: `Instagram Post`,
+                        timestamp: Math.floor(Date.now() / 1000)
+                      };
+                      this.logger.log(`Found post from DuckDuckGo Search: ${decoded}`);
+                      break;
+                    }
+                  }
+                }
+              } else {
+                this.logger.warn(`DuckDuckGo request failed with status: ${res.status}`);
+              }
+            }
+            
+            if (foundVideo) {
+               latestVideos.push(foundVideo);
             }
           } catch (e) {
-            this.logger.warn(`DuckDuckGo polling failed: ${e.message}`);
+            this.logger.warn(`Instagram polling failed: ${e.message}`);
           }
 
         } else if (source.platform === 'XIAOHONGSHU' || source.platform === 'KUAISHOU') {
