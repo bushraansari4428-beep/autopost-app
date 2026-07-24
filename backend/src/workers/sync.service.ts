@@ -96,85 +96,6 @@ export class SyncService {
 
       if (!latestVideo) {
         if (mapping.source.platform === 'INSTAGRAM') {
-          try {
-            const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0];
-            if (username) {
-              const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
-              
-              if (braveApiKey) {
-                this.logsService.log('INFO', `Searching Brave API for latest Reel by ${username}...`);
-                const query = `site:instagram.com "${username}"`;
-                const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-                
-                const res = await fetch(searchUrl, {
-                  headers: {
-                    'Accept': 'application/json',
-                    'X-Subscription-Token': braveApiKey
-                  }
-                });
-                
-                if (res.ok) {
-                  const data = await res.json();
-                  const results = data.web?.results || [];
-                  for (const result of results) {
-                    if (result.url && result.url.includes('instagram.com/')) {
-                      const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
-                      if (shortcodeMatch) {
-                        latestVideo = {
-                          id: shortcodeMatch[2],
-                          url: result.url,
-                          title: `Instagram Post`,
-                          timestamp: Math.floor(Date.now() / 1000)
-                        };
-                        this.logsService.log('INFO', `Found post from Brave Search: ${result.url}`);
-                        break;
-                      }
-                    }
-                  }
-                } else {
-                  this.logsService.log('ERROR', `Brave Search request failed with status: ${res.status}`);
-                }
-              }
-
-              // Fallback to RapidAPI RockSolid if Brave failed or wasn't used
-              if (!latestVideo) {
-                const rapidApiKey = process.env.RAPIDAPI_KEY;
-                if (!rapidApiKey) {
-                  this.logsService.log('ERROR', `RAPIDAPI_KEY missing. Cannot fallback to RapidAPI.`);
-                } else {
-                  this.logsService.log('INFO', `Searching RapidAPI (RockSolid) for latest Reel by ${username}...`);
-                  
-                  const searchUrl = `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_reels.php`;
-                  const res = await fetch(searchUrl, {
-                    method: 'POST',
-                    headers: {
-                      'content-type': 'application/x-www-form-urlencoded',
-                      'x-rapidapi-host': 'instagram-scraper-stable-api.p.rapidapi.com',
-                      'x-rapidapi-key': rapidApiKey,
-                    },
-                    body: `username_or_url=${encodeURIComponent(username)}&amount=12`
-                  });
-                  
-                  if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.reels && data.reels.length > 0) {
-                      const latestReel = data.reels[0];
-                      const code = latestReel?.node?.media?.code;
-                      
-                      if (code) {
-                        const latestReelUrl = `https://www.instagram.com/reel/${code}/`;
-                        latestVideo = {
-                          id: code,
-                          url: latestReelUrl,
-                          title: `Instagram Post`,
-                          timestamp: Math.floor(Date.now() / 1000)
-                        };
-                        this.logsService.log('INFO', `Found latest reel via RapidAPI: ${latestReelUrl}`);
-                      } else {
-                        this.logsService.log('ERROR', `RapidAPI returned reels but missing 'code' field for ${username}`);
-                      }
-                    } else {
-                      this.logsService.log('ERROR', `RapidAPI found no reels for ${username}`);
                     }
                   } else {
                     this.logsService.log('ERROR', `RapidAPI request failed with status: ${res.status}`);
@@ -607,42 +528,8 @@ export class SyncService {
         throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
       }
     } else if (targetUrl.includes('instagram.com')) {
-      this.logger.log(`Requesting RapidAPI for INSTAGRAM video URL: ${targetUrl}`);
-      const rapidApiKey = process.env.RAPIDAPI_KEY;
-      if (!rapidApiKey) {
-        throw new Error(`RAPIDAPI_KEY is not set for Instagram download.`);
-      }
-      
-      const options = {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-rapidapi-key': rapidApiKey,
-          'x-rapidapi-host': 'instagram120.p.rapidapi.com'
-        },
-        body: JSON.stringify({ url: targetUrl })
-      };
-      
-      const res = await fetch(`https://instagram120.p.rapidapi.com/api/instagram/links`, options);
-      const igData = await res.json();
-      
-      if (Array.isArray(igData)) {
-        for (const item of igData) {
-          if (item.urls && Array.isArray(item.urls)) {
-            const mp4Obj = item.urls.find((u: any) => u.extension === 'mp4' || u.name === 'MP4' || u.url.includes('.mp4'));
-            if (mp4Obj && mp4Obj.url) {
-              videoUrl = mp4Obj.url.startsWith('/') ? `https://instagram120.p.rapidapi.com${mp4Obj.url}` : mp4Obj.url;
-              break;
-            }
-          }
-        }
-      }
-      
-      if (videoUrl) {
-        this.logsService.log('INFO', `Successfully got Instagram video URL from RapidAPI.`);
-      } else {
-        throw new Error(`Failed to extract video_url from RapidAPI response: ${JSON.stringify(igData).substring(0, 200)}`);
-      }
+       // Should not happen anymore, but fallback just in case
+       throw new Error('Instagram downloads should be processed by the webhook directly.');
     } else if (targetUrl.includes('kuaishou.com')) {
       this.logger.log(`Extracting Kuaishou MP4 from mobile endpoint for URL: ${targetUrl}`);
       const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;

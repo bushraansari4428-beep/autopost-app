@@ -1,0 +1,82 @@
+name: Instagram Profile Monitor
+
+on:
+  schedule:
+    # Runs every 20 minutes
+    - cron: '*/20 * * * *'
+  workflow_dispatch: # Allows manual run testing
+
+jobs:
+  check-profile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Instaloader & Requests
+        run: pip install instaloader requests
+
+      - name: Check Instagram Profile & Trigger Webhook
+        env:
+          NESTJS_WEBHOOK_URL: ${{ secrets.NESTJS_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          python - << 'EOF'
+          import os
+          import requests
+          import instaloader
+
+          # Hardcoded for now based on user requirements. Can be fetched dynamically later if needed.
+          TARGET_USERNAMES = ["moromorotv"]
+          
+          WEBHOOK_URL = os.getenv("NESTJS_WEBHOOK_URL")
+          SECRET = os.getenv("WEBHOOK_SECRET")
+
+          if not WEBHOOK_URL or not SECRET:
+              print("Missing Webhook URL or Secret. Exiting.")
+              exit(1)
+
+          L = instaloader.Instaloader(
+              download_pictures=False,
+              download_videos=False,
+              download_video_thumbnails=False,
+              save_metadata=False,
+              user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+          )
+
+          for TARGET_USERNAME in TARGET_USERNAMES:
+              try:
+                  print(f"Checking profile: {TARGET_USERNAME}")
+                  profile = instaloader.Profile.from_username(L.context, TARGET_USERNAME)
+                  
+                  post_iterator = profile.get_posts()
+                  try:
+                      latest_post = next(post_iterator)
+                  except StopIteration:
+                      print(f"No posts found for {TARGET_USERNAME}")
+                      continue
+                  
+                  if latest_post.is_video:
+                      reel_url = f"https://www.instagram.com/reel/{latest_post.shortcode}/"
+                      
+                      payload = {
+                          "username": TARGET_USERNAME,
+                          "shortcode": latest_post.shortcode,
+                          "reelUrl": reel_url,
+                          "caption": latest_post.caption or ""
+                      }
+                      headers = {"x-webhook-secret": SECRET}
+                      
+                      res = requests.post(WEBHOOK_URL, json=payload, headers=headers)
+                      print(f"Triggered NestJS Webhook for {TARGET_USERNAME}: Status {res.status_code}")
+                  else:
+                      print(f"Latest post for {TARGET_USERNAME} is not a video/reel. Skipping.")
+
+              except Exception as e:
+                  print(f"Error fetching profile {TARGET_USERNAME}: {e}")
+          EOF

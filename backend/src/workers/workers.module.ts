@@ -4,12 +4,16 @@ import { CronService } from './cron.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { FacebookModule } from '../facebook/facebook.module';
 import { LogsModule } from '../logs/logs.module';
+import { InstagramWebhookController } from './instagram-webhook.controller';
 
 @Module({
   imports: [
     PrismaModule,
     FacebookModule,
     LogsModule,
+  ],
+  controllers: [
+    InstagramWebhookController
   ],
   providers: [
     SyncService,
