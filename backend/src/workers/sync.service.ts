@@ -605,25 +605,37 @@ export class SyncService {
       }
     } else if (targetUrl.includes('instagram.com')) {
       this.logsService.log('INFO', `Requesting Cobalt API for INSTAGRAM download: ${targetUrl}`);
-      try {
-        const res = await fetch('https://api.cobalt.tools/api/json', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ url: targetUrl })
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.url) {
-            videoUrl = data.url;
-            this.logsService.log('INFO', `Successfully got Instagram MP4 from Cobalt API.`);
+      
+      const cobaltInstances = [
+        'https://api.cobalt.tools/api/json',
+        'https://cobalt.kwiatektv.me/api/json',
+        'https://cobalt.catterall.sh/api/json',
+        'https://cobalt.shiron.dev/api/json',
+        'https://co.wuk.sh/api/json'
+      ];
+
+      for (const instance of cobaltInstances) {
+        if (videoUrl) break;
+        try {
+          const res = await fetch(instance, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: targetUrl })
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.url) {
+              videoUrl = data.url;
+              this.logsService.log('INFO', `Successfully got Instagram MP4 from Cobalt API (${instance}).`);
+            }
           }
+        } catch (e) {
+          this.logger.warn(`Cobalt instance ${instance} failed: ${e.message}`);
         }
-      } catch (e) {
-        this.logger.warn(`Cobalt API failed: ${e.message}`);
       }
       
       if (!videoUrl) {
