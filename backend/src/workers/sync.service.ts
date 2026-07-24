@@ -365,11 +365,11 @@ export class SyncService {
             }
 
             if (!foundVideo) {
-              this.logger.log(`Fetching IG internal API via Cloudflare Worker for latest Reel by ${username}...`);
+              this.logsService.log('INFO', `Fetching IG internal API via Cloudflare Worker for latest Reel by ${username}...`);
               const igWorkerUrl = process.env.IG_WORKER_URL;
               
               if (!igWorkerUrl) {
-                this.logger.error(`IG_WORKER_URL missing. Cannot poll Instagram internal API.`);
+                this.logsService.log('ERROR', `IG_WORKER_URL missing. Cannot poll Instagram internal API.`);
               } else {
                 let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
                 if (!baseUrl.startsWith('http')) {
@@ -396,11 +396,11 @@ export class SyncService {
                         title: `Instagram Reel`,
                         timestamp: latestMedia.taken_at_timestamp || Math.floor(Date.now() / 1000)
                       };
-                      this.logger.log(`Found Reel from IG internal API: ${reelUrl}`);
+                      this.logsService.log('INFO', `Found Reel from IG internal API: ${reelUrl}`);
                     }
                   }
                 } else {
-                  this.logger.warn(`IG internal API request failed with status: ${res.status}`);
+                  this.logsService.log('ERROR', `IG internal API request failed with status: ${res.status}`);
                 }
               }
             }
@@ -409,7 +409,7 @@ export class SyncService {
                latestVideos.push(foundVideo);
             }
           } catch (e) {
-            this.logger.warn(`Instagram polling failed: ${e.message}`);
+            this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
           }
 
         } else if (source.platform === 'XIAOHONGSHU' || source.platform === 'KUAISHOU') {
