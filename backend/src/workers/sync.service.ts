@@ -191,16 +191,16 @@ export class SyncService {
           const urlParts = mapping.source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
           
-          this.logsService.log('INFO', `Searching TikHub for latest ${mapping.source.platform} video for user ${userId}...`);
-          const tikhubUrl = await this.fetchLatestFromTikHub(mapping.source.platform, userId);
+          this.logsService.log('INFO', `Searching Hugging Face Microservice for latest ${mapping.source.platform} video for user ${userId}...`);
+          const hfUrl = await this.fetchLatestFromHuggingFace(mapping.source.platform, mapping.source.url);
           
-          if (!tikhubUrl) {
-             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via TikHub`);
+          if (!hfUrl) {
+             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via Hugging Face`);
           } else {
-             this.logsService.log('INFO', `Found latest video via TikHub: ${tikhubUrl}`);
+             this.logsService.log('INFO', `Found latest video via Hugging Face: ${hfUrl}`);
              latestVideo = {
-               id: 'tikhub_' + Date.now(),
-               url: tikhubUrl,
+               id: 'hf_' + Date.now(),
+               url: hfUrl,
                title: `${mapping.source.platform} Video`,
                timestamp: Math.floor(Date.now() / 1000)
              };
@@ -419,12 +419,12 @@ export class SyncService {
           const urlParts = source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1];
           
-          this.logger.log(`Searching TikHub for latest ${source.platform} video for user ${userId}...`);
-          const tikhubUrl = await this.fetchLatestFromTikHub(source.platform, userId);
-          if (tikhubUrl) {
+          this.logger.log(`Searching Hugging Face for latest ${source.platform} video for user ${userId}...`);
+          const hfUrl = await this.fetchLatestFromHuggingFace(source.platform, source.url);
+          if (hfUrl) {
              latestVideos.push({
-               id: 'tikhub_' + Date.now(),
-               url: tikhubUrl,
+               id: 'hf_' + Date.now(),
+               url: hfUrl,
                title: `${source.platform} Video`,
                timestamp: Math.floor(Date.now() / 1000)
              });
@@ -744,51 +744,31 @@ export class SyncService {
     return null;
   }
 
-  private async fetchLatestFromTikHub(platform: string, userId: string): Promise<string | null> {
-    const tikhubApiKey = process.env.TIKHUB_API_KEY;
-    if (!tikhubApiKey) {
-      this.logger.error('TIKHUB_API_KEY is not set in environment variables');
+  private async fetchLatestFromHuggingFace(platform: string, profileUrl: string): Promise<string | null> {
+    const hfApiUrl = process.env.HUGGINGFACE_API_URL;
+    if (!hfApiUrl) {
+      this.logger.error('HUGGINGFACE_API_URL is not set in environment variables');
       return null;
     }
 
-    const baseUrl = 'https://api.tikhub.io/api/v1';
-
     try {
-      if (platform === 'XIAOHONGSHU') {
-        const response = await fetch(
-          `${baseUrl}/xiaohongshu/web/get_user_notes?user_id=${userId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${tikhubApiKey}`,
-              'Accept': 'application/json',
-            },
+      const platformParam = platform === 'XIAOHONGSHU' ? 'xiaohongshu' : 'kuaishou';
+      const response = await fetch(
+        `${hfApiUrl.replace(/\/$/, '')}/scrape?url=${encodeURIComponent(profileUrl)}&platform=${platformParam}`,
+        {
+          headers: {
+            'Accept': 'application/json',
           },
-        );
-        const result = await response.json();
-        const notes = result?.data?.notes || result?.data?.items;
-        if (notes && notes.length > 0) {
-          const latestNoteId = notes[0].note_id || notes[0].id;
-          return `https://www.xiaohongshu.com/explore/${latestNoteId}`;
-        }
-      } else if (platform === 'KUAISHOU') {
-        const response = await fetch(
-          `${baseUrl}/kuaishou/web/get_user_profile_feed?user_id=${userId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${tikhubApiKey}`,
-              'Accept': 'application/json',
-            },
-          },
-        );
-        const result = await response.json();
-        const feeds = result?.data?.list || result?.data?.visionProfilePhotoList;
-        if (feeds && feeds.length > 0) {
-          const latestPhotoId = feeds[0].photo_id || feeds[0].id;
-          return `https://www.kuaishou.com/short-video/${latestPhotoId}`;
-        }
+        },
+      );
+      const result = await response.json();
+      if (result && result.success && result.url) {
+        return result.url;
+      } else {
+        this.logger.error(`Hugging Face API returned error: ${result.error || 'Unknown error'}`);
       }
     } catch (error: any) {
-      this.logger.error(`TikHub fetch error: ${error.message}`);
+      this.logger.error(`Hugging Face fetch error: ${error.message}`);
     }
     return null;
   }
