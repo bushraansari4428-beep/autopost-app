@@ -96,16 +96,9 @@ export class SyncService {
 
       if (!latestVideo) {
         if (mapping.source.platform === 'INSTAGRAM') {
-                    }
-                  } else {
-                    this.logsService.log('ERROR', `RapidAPI request failed with status: ${res.status}`);
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            this.logger.warn(`Instagram DuckDuckGo Search failed: ${e.message}`);
-          }
+          // Instagram is now handled separately by GitHub Actions + Webhooks architecture.
+          // This cron job will simply skip Instagram to avoid RapidAPI rate limits.
+          this.logger.log(`Skipping INSTAGRAM check for ${mapping.source.url} (handled by Webhooks)`);
 
         } else if (mapping.source.platform === 'XIAOHONGSHU' || mapping.source.platform === 'KUAISHOU') {
           // Extract user ID from URL
