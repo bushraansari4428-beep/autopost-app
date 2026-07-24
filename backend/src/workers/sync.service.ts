@@ -140,7 +140,11 @@ export class SyncService {
               if (!igWorkerUrl) {
                 this.logsService.log('ERROR', `IG_WORKER_URL missing. Cannot poll Instagram internal API. Please create the Cloudflare Worker and add the URL to Render.`);
               } else {
-                const searchUrl = `${igWorkerUrl.replace(/\/$/, '')}?username=${username}`;
+                let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
+                if (!baseUrl.startsWith('http')) {
+                  baseUrl = `https://${baseUrl}`;
+                }
+                const searchUrl = `${baseUrl}?username=${username}`;
                 
                 const res = await fetch(searchUrl);
                 
@@ -367,7 +371,11 @@ export class SyncService {
               if (!igWorkerUrl) {
                 this.logger.error(`IG_WORKER_URL missing. Cannot poll Instagram internal API.`);
               } else {
-                const searchUrl = `${igWorkerUrl.replace(/\/$/, '')}?username=${username}`;
+                let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
+                if (!baseUrl.startsWith('http')) {
+                  baseUrl = `https://${baseUrl}`;
+                }
+                const searchUrl = `${baseUrl}?username=${username}`;
                 
                 const res = await fetch(searchUrl);
                 
