@@ -134,43 +134,53 @@ export class SyncService {
             }
             
             if (!latestVideo) {
-              this.logsService.log('INFO', `Searching DuckDuckGo for latest Reel by ${username}...`);
-              const query = `site:instagram.com "${username}"`;
-              const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              this.logsService.log('INFO', `Fetching IG internal API via Cloudflare Proxy for latest Reel by ${username}...`);
               const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
-              const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
               
-              const res = await fetch(searchUrl, {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
-              });
-              
-              if (res.ok) {
-                const html = await res.text();
-                // DuckDuckGo URL format: //duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.instagram.com%2Freel%2FCODE%2F
-                const matches = [...html.matchAll(/uddg=([^&"']+)/g)];
-                for (const match of matches) {
-                  const decoded = decodeURIComponent(match[1]);
-                  if (decoded.includes('instagram.com/') && (decoded.includes('/reel/') || decoded.includes('/p/'))) {
-                    const shortcodeMatch = decoded.match(/(reel|p)\/([^\/]+)/);
-                    if (shortcodeMatch) {
+              if (!proxyUrl) {
+                this.logsService.log('ERROR', `CLOUDFLARE_PROXY_URL missing. Cannot poll Instagram internal API.`);
+              } else {
+                const targetUrl = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`;
+                const searchUrl = `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}`;
+                
+                const res = await fetch(searchUrl, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'X-IG-App-ID': '936619743392459',
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin'
+                  }
+                });
+                
+                if (res.ok) {
+                  const data = await res.json();
+                  const user = data?.data?.user;
+                  const edges = user?.edge_owner_to_timeline_media?.edges;
+                  
+                  if (edges && edges.length > 0) {
+                    // Find first video/reel
+                    const latestMedia = edges.find((e: any) => e.node && e.node.is_video)?.node;
+                    
+                    if (latestMedia) {
+                      const shortcode = latestMedia.shortcode;
+                      const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
                       latestVideo = {
-                        id: shortcodeMatch[2],
-                        url: decoded,
-                        title: `Instagram Post`,
-                        timestamp: Math.floor(Date.now() / 1000)
+                        id: shortcode,
+                        url: reelUrl,
+                        title: `Instagram Reel`,
+                        timestamp: latestMedia.taken_at_timestamp || Math.floor(Date.now() / 1000)
                       };
-                      this.logsService.log('INFO', `Found post from DuckDuckGo: ${decoded}`);
-                      break;
+                      this.logsService.log('INFO', `Found Reel from IG internal API: ${reelUrl}`);
                     }
                   }
+                  if (!latestVideo) {
+                     this.logsService.log('WARN', `IG internal API found no valid Instagram reels for ${username}`);
+                  }
+                } else {
+                  this.logsService.log('ERROR', `IG internal API request failed with status: ${res.status}`);
                 }
-                if (!latestVideo) {
-                   this.logsService.log('WARN', `DuckDuckGo found no valid Instagram reels for ${username}`);
-                }
-              } else {
-                this.logsService.log('ERROR', `DuckDuckGo request failed with status: ${res.status}`);
               }
             }
           } catch (e) {
@@ -362,39 +372,49 @@ export class SyncService {
             }
 
             if (!foundVideo) {
-              this.logger.log(`Searching DuckDuckGo for latest Reel by ${username}...`);
-              const query = `site:instagram.com "${username}"`;
-              const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+              this.logger.log(`Fetching IG internal API via Cloudflare Proxy for latest Reel by ${username}...`);
               const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
-              const searchUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(ddgUrl)}` : ddgUrl;
               
-              const res = await fetch(searchUrl, {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
-              });
-              
-              if (res.ok) {
-                const html = await res.text();
-                const matches = [...html.matchAll(/uddg=([^&"']+)/g)];
-                for (const match of matches) {
-                  const decoded = decodeURIComponent(match[1]);
-                  if (decoded.includes('instagram.com/') && (decoded.includes('/reel/') || decoded.includes('/p/'))) {
-                    const shortcodeMatch = decoded.match(/(reel|p)\/([^\/]+)/);
-                    if (shortcodeMatch) {
+              if (!proxyUrl) {
+                this.logger.error(`CLOUDFLARE_PROXY_URL missing. Cannot poll Instagram internal API.`);
+              } else {
+                const targetUrl = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`;
+                const searchUrl = `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}`;
+                
+                const res = await fetch(searchUrl, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'X-IG-App-ID': '936619743392459',
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin'
+                  }
+                });
+                
+                if (res.ok) {
+                  const data = await res.json();
+                  const user = data?.data?.user;
+                  const edges = user?.edge_owner_to_timeline_media?.edges;
+                  
+                  if (edges && edges.length > 0) {
+                    const latestMedia = edges.find((e: any) => e.node && e.node.is_video)?.node;
+                    
+                    if (latestMedia) {
+                      const shortcode = latestMedia.shortcode;
+                      const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
                       foundVideo = {
-                        id: shortcodeMatch[2],
-                        url: decoded,
-                        title: `Instagram Post`,
-                        timestamp: Math.floor(Date.now() / 1000)
+                        id: shortcode,
+                        url: reelUrl,
+                        title: `Instagram Reel`,
+                        timestamp: latestMedia.taken_at_timestamp || Math.floor(Date.now() / 1000)
                       };
-                      this.logger.log(`Found post from DuckDuckGo Search: ${decoded}`);
-                      break;
+                      this.logger.log(`Found Reel from IG internal API: ${reelUrl}`);
                     }
                   }
+                } else {
+                  this.logger.warn(`IG internal API request failed with status: ${res.status}`);
                 }
-              } else {
-                this.logger.warn(`DuckDuckGo request failed with status: ${res.status}`);
               }
             }
             
