@@ -5,7 +5,7 @@ import { LogsService } from '../logs/logs.service';
 import { execPromise } from '../utils/exec.util';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as Parser from 'rss-parser';
+import Parser from 'rss-parser';
 
 @Injectable()
 export class SyncService {
