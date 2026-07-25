@@ -134,7 +134,32 @@ export class SyncService {
             }
             
             if (!latestVideo) {
-              this.logsService.log('INFO', `Fetching IG internal API via Cloudflare Worker for latest Reel by ${username}...`);
+              this.logsService.log('INFO', `Polling public mirrors (Imginn) for latest Reel by ${username}...`);
+              try {
+                const mirrorRes = await fetch(`https://imginn.com/${username}/`, {
+                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' }
+                });
+                if (mirrorRes.ok) {
+                  const html = await mirrorRes.text();
+                  const match = html.match(/(?:\/p\/|\/reel\/)([A-Za-z0-9_-]{10,15})/);
+                  if (match && match[1]) {
+                    const shortcode = match[1];
+                    const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
+                    latestVideo = {
+                      id: shortcode,
+                      url: reelUrl,
+                      title: `Instagram Reel`,
+                      timestamp: Math.floor(Date.now() / 1000)
+                    };
+                    this.logsService.log('INFO', `Found latest Reel via public mirror: ${reelUrl}`);
+                  }
+                }
+              } catch (e: any) {
+                this.logger.warn(`Public mirror poll failed for ${username}: ${e.message}`);
+              }
+
+              if (!latestVideo) {
+                this.logsService.log('INFO', `Mirror poll missed. Falling back to IG internal API via Cloudflare Worker for ${username}...`);
               const igWorkerUrl = process.env.IG_WORKER_URL;
               
               if (!igWorkerUrl) {
@@ -173,6 +198,7 @@ export class SyncService {
                   }
                 } else {
                   this.logsService.log('ERROR', `IG internal API request failed with status: ${res.status}`);
+                }
                 }
               }
             }
@@ -604,43 +630,72 @@ export class SyncService {
         throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
       }
     } else if (targetUrl.includes('instagram.com')) {
-      this.logsService.log('INFO', `Requesting Instagram MP4 via Edge Worker extraction: ${targetUrl}`);
-      const igWorkerUrl = process.env.IG_WORKER_URL;
-      
-      if (!igWorkerUrl) {
-        throw new Error('IG_WORKER_URL is missing in environment variables. Cannot extract Reel MP4.');
-      }
-
-      let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
-      if (!baseUrl.startsWith('http')) {
-        baseUrl = `https://${baseUrl}`;
-      }
-
       const match = targetUrl.match(/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
       const shortcode = match ? match[1] : targetUrl.split('/').filter(Boolean).pop();
 
-      const extractionUrl = `${baseUrl}?shortcode=${shortcode}`;
-      this.logsService.log('INFO', `Calling Edge Worker for shortcode: ${shortcode}`);
-      
+      this.logsService.log('INFO', `Extracting Instagram MP4 via InstaFix mirror for shortcode: ${shortcode}...`);
+
+      // 1. Primary: kkinstagram.com (Direct MP4 Stream Redirect)
       try {
-        const res = await fetch(extractionUrl);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.mp4_url) {
-            videoUrl = data.mp4_url;
-            this.logsService.log('INFO', `Successfully extracted Instagram MP4 URL via Edge Worker!`);
-          } else {
-            this.logsService.log('WARN', `Edge Worker returned OK but missing mp4_url: ${JSON.stringify(data)}`);
+        const kkRes = await fetch(`https://kkinstagram.com/reel/${shortcode}/`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' },
+          redirect: 'follow'
+        });
+        if (kkRes.ok) {
+          const contentType = kkRes.headers.get('content-type') || '';
+          if (contentType.includes('video/') || kkRes.url.includes('.mp4') || kkRes.url.includes('cdninstagram.com')) {
+            videoUrl = kkRes.url;
+            this.logsService.log('INFO', `Successfully obtained direct MP4 video stream from InstaFix mirror!`);
           }
-        } else {
-          this.logsService.log('ERROR', `Edge Worker extraction failed with status: ${res.status} - ${await res.text()}`);
         }
       } catch (e: any) {
-        this.logsService.log('ERROR', `Error calling Edge Worker for extraction: ${e.message}`);
+        this.logger.warn(`kkinstagram extraction failed: ${e.message}`);
+      }
+
+      // 2. Secondary: Imginn mirror fallback
+      if (!videoUrl) {
+        try {
+          this.logsService.log('INFO', `Trying secondary mirror (Imginn) for shortcode: ${shortcode}...`);
+          const imgRes = await fetch(`https://imginn.com/p/${shortcode}/`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          });
+          if (imgRes.ok) {
+            const html = await imgRes.text();
+            const mp4Match = html.match(/href="([^"]+cdninstagram[^"]+\.mp4[^"]*)"/i) || html.match(/(https?:\/\/[^"'\s]+cdninstagram[^"'\s]+\.mp4[^"'\s]*)/i);
+            if (mp4Match && mp4Match[1]) {
+              videoUrl = mp4Match[1].replace(/&#38;/g, '&').replace(/&amp;/g, '&');
+              this.logsService.log('INFO', `Successfully obtained direct MP4 video URL from Imginn mirror!`);
+            }
+          }
+        } catch (e: any) {
+          this.logger.warn(`Imginn extraction failed: ${e.message}`);
+        }
+      }
+
+      // 3. Fallback: Cloudflare Edge Worker
+      if (!videoUrl) {
+        this.logsService.log('WARN', `Public mirrors missed. Trying Edge Worker fallback for: ${shortcode}...`);
+        const igWorkerUrl = process.env.IG_WORKER_URL;
+        if (igWorkerUrl) {
+          let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
+          if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+          try {
+            const res = await fetch(`${baseUrl}?shortcode=${shortcode}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.mp4_url) {
+                videoUrl = data.mp4_url;
+                this.logsService.log('INFO', `Successfully extracted Instagram MP4 URL via Edge Worker fallback!`);
+              }
+            }
+          } catch (e: any) {
+            this.logger.warn(`Edge Worker extraction failed: ${e.message}`);
+          }
+        }
       }
 
       if (!videoUrl) {
-        throw new Error(`Failed to extract Instagram MP4 via Edge Worker for shortcode: ${shortcode}`);
+        throw new Error(`Failed to extract Instagram MP4 via mirrors and worker for shortcode: ${shortcode}`);
       }
     } else if (targetUrl.includes('kuaishou.com')) {
       this.logger.log(`Extracting Kuaishou MP4 from mobile endpoint for URL: ${targetUrl}`);
