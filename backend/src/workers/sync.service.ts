@@ -604,90 +604,43 @@ export class SyncService {
         throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
       }
     } else if (targetUrl.includes('instagram.com')) {
-      this.logsService.log('INFO', `Requesting yt-dlp for INSTAGRAM download: ${targetUrl}`);
+      this.logsService.log('INFO', `Requesting Instagram MP4 via Edge Worker extraction: ${targetUrl}`);
+      const igWorkerUrl = process.env.IG_WORKER_URL;
+      
+      if (!igWorkerUrl) {
+        throw new Error('IG_WORKER_URL is missing in environment variables. Cannot extract Reel MP4.');
+      }
+
+      let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
+      if (!baseUrl.startsWith('http')) {
+        baseUrl = `https://${baseUrl}`;
+      }
+
+      const match = targetUrl.match(/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
+      const shortcode = match ? match[1] : targetUrl.split('/').filter(Boolean).pop();
+
+      const extractionUrl = `${baseUrl}?shortcode=${shortcode}`;
+      this.logsService.log('INFO', `Calling Edge Worker for shortcode: ${shortcode}`);
+      
       try {
-        const cmd = `./yt-dlp --cookies cookies.txt --dump-json "${targetUrl}"`;
-        const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-        if (stdout && stdout.trim()) {
-          const videoData = JSON.parse(stdout.trim());
-          if (videoData && videoData.url) {
-            videoUrl = videoData.url;
-            this.logsService.log('INFO', `Successfully got Instagram MP4 from yt-dlp.`);
+        const res = await fetch(extractionUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.mp4_url) {
+            videoUrl = data.mp4_url;
+            this.logsService.log('INFO', `Successfully extracted Instagram MP4 URL via Edge Worker!`);
+          } else {
+            this.logsService.log('WARN', `Edge Worker returned OK but missing mp4_url: ${JSON.stringify(data)}`);
           }
+        } else {
+          this.logsService.log('ERROR', `Edge Worker extraction failed with status: ${res.status} - ${await res.text()}`);
         }
       } catch (e: any) {
-        this.logger.warn(`yt-dlp download failed for IG: ${e.message.substring(0, 200)}...`);
+        this.logsService.log('ERROR', `Error calling Edge Worker for extraction: ${e.message}`);
       }
 
       if (!videoUrl) {
-        this.logsService.log('WARN', `yt-dlp failed. Falling back to Cobalt API for INSTAGRAM...`);
-        const cobaltInstances = [
-          'https://api.cobalt.tools/api/json',
-          'https://cobalt.kwiatektv.me/api/json',
-          'https://cobalt.catterall.sh/api/json',
-          'https://cobalt.shiron.dev/api/json',
-          'https://co.wuk.sh/api/json'
-        ];
-
-        for (const instance of cobaltInstances) {
-          if (videoUrl) break;
-          try {
-            const res = await fetch(instance, {
-              method: 'POST',
-              headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ url: targetUrl })
-            });
-            
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.url) {
-                videoUrl = data.url;
-                this.logsService.log('INFO', `Successfully got Instagram MP4 from Cobalt API (${instance}).`);
-              }
-            }
-          } catch (e) {
-            this.logger.warn(`Cobalt instance ${instance} failed: ${e.message}`);
-          }
-        }
-      }
-      
-      if (!videoUrl) {
-         this.logsService.log('WARN', `Cobalt API failed. Falling back to RapidAPI RockSolid...`);
-         const rapidApiKey = process.env.RAPIDAPI_KEY;
-         if (!rapidApiKey) {
-           throw new Error('Cobalt API failed and RAPIDAPI_KEY is not set for fallback.');
-         }
-
-         const username = targetUrl.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
-         const searchUrl = `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_reels.php`;
-         const rapidRes = await fetch(searchUrl, {
-           method: 'POST',
-           headers: {
-             'content-type': 'application/x-www-form-urlencoded',
-             'x-rapidapi-host': 'instagram-scraper-stable-api.p.rapidapi.com',
-             'x-rapidapi-key': rapidApiKey,
-           },
-           body: `username_or_url=${encodeURIComponent(username)}&amount=1`
-         });
-         
-         if (rapidRes.ok) {
-           const rapidData = await rapidRes.json();
-           if (rapidData && rapidData.reels && rapidData.reels.length > 0) {
-              const reelNode = rapidData.reels[0].node;
-              if (reelNode && reelNode.video_url) {
-                videoUrl = reelNode.video_url;
-                this.logsService.log('INFO', `Successfully got Instagram MP4 from RapidAPI fallback.`);
-              }
-           }
-         }
-      }
-
-      if (!videoUrl) {
-         this.logsService.log('ERROR', `Failed to get Instagram video URL from both Cobalt API and RapidAPI.`);
-         throw new Error('Both Cobalt API and RapidAPI failed to provide video URL for Instagram');
+        throw new Error(`Failed to extract Instagram MP4 via Edge Worker for shortcode: ${shortcode}`);
       }
     } else if (targetUrl.includes('kuaishou.com')) {
       this.logger.log(`Extracting Kuaishou MP4 from mobile endpoint for URL: ${targetUrl}`);
