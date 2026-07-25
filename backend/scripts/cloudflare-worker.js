@@ -5,56 +5,151 @@ export default {
     const shortcode = url.searchParams.get("shortcode");
 
     if (!username && !shortcode) {
-      return new Response(JSON.stringify({ error: "Username or shortcode required" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "Username or shortcode required" }), { 
+        status: 400, 
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+      });
     }
 
-    const baseHeaders = {
+    const headers = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "x-ig-app-id": "936619743392459",
-      "Accept": "*/*",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "en-US,en;q=0.9",
     };
 
-    try {
-      // Step 1: Handshake request to generate anonymous guest tokens
-      const initRes = await fetch("https://www.instagram.com/api/v1/si/fetch_headers/", { 
-        headers: baseHeaders 
-      });
-      
-      const rawCookies = initRes.headers.get("set-cookie") || "";
-      const midMatch = rawCookies.match(/mid=([^;]+)/);
-      const csrfMatch = rawCookies.match(/csrftoken=([^;]+)/);
-      const igDidMatch = rawCookies.match(/ig_did=([^;]+)/);
+    // ==========================================
+    // 1. EXTRACT MP4 STREAM BY SHORTCODE
+    // ==========================================
+    if (shortcode) {
+      // Primary Mirror: kkinstagram (Discord Bot Unfurling Relay)
+      try {
+        const kkRes = await fetch(`https://kkinstagram.com/reel/${shortcode}/`, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" },
+          redirect: "follow"
+        });
+        if (kkRes.ok && (kkRes.headers.get("content-type")?.includes("video/") || kkRes.url.includes(".mp4") || kkRes.url.includes("cdninstagram.com"))) {
+          return new Response(JSON.stringify({ success: true, source: "kkinstagram", mp4_url: kkRes.url }), { 
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+          });
+        }
+      } catch (e) {}
 
-      const guestCookies = [
-        midMatch ? `mid=${midMatch[1]}` : "",
-        csrfMatch ? `csrftoken=${csrfMatch[1]}` : "",
-        igDidMatch ? `ig_did=${igDidMatch[1]}` : "",
-      ].filter(Boolean).join("; ");
+      // Secondary Mirror: Imginn
+      try {
+        const imgRes = await fetch(`https://imginn.com/p/${shortcode}/`, { headers });
+        if (imgRes.ok) {
+          const html = await imgRes.text();
+          const mp4Match = html.match(/href="([^"]+cdninstagram[^"]+\.mp4[^"]*)"/i) || html.match(/(https?:\/\/[^"'\s]+cdninstagram[^"'\s]+\.mp4[^"'\s]*)/i);
+          if (mp4Match && mp4Match[1]) {
+            const cleanUrl = mp4Match[1].replace(/&#38;/g, '&').replace(/&amp;/g, '&');
+            return new Response(JSON.stringify({ success: true, source: "imginn", mp4_url: cleanUrl }), { 
+              headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+            });
+          }
+        }
+      } catch (e) {}
 
-      const authHeaders = {
-        ...baseHeaders,
-        "Cookie": guestCookies,
-        "x-csrftoken": csrfMatch ? csrfMatch[1] : "",
-      };
-
-      if (shortcode) {
+      // Fallback: Meta internal post API with anonymous handshake
+      try {
+        const authHeaders = await getAuthHeaders();
         const igUrl = `https://www.instagram.com/p/${shortcode}/?__a=1&__d=dis`;
         const igResponse = await fetch(igUrl, { headers: authHeaders });
-        if (!igResponse.ok) return new Response(JSON.stringify({ error: "Post not found" }), { status: igResponse.status });
-        const data = await igResponse.json();
-        return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+        if (igResponse.ok) {
+          const data = await igResponse.json();
+          const items = data.items || data?.graphql?.shortcode_media;
+          const videoUrl = items?.[0]?.video_versions?.[0]?.url || items?.video_url;
+          if (videoUrl) {
+            return new Response(JSON.stringify({ success: true, source: "meta_api", mp4_url: videoUrl, data }), { 
+              headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+            });
+          }
+        }
+      } catch (e) {}
+
+      return new Response(JSON.stringify({ error: "Failed to extract video MP4 from edge mirrors and internal APIs" }), { 
+        status: 404, 
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+      });
+    }
+
+    // ==========================================
+    // 2. POLL PROFILE FOR LATEST REEL SHORTCODE
+    // ==========================================
+    if (username) {
+      const profileMirrors = [
+        { name: "Imginn", url: `https://imginn.com/${username}/` },
+        { name: "Picnob", url: `https://www.picnob.com/profile/${username}/` },
+        { name: "Dumpor", url: `https://dumpoir.com/v/${username}` },
+        { name: "Greatfon", url: `https://greatfon.com/v/${username}` },
+        { name: "Anonymously", url: `https://anonymously.io/profile/${username}/` }
+      ];
+
+      for (const m of profileMirrors) {
+        try {
+          const res = await fetch(m.url, { headers });
+          if (res.ok) {
+            const html = await res.text();
+            const matches = html.match(/(?:\/p\/|\/reel\/|\/post\/|\/v\/[^\/]+\/)([A-Za-z0-9_-]{10,15})/i) || html.match(/shortcode["':\s]+([A-Za-z0-9_-]{10,15})/i);
+            if (matches && matches[1]) {
+              const shortcode = matches[1];
+              return new Response(JSON.stringify({ 
+                success: true, 
+                source: m.name, 
+                shortcode: shortcode, 
+                url: `https://www.instagram.com/reel/${shortcode}/` 
+              }), { 
+                headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+              });
+            }
+          }
+        } catch (e) {}
       }
-      
-      if (username) {
+
+      // Fallback: Meta internal profile API
+      try {
+        const authHeaders = await getAuthHeaders();
         const igUrl = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`;
         const igResponse = await fetch(igUrl, { headers: authHeaders });
-        if (!igResponse.ok) return new Response(JSON.stringify({ error: "User not found" }), { status: igResponse.status });
-        const data = await igResponse.json();
-        return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-      }
-    } catch (e) {
-      return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        if (igResponse.ok) {
+          const data = await igResponse.json();
+          return new Response(JSON.stringify(data), { 
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+          });
+        }
+      } catch (e) {}
+
+      return new Response(JSON.stringify({ error: `Could not find any videos for profile @${username} via edge mirrors and internal APIs` }), { 
+        status: 404, 
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+      });
     }
   },
 };
+
+async function getAuthHeaders() {
+  const baseHeaders = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "x-ig-app-id": "936619743392459",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+  try {
+    const initRes = await fetch("https://www.instagram.com/api/v1/si/fetch_headers/", { headers: baseHeaders });
+    const rawCookies = initRes.headers.get("set-cookie") || "";
+    const midMatch = rawCookies.match(/mid=([^;]+)/);
+    const csrfMatch = rawCookies.match(/csrftoken=([^;]+)/);
+    const igDidMatch = rawCookies.match(/ig_did=([^;]+)/);
+    const guestCookies = [
+      midMatch ? `mid=${midMatch[1]}` : "",
+      csrfMatch ? `csrftoken=${csrfMatch[1]}` : "",
+      igDidMatch ? `ig_did=${igDidMatch[1]}` : "",
+    ].filter(Boolean).join("; ");
+    return {
+      ...baseHeaders,
+      "Cookie": guestCookies,
+      "x-csrftoken": csrfMatch ? csrfMatch[1] : "",
+    };
+  } catch (e) {
+    return baseHeaders;
+  }
+}

@@ -760,6 +760,17 @@ export class SyncService {
         const res = await fetch(`${baseUrl}?username=${username}`);
         if (res.ok) {
           const data = await res.json();
+          if (data && data.shortcode) {
+            const shortcode = data.shortcode;
+            const reelUrl = data.url || `https://www.instagram.com/reel/${shortcode}/`;
+            this.logsService.log('INFO', `Found Reel via IG Edge Worker Mirror (${data.source || 'edge'}): ${reelUrl}`);
+            return {
+              id: shortcode,
+              url: reelUrl,
+              title: `Instagram Reel`,
+              timestamp: Math.floor(Date.now() / 1000)
+            };
+          }
           const user = data?.data?.user;
           const edges = user?.edge_owner_to_timeline_media?.edges;
           if (edges && edges.length > 0) {
@@ -767,7 +778,7 @@ export class SyncService {
             if (latestMedia) {
               const shortcode = latestMedia.shortcode;
               const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
-              this.logsService.log('INFO', `Found Reel via IG Worker: ${reelUrl}`);
+              this.logsService.log('INFO', `Found Reel via IG Worker API: ${reelUrl}`);
               return {
                 id: shortcode,
                 url: reelUrl,
