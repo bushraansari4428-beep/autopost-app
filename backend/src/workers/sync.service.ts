@@ -726,6 +726,7 @@ export class SyncService {
       try {
         this.logsService.log('INFO', `Polling ${mirror.name} mirror for user @${username}...`);
         const res = await fetch(mirror.url, { headers, redirect: 'follow' });
+        if (res.ok) {
           const html = await res.text();
           const regex = /(?:\/p\/|\/reel\/|\/post\/|shortcode["':\s]+)([A-Za-z0-9_-]{10,12})/gi;
           let match;
