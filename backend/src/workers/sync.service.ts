@@ -159,7 +159,7 @@ export class SyncService {
                timestamp: Math.floor(Date.now() / 1000)
              };
           }
-        } else if (mapping.source.platform !== 'INSTAGRAM') {
+        } else {
           for (const url of urlsToScan) {
             let cmd: string;
             if (mapping.source.platform === 'TIKTOK') {
