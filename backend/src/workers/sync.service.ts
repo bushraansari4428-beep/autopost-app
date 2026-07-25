@@ -728,12 +728,20 @@ export class SyncService {
         const res = await fetch(mirror.url, { headers, redirect: 'follow' });
         if (res.ok) {
           const html = await res.text();
-          const regex = /(?:\/p\/|\/reel\/|\/post\/|shortcode["':\s]+)([A-Za-z0-9_-]{10,12})/gi;
+          const regex = /(?:\/p\/|\/reel\/|\/post\/|shortcode["':\s]+)([A-Za-z0-9_-]{11})(?:[\/'"\s?#&]|$)/gi;
           let match;
           let validShortcode: string | null = null;
           while ((match = regex.exec(html)) !== null) {
             const code = match[1];
-            if (!/^[0-9]+$/.test(code) && !/^(reels|posts|stories|profile|explore|tagged|highlights)$/i.test(code)) {
+            // Genuine shortcode rules: exactly 11 chars, must not start with image prefix (pt_, vd_, th_), must have uppercase + lowercase + (digit or symbol) or high entropy
+            if (
+              code.length === 11 &&
+              !/^[0-9]+$/.test(code) &&
+              !/^(pt|vd|th|pb|im|px|sp)_/i.test(code) &&
+              !/^(reels|posts|stories|profile|explore|tagged|highlights|Montserrat)$/i.test(code) &&
+              (/[A-Z]/.test(code) && /[a-z]/.test(code)) &&
+              (/[0-9]/.test(code) || /[A-Z].*[A-Z]/.test(code))
+            ) {
               validShortcode = code;
               break;
             }
