@@ -6,6 +6,7 @@ import { execPromise } from '../utils/exec.util';
 import * as fs from 'fs';
 import * as path from 'path';
 import Parser from 'rss-parser';
+import { InstagramRelayClient } from './instagram-relay.client';
 
 @Injectable()
 export class SyncService {
@@ -35,6 +36,7 @@ export class SyncService {
     private readonly prisma: PrismaService,
     private readonly facebookService: FacebookService,
     private readonly logsService: LogsService,
+    private readonly igRelayClient: InstagramRelayClient,
   ) {}
 
   async testMapping(mappingId: string) {
@@ -528,71 +530,18 @@ export class SyncService {
       }
     } else if (targetUrl.includes('instagram.com')) {
       const match = targetUrl.match(/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
-      const shortcode = match ? match[1] : targetUrl.split('/').filter(Boolean).pop();
+      const rawShortcode = match ? match[1] : targetUrl.split('/').filter(Boolean).pop();
+      const shortcode = this.igRelayClient.validateShortcode(rawShortcode) || rawShortcode;
 
-      this.logsService.log('INFO', `Extracting Instagram MP4 via InstaFix mirror for shortcode: ${shortcode}...`);
-
-      // 1. Primary: kkinstagram.com (Direct MP4 Stream Redirect)
-      try {
-        const kkRes = await fetch(`https://kkinstagram.com/reel/${shortcode}/`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' },
-          redirect: 'follow'
-        });
-        if (kkRes.ok) {
-          const contentType = kkRes.headers.get('content-type') || '';
-          if (contentType.includes('video/') || kkRes.url.includes('.mp4') || kkRes.url.includes('cdninstagram.com')) {
-            videoUrl = kkRes.url;
-            this.logsService.log('INFO', `Successfully obtained direct MP4 video stream from InstaFix mirror!`);
-          }
-        }
-      } catch (e: any) {
-        this.logger.warn(`kkinstagram extraction failed: ${e.message}`);
-      }
-
-      // 2. Secondary: Imginn mirror fallback
-      if (!videoUrl) {
-        try {
-          this.logsService.log('INFO', `Trying secondary mirror (Imginn) for shortcode: ${shortcode}...`);
-          const imgRes = await fetch(`https://imginn.com/p/${shortcode}/`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-          });
-          if (imgRes.ok) {
-            const html = await imgRes.text();
-            const mp4Match = html.match(/href="([^"]+cdninstagram[^"]+\.mp4[^"]*)"/i) || html.match(/(https?:\/\/[^"'\s]+cdninstagram[^"'\s]+\.mp4[^"'\s]*)/i);
-            if (mp4Match && mp4Match[1]) {
-              videoUrl = mp4Match[1].replace(/&#38;/g, '&').replace(/&amp;/g, '&');
-              this.logsService.log('INFO', `Successfully obtained direct MP4 video URL from Imginn mirror!`);
-            }
-          }
-        } catch (e: any) {
-          this.logger.warn(`Imginn extraction failed: ${e.message}`);
-        }
-      }
-
-      // 3. Fallback: Cloudflare Edge Worker
-      if (!videoUrl) {
-        this.logsService.log('WARN', `Public mirrors missed. Trying Edge Worker fallback for: ${shortcode}...`);
-        const igWorkerUrl = process.env.IG_WORKER_URL;
-        if (igWorkerUrl) {
-          let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
-          if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-          try {
-            const res = await fetch(`${baseUrl}?shortcode=${shortcode}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.mp4_url) {
-                videoUrl = data.mp4_url;
-                this.logsService.log('INFO', `Successfully extracted Instagram MP4 URL via Edge Worker fallback!`);
-              }
-            }
-          } catch (e: any) {
-            this.logger.warn(`Edge Worker extraction failed: ${e.message}`);
-          }
-        }
+      this.logsService.log('INFO', `Resolving Instagram MP4 stream via Relay Client for shortcode: ${shortcode}...`);
+      const relayResult = await this.igRelayClient.resolveMp4(shortcode);
+      if (relayResult) {
+        videoUrl = relayResult.mp4Url;
+        this.logsService.log('INFO', `Successfully obtained direct MP4 stream via ${relayResult.source}!`);
       }
 
       if (!videoUrl) {
-        throw new Error(`Failed to extract Instagram MP4 via mirrors and worker for shortcode: ${shortcode}`);
+        throw new Error(`Failed to extract Instagram MP4 via Relay Client for shortcode: ${shortcode}`);
       }
     } else if (targetUrl.includes('kuaishou.com')) {
       this.logger.log(`Extracting Kuaishou MP4 from mobile endpoint for URL: ${targetUrl}`);
@@ -708,6 +657,20 @@ export class SyncService {
   }
 
   private async pollInstagramProfile(username: string): Promise<any> {
+    // 1. Try Residential Relay and verified Edge Worker rotation first
+    const relayResult = await this.igRelayClient.getLatestShortcode(username);
+    if (relayResult) {
+      const { shortcode, source } = relayResult;
+      const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
+      this.logsService.log('INFO', `SUCCESS: Found latest Reel shortcode (${shortcode}) for @${username} via ${source}!`);
+      return {
+        id: shortcode,
+        url: reelUrl,
+        title: `Instagram Reel`,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+    }
+
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',

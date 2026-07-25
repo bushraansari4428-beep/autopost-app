@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Headers, UnauthorizedException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LogsService } from '../logs/logs.service';
+import { InstagramRelayClient } from './instagram-relay.client';
 
 @Controller('api/webhooks')
 export class InstagramWebhookController {
@@ -9,6 +10,7 @@ export class InstagramWebhookController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logsService: LogsService,
+    private readonly igRelayClient: InstagramRelayClient,
   ) {}
 
   @Post('instagram-reel')
@@ -123,39 +125,7 @@ export class InstagramWebhookController {
     }
   }
   private async extractInstagramMp4(shortcode: string): Promise<string | null> {
-    try {
-      this.logsService.log('INFO', `Extracting MP4 via kkinstagram mirror for shortcode: ${shortcode}`);
-      const res = await fetch(`https://kkinstagram.com/reel/${shortcode}/`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' },
-        redirect: 'follow',
-      });
-      if (res.ok && (res.headers.get('content-type')?.includes('video/') || res.url.includes('.mp4') || res.url.includes('cdninstagram.com'))) {
-        this.logsService.log('INFO', `Successfully resolved Instagram MP4 stream via kkinstagram.`);
-        return res.url;
-      }
-    } catch (e: any) {
-      this.logger.warn(`kkinstagram extraction failed for ${shortcode}: ${e.message}`);
-    }
-
-    const igWorkerUrl = process.env.IG_WORKER_URL;
-    if (igWorkerUrl) {
-      try {
-        let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
-        if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-        this.logsService.log('INFO', `Trying IG Worker fallback for MP4 extraction: ${shortcode}`);
-        const res = await fetch(`${baseUrl}?shortcode=${shortcode}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.mp4_url) {
-            this.logsService.log('INFO', `Extracted MP4 via IG Worker fallback.`);
-            return data.mp4_url;
-          }
-        }
-      } catch (e: any) {
-        this.logger.error(`IG Worker MP4 fallback failed: ${e.message}`);
-      }
-    }
-
-    return null;
+    const result = await this.igRelayClient.resolveMp4(shortcode);
+    return result ? result.mp4Url : null;
   }
 }

@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { FacebookModule } from '../facebook/facebook.module';
 import { LogsModule } from '../logs/logs.module';
 import { InstagramWebhookController } from './instagram-webhook.controller';
+import { InstagramRelayClient } from './instagram-relay.client';
 
 @Module({
   imports: [
@@ -18,7 +19,8 @@ import { InstagramWebhookController } from './instagram-webhook.controller';
   providers: [
     SyncService,
     CronService,
+    InstagramRelayClient,
   ],
-  exports: [SyncService],
+  exports: [SyncService, InstagramRelayClient],
 })
 export class WorkersModule {}

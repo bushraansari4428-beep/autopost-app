@@ -1,0 +1,13 @@
+{
+  "name": "instagram-home-relay",
+  "version": "1.0.0",
+  "description": "Zero-cost residential relay server for Instagram polling & MP4 extraction via Cloudflare Tunnel",
+  "main": "relay-server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node relay-server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
