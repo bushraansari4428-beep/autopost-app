@@ -726,21 +726,28 @@ export class SyncService {
       try {
         this.logsService.log('INFO', `Polling ${mirror.name} mirror for user @${username}...`);
         const res = await fetch(mirror.url, { headers, redirect: 'follow' });
-        if (res.ok) {
           const html = await res.text();
-          const matches = html.match(/(?:\/p\/|\/reel\/|\/post\/|\/v\/[^\/]+\/)([A-Za-z0-9_-]{10,15})/i) || html.match(/shortcode["':\s]+([A-Za-z0-9_-]{10,15})/i);
-          if (matches && matches[1]) {
-            const shortcode = matches[1];
-            const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
-            this.logsService.log('INFO', `SUCCESS: Found latest Reel shortcode (${shortcode}) via ${mirror.name}!`);
+          const regex = /(?:\/p\/|\/reel\/|\/post\/|shortcode["':\s]+)([A-Za-z0-9_-]{10,12})/gi;
+          let match;
+          let validShortcode: string | null = null;
+          while ((match = regex.exec(html)) !== null) {
+            const code = match[1];
+            if (!/^[0-9]+$/.test(code) && !/^(reels|posts|stories|profile|explore|tagged|highlights)$/i.test(code)) {
+              validShortcode = code;
+              break;
+            }
+          }
+          if (validShortcode) {
+            const reelUrl = `https://www.instagram.com/reel/${validShortcode}/`;
+            this.logsService.log('INFO', `SUCCESS: Found latest Reel shortcode (${validShortcode}) via ${mirror.name}!`);
             return {
-              id: shortcode,
+              id: validShortcode,
               url: reelUrl,
               title: `Instagram Reel`,
               timestamp: Math.floor(Date.now() / 1000)
             };
           } else {
-            this.logsService.log('WARN', `${mirror.name}: Connected but no video shortcode found in HTML.`);
+            this.logsService.log('WARN', `${mirror.name}: Connected but no valid alphanumeric shortcode found in HTML.`);
           }
         } else {
           this.logsService.log('WARN', `${mirror.name} returned HTTP ${res.status} (Cloud blocking)`);

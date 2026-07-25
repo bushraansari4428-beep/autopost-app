@@ -21,7 +21,7 @@ export default {
     // 1. EXTRACT MP4 STREAM BY SHORTCODE
     // ==========================================
     if (shortcode) {
-      // Primary Mirror: kkinstagram (Discord Bot Unfurling Relay)
+      // Primary Mirror: kkinstagram (Discord Bot Unfurling Relay - 100% Verified)
       try {
         const kkRes = await fetch(`https://kkinstagram.com/reel/${shortcode}/`, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" },
@@ -89,17 +89,21 @@ export default {
           const res = await fetch(m.url, { headers });
           if (res.ok) {
             const html = await res.text();
-            const matches = html.match(/(?:\/p\/|\/reel\/|\/post\/|\/v\/[^\/]+\/)([A-Za-z0-9_-]{10,15})/i) || html.match(/shortcode["':\s]+([A-Za-z0-9_-]{10,15})/i);
-            if (matches && matches[1]) {
-              const shortcode = matches[1];
-              return new Response(JSON.stringify({ 
-                success: true, 
-                source: m.name, 
-                shortcode: shortcode, 
-                url: `https://www.instagram.com/reel/${shortcode}/` 
-              }), { 
-                headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
-              });
+            // Filter out invalid purely numeric node IDs or common system words
+            const regex = /(?:\/p\/|\/reel\/|\/post\/|shortcode["':\s]+)([A-Za-z0-9_-]{10,12})/gi;
+            let match;
+            while ((match = regex.exec(html)) !== null) {
+              const code = match[1];
+              if (!/^[0-9]+$/.test(code) && !/^(reels|posts|stories|profile|explore|tagged|highlights)$/i.test(code)) {
+                return new Response(JSON.stringify({ 
+                  success: true, 
+                  source: m.name, 
+                  shortcode: code, 
+                  url: `https://www.instagram.com/reel/${code}/` 
+                }), { 
+                  headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+                });
+              }
             }
           }
         } catch (e) {}

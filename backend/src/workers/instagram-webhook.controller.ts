@@ -50,9 +50,9 @@ export class InstagramWebhookController {
         return { success: true, message: 'Already processed' };
       }
 
-      let directMp4Url = await this.getDirectMp4FromCobalt(payload.reelUrl);
+      let directMp4Url = await this.extractInstagramMp4(payload.shortcode);
       if (!directMp4Url) {
-         this.logsService.log('ERROR', `Could not extract direct MP4 URL via Cobalt for ${payload.shortcode}`);
+         this.logsService.log('ERROR', `Could not extract direct MP4 URL via mirrors/worker for ${payload.shortcode}`);
          return { success: false, message: 'Failed to extract MP4' };
       }
 
@@ -122,25 +122,40 @@ export class InstagramWebhookController {
       return { success: false, error: e.message };
     }
   }
-
-  private async getDirectMp4FromCobalt(reelUrl: string): Promise<string | null> {
+  private async extractInstagramMp4(shortcode: string): Promise<string | null> {
     try {
-      const response = await fetch('https://api.cobalt.tools/api/json', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url: reelUrl })
+      this.logsService.log('INFO', `Extracting MP4 via kkinstagram mirror for shortcode: ${shortcode}`);
+      const res = await fetch(`https://kkinstagram.com/reel/${shortcode}/`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' },
+        redirect: 'follow',
       });
-      const data = await response.json();
-      if (data && data.url) {
-        return data.url;
+      if (res.ok && (res.headers.get('content-type')?.includes('video/') || res.url.includes('.mp4') || res.url.includes('cdninstagram.com'))) {
+        this.logsService.log('INFO', `Successfully resolved Instagram MP4 stream via kkinstagram.`);
+        return res.url;
       }
-      return null;
-    } catch (error: any) {
-      this.logger.error(`Cobalt API failed: ${error.message}`);
-      return null;
+    } catch (e: any) {
+      this.logger.warn(`kkinstagram extraction failed for ${shortcode}: ${e.message}`);
     }
+
+    const igWorkerUrl = process.env.IG_WORKER_URL;
+    if (igWorkerUrl) {
+      try {
+        let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
+        if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+        this.logsService.log('INFO', `Trying IG Worker fallback for MP4 extraction: ${shortcode}`);
+        const res = await fetch(`${baseUrl}?shortcode=${shortcode}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.mp4_url) {
+            this.logsService.log('INFO', `Extracted MP4 via IG Worker fallback.`);
+            return data.mp4_url;
+          }
+        }
+      } catch (e: any) {
+        this.logger.error(`IG Worker MP4 fallback failed: ${e.message}`);
+      }
+    }
+
+    return null;
   }
 }
