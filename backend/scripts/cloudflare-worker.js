@@ -77,6 +77,7 @@ export default {
     // ==========================================
     if (username) {
       const profileMirrors = [
+        { name: "DuckDuckGo", url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:instagram.com/reel/ OR site:instagram.com/p/ ' + username)}` },
         { name: "Imginn", url: `https://imginn.com/${username}/` },
         { name: "Picnob", url: `https://www.picnob.com/profile/${username}/` },
         { name: "Dumpor", url: `https://dumpoir.com/v/${username}` },

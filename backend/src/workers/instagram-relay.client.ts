@@ -70,6 +70,29 @@ export class InstagramRelayClient {
       }
     }
 
+    // 3. Try DuckDuckGo Unblockable Index directly from Backend
+    try {
+      this.logger.log(`[IG Relay Client] Exploring DuckDuckGo index for @${username}...`);
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:instagram.com/reel/ OR site:instagram.com/p/ ' + username)}`;
+      const res = await fetch(ddgUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' }
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const regex = /instagram\.com\/(?:reel|p)\/([A-Za-z0-9_-]{10,11})/gi;
+        let m;
+        while ((m = regex.exec(html)) !== null) {
+          const code = this.validateShortcode(m[1]);
+          if (code) {
+            this.logger.log(`[IG Relay Client] ✅ Got verified shortcode [${code}] via direct DuckDuckGo search index!`);
+            return { shortcode: code, source: 'DDG_Search_Index' };
+          }
+        }
+      }
+    } catch (e: any) {
+      this.logger.warn(`[IG Relay Client] DDG Index fallback failed: ${e.message}`);
+    }
+
     return null;
   }
 

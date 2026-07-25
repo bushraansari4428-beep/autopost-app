@@ -49,6 +49,28 @@ def poll_via_graphql(username):
         pass
     return None
 
+def poll_via_ddg(username):
+    query = f'site:instagram.com/reel/ OR site:instagram.com/p/ {username}'
+    url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as res:
+            html = res.read().decode('utf-8', errors='ignore')
+            matches = re.findall(r'instagram\.com/(?:reel|p)/([A-Za-z0-9_-]{10,11})', html, re.I)
+            for m in matches:
+                code = validate_shortcode(m)
+                if code:
+                    print(f"[RELAY INFO] DuckDuckGo discovered shortcode: {code}")
+                    return code
+    except Exception as e:
+        print(f"[RELAY WARN] DDG search failed: {e}")
+    return None
+
 def poll_via_embed(username):
     url = f'https://www.instagram.com/{username}/embed/'
     headers = {
@@ -126,8 +148,8 @@ class RelayHandler(http.server.BaseHTTPRequestHandler):
             username = params.get('username', [''])[0]
             if not username:
                 return self.send_json(400, {'error': 'username_required'})
-            print(f"[RELAY INFO] Polling latest Reel shortcode for @{username} via Residential IP...")
-            shortcode = poll_via_graphql(username) or poll_via_embed(username)
+            print(f"[RELAY INFO] Polling latest Reel shortcode for @{username} via Residential IP & DDG Index...")
+            shortcode = poll_via_ddg(username) or poll_via_graphql(username) or poll_via_embed(username)
             if shortcode:
                 print(f"[RELAY SUCCESS] Found verified shortcode for @{username}: {shortcode}")
                 return self.send_json(200, {'shortcode': shortcode})
@@ -156,8 +178,8 @@ if __name__ == '__main__':
     server_address = ('', PORT)
     httpd = http.server.HTTPServer(server_address, RelayHandler)
     print(f"============================================================")
-    print(f"🚀 Python IG Residential Relay listening on port :{PORT}")
-    print(f"   Zero dependencies required! Ready for Cloudflare Tunnel.")
+    print(f"[START] Python IG Residential Relay listening on port :{PORT}")
+    print(f"        Zero dependencies required! Ready for Cloudflare Tunnel.")
     print(f"============================================================")
     try:
         httpd.serve_forever()
