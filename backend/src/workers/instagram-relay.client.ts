@@ -1,4 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class InstagramRelayClient {
@@ -21,13 +25,75 @@ export class InstagramRelayClient {
   }
 
   /**
-   * Polls the residential relay or edge fallback for the latest shortcode of a given IG username.
+   * Polls target IG username for the latest Reel shortcode across a 4-tier resilient discovery pipeline:
+   * 1. Official Meta Business Discovery API (Graph API) - zero scraping, immune to ASN blocks
+   * 2. DuckDuckGo Realtime HTML Index - zero IP blocking or login requirements
+   * 3. Residential Cloudflare Tunnel Relay - consumer home IP traffic
+   * 4. Cloudflare Edge Worker fallback
    */
   public async getLatestShortcode(username: string): Promise<{ shortcode: string; source: string } | null> {
+    // =========================================================================
+    // 1. Official Meta Business Discovery Graph API (Problem 1 Primary Solution)
+    // =========================================================================
+    const yourIgAccountId = process.env.META_IG_ACCOUNT_ID;
+    const accessToken = process.env.META_LONG_LIVED_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.FB_ACCESS_TOKEN;
+    if (yourIgAccountId && accessToken) {
+      try {
+        this.logger.log(`[IG Relay Client] Polling @${username} via official Meta Business Discovery API...`);
+        const graphUrl = `https://graph.facebook.com/v22.0/${yourIgAccountId}?fields=${encodeURIComponent(`business_discovery.username(${username}){media.limit(10){id,caption,media_type,media_product_type,permalink,timestamp}}`)}&access_token=${encodeURIComponent(accessToken)}`;
+        const res = await fetch(graphUrl);
+        if (res.ok) {
+          const data = await res.json();
+          const mediaList = data?.business_discovery?.media?.data || [];
+          for (const item of mediaList) {
+            if (item?.media_product_type === 'REELS' || item?.media_type === 'VIDEO' || (item?.permalink && item.permalink.includes('/reel/'))) {
+              const match = item?.permalink?.match(/\/(?:reel|p)\/([A-Za-z0-9_-]+)/);
+              const code = this.validateShortcode(match ? match[1] : null);
+              if (code) {
+                this.logger.log(`[IG Relay Client] ✅ Got verified Reel shortcode [${code}] directly from official Business Discovery API!`);
+                return { shortcode: code, source: 'Meta_Business_Discovery_API' };
+              }
+            }
+          }
+        } else {
+          const errText = await res.text();
+          this.logger.warn(`[IG Relay Client] Business Discovery API response non-200: ${res.status} ${errText}`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`[IG Relay Client] Business Discovery API polling failed: ${e.message}`);
+      }
+    }
+
+    // =========================================================================
+    // 2. DuckDuckGo Realtime HTML Index Discovery
+    // =========================================================================
+    try {
+      this.logger.log(`[IG Relay Client] Exploring DuckDuckGo real-time search index for @${username}...`);
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:instagram.com/reel/ OR site:instagram.com/p/ ' + username)}`;
+      const res = await fetch(ddgUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' }
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const regex = /instagram\.com\/(?:reel|p)\/([A-Za-z0-9_-]{10,11})/gi;
+        let m;
+        while ((m = regex.exec(html)) !== null) {
+          const code = this.validateShortcode(m[1]);
+          if (code) {
+            this.logger.log(`[IG Relay Client] ✅ Got verified shortcode [${code}] via DuckDuckGo search index!`);
+            return { shortcode: code, source: 'DDG_Search_Index' };
+          }
+        }
+      }
+    } catch (e: any) {
+      this.logger.warn(`[IG Relay Client] DDG Index fallback failed: ${e.message}`);
+    }
+
+    // =========================================================================
+    // 3. Residential Cloudflare Tunnel Relay
+    // =========================================================================
     const relayBase = process.env.IG_RELAY_URL;
     const relayKey = process.env.IG_RELAY_SECRET || 'autopost-secret-key-2026';
-
-    // 1. Try Residential Cloudflare Tunnel Relay (if configured)
     if (relayBase) {
       try {
         let baseUrl = relayBase.trim().replace(/\/$/, '');
@@ -49,7 +115,9 @@ export class InstagramRelayClient {
       }
     }
 
-    // 2. Try Cloudflare Edge Worker (if configured and relay missed)
+    // =========================================================================
+    // 4. Cloudflare Edge Worker Fallback
+    // =========================================================================
     const igWorkerUrl = process.env.IG_WORKER_URL;
     if (igWorkerUrl) {
       try {
@@ -70,34 +138,15 @@ export class InstagramRelayClient {
       }
     }
 
-    // 3. Try DuckDuckGo Unblockable Index directly from Backend
-    try {
-      this.logger.log(`[IG Relay Client] Exploring DuckDuckGo index for @${username}...`);
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:instagram.com/reel/ OR site:instagram.com/p/ ' + username)}`;
-      const res = await fetch(ddgUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' }
-      });
-      if (res.ok) {
-        const html = await res.text();
-        const regex = /instagram\.com\/(?:reel|p)\/([A-Za-z0-9_-]{10,11})/gi;
-        let m;
-        while ((m = regex.exec(html)) !== null) {
-          const code = this.validateShortcode(m[1]);
-          if (code) {
-            this.logger.log(`[IG Relay Client] ✅ Got verified shortcode [${code}] via direct DuckDuckGo search index!`);
-            return { shortcode: code, source: 'DDG_Search_Index' };
-          }
-        }
-      }
-    } catch (e: any) {
-      this.logger.warn(`[IG Relay Client] DDG Index fallback failed: ${e.message}`);
-    }
-
     return null;
   }
 
   /**
-   * Resolves direct playable MP4 URL for a valid shortcode via Relay or Edge fallback.
+   * Resolves direct playable MP4 URL for a valid shortcode across a 4-tier resilient resolution pipeline:
+   * 1. Method A: yt-dlp binary execution with --force-ipv6 (bypasses AWS datacenter IPv4 blocking)
+   * 2. Method B: Lightweight Embed JSON Parser with iPhone User-Agent
+   * 3. Residential Cloudflare Tunnel Relay
+   * 4. Multi-mirror rotation (kkinstagram / ddinstagram) and Cloudflare Worker
    */
   public async resolveMp4(shortcode: string): Promise<{ mp4Url: string; source: string } | null> {
     const validCode = this.validateShortcode(shortcode);
@@ -106,10 +155,59 @@ export class InstagramRelayClient {
       return null;
     }
 
+    // =========================================================================
+    // 1. Method A: yt-dlp Binary Execution with --force-ipv6 & iPhone UA
+    // =========================================================================
+    try {
+      this.logger.log(`[IG Relay Client] Attempting Method A (yt-dlp --force-ipv6) for [${validCode}]...`);
+      const reelUrl = `https://www.instagram.com/reel/${validCode}/`;
+      const { stdout } = await execFileAsync('yt-dlp', [
+        '-g',
+        '--format', 'mp4',
+        '--force-ipv6', // Bypasses AWS IPv4 datacenter blocklists
+        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15',
+        reelUrl,
+      ], { timeout: 15000 });
+
+      const streamUrl = stdout?.trim();
+      if (streamUrl && streamUrl.startsWith('http')) {
+        this.logger.log(`[IG Relay Client] ✅ Directly extracted clean CDN MP4 stream using yt-dlp!`);
+        return { mp4Url: streamUrl.split('\n')[0].trim(), source: 'yt-dlp_ipv6' };
+      }
+    } catch (error: any) {
+      this.logger.debug(`[IG Relay Client] Method A (yt-dlp) resolution skipped/failed: ${error.message}`);
+    }
+
+    // =========================================================================
+    // 2. Method B: Lightweight Embed JSON Parser with iPhone User-Agent
+    // =========================================================================
+    try {
+      this.logger.log(`[IG Relay Client] Attempting Method B (Embed JSON parser) for [${validCode}]...`);
+      const embedUrl = `https://www.instagram.com/p/${validCode}/embed/captioned/`;
+      const res = await fetch(embedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const match = html.match(/"video_url":"([^"]+)"/);
+        if (match && match[1]) {
+          const rawUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+          this.logger.log(`[IG Relay Client] ✅ Extracted video_url from Method B embed JSON payload!`);
+          return { mp4Url: rawUrl, source: 'embed_json_parser' };
+        }
+      }
+    } catch (error: any) {
+      this.logger.debug(`[IG Relay Client] Method B embed parser failed: ${error.message}`);
+    }
+
+    // =========================================================================
+    // 3. Residential Cloudflare Tunnel Relay
+    // =========================================================================
     const relayBase = process.env.IG_RELAY_URL;
     const relayKey = process.env.IG_RELAY_SECRET || 'autopost-secret-key-2026';
-
-    // 1. Try Residential Relay
     if (relayBase) {
       try {
         let baseUrl = relayBase.trim().replace(/\/$/, '');
@@ -130,7 +228,9 @@ export class InstagramRelayClient {
       }
     }
 
-    // 2. Try Direct Mirrors (kkinstagram / ddinstagram rotation)
+    // =========================================================================
+    // 4. Direct Mirrors (kkinstagram / ddinstagram rotation) & Edge Worker
+    // =========================================================================
     const mirrors = [
       { name: 'kkinstagram', url: `https://kkinstagram.com/reel/${validCode}/` },
       { name: 'ddinstagram', url: `https://ddinstagram.com/reel/${validCode}/` },
@@ -155,7 +255,6 @@ export class InstagramRelayClient {
       }
     }
 
-    // 3. Try Cloudflare Edge Worker
     const igWorkerUrl = process.env.IG_WORKER_URL;
     if (igWorkerUrl) {
       try {
