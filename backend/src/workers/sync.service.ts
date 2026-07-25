@@ -134,73 +134,7 @@ export class SyncService {
             }
             
             if (!latestVideo) {
-              this.logsService.log('INFO', `Polling public mirrors (Imginn) for latest Reel by ${username}...`);
-              try {
-                const mirrorRes = await fetch(`https://imginn.com/${username}/`, {
-                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' }
-                });
-                if (mirrorRes.ok) {
-                  const html = await mirrorRes.text();
-                  const match = html.match(/(?:\/p\/|\/reel\/)([A-Za-z0-9_-]{10,15})/);
-                  if (match && match[1]) {
-                    const shortcode = match[1];
-                    const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
-                    latestVideo = {
-                      id: shortcode,
-                      url: reelUrl,
-                      title: `Instagram Reel`,
-                      timestamp: Math.floor(Date.now() / 1000)
-                    };
-                    this.logsService.log('INFO', `Found latest Reel via public mirror: ${reelUrl}`);
-                  }
-                }
-              } catch (e: any) {
-                this.logger.warn(`Public mirror poll failed for ${username}: ${e.message}`);
-              }
-
-              if (!latestVideo) {
-                this.logsService.log('INFO', `Mirror poll missed. Falling back to IG internal API via Cloudflare Worker for ${username}...`);
-              const igWorkerUrl = process.env.IG_WORKER_URL;
-              
-              if (!igWorkerUrl) {
-                this.logsService.log('ERROR', `IG_WORKER_URL missing. Cannot poll Instagram internal API. Please create the Cloudflare Worker and add the URL to Render.`);
-              } else {
-                let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
-                if (!baseUrl.startsWith('http')) {
-                  baseUrl = `https://${baseUrl}`;
-                }
-                const searchUrl = `${baseUrl}?username=${username}`;
-                
-                const res = await fetch(searchUrl);
-                
-                if (res.ok) {
-                  const data = await res.json();
-                  const user = data?.data?.user;
-                  const edges = user?.edge_owner_to_timeline_media?.edges;
-                  
-                  if (edges && edges.length > 0) {
-                    const latestMedia = edges.find((e: any) => e.node && e.node.is_video)?.node;
-                    
-                    if (latestMedia) {
-                      const shortcode = latestMedia.shortcode;
-                      const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
-                      latestVideo = {
-                        id: shortcode,
-                        url: reelUrl,
-                        title: `Instagram Reel`,
-                        timestamp: latestMedia.taken_at_timestamp || Math.floor(Date.now() / 1000)
-                      };
-                      this.logsService.log('INFO', `Found Reel from IG internal API: ${reelUrl}`);
-                    }
-                  }
-                  if (!latestVideo) {
-                     this.logsService.log('WARN', `IG internal API found no valid Instagram reels for ${username}`);
-                  }
-                } else {
-                  this.logsService.log('ERROR', `IG internal API request failed with status: ${res.status}`);
-                }
-                }
-              }
+              latestVideo = await this.pollInstagramProfile(username);
             }
           } catch (e) {
             this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
@@ -225,7 +159,7 @@ export class SyncService {
                timestamp: Math.floor(Date.now() / 1000)
              };
           }
-        } else {
+        } else if (mapping.source.platform !== 'INSTAGRAM') {
           for (const url of urlsToScan) {
             let cmd: string;
             if (mapping.source.platform === 'TIKTOK') {
@@ -391,44 +325,7 @@ export class SyncService {
             }
 
             if (!foundVideo) {
-              this.logsService.log('INFO', `Fetching IG internal API via Cloudflare Worker for latest Reel by ${username}...`);
-              const igWorkerUrl = process.env.IG_WORKER_URL;
-              
-              if (!igWorkerUrl) {
-                this.logsService.log('ERROR', `IG_WORKER_URL missing. Cannot poll Instagram internal API.`);
-              } else {
-                let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
-                if (!baseUrl.startsWith('http')) {
-                  baseUrl = `https://${baseUrl}`;
-                }
-                const searchUrl = `${baseUrl}?username=${username}`;
-                
-                const res = await fetch(searchUrl);
-                
-                if (res.ok) {
-                  const data = await res.json();
-                  const user = data?.data?.user;
-                  const edges = user?.edge_owner_to_timeline_media?.edges;
-                  
-                  if (edges && edges.length > 0) {
-                    const latestMedia = edges.find((e: any) => e.node && e.node.is_video)?.node;
-                    
-                    if (latestMedia) {
-                      const shortcode = latestMedia.shortcode;
-                      const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
-                      foundVideo = {
-                        id: shortcode,
-                        url: reelUrl,
-                        title: `Instagram Reel`,
-                        timestamp: latestMedia.taken_at_timestamp || Math.floor(Date.now() / 1000)
-                      };
-                      this.logsService.log('INFO', `Found Reel from IG internal API: ${reelUrl}`);
-                    }
-                  }
-                } else {
-                  this.logsService.log('ERROR', `IG internal API request failed with status: ${res.status}`);
-                }
-              }
+              foundVideo = await this.pollInstagramProfile(username);
             }
             
             if (foundVideo) {
@@ -469,7 +366,7 @@ export class SyncService {
         }
       }
       
-      if (latestVideos.length === 0) {
+      if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM') {
         for (const url of urlsToScan) {
           let cmd: string;
           if (source.platform === 'TIKTOK') {
@@ -808,6 +705,86 @@ export class SyncService {
 
   private async downloadAndUpload(uploadHistory: any) {
     await this.nativeDownloadAndUpload(uploadHistory);
+  }
+
+  private async pollInstagramProfile(username: string): Promise<any> {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5'
+    };
+
+    const mirrors = [
+      { name: 'Imginn', url: `https://imginn.com/${username}/` },
+      { name: 'Picnob', url: `https://www.picnob.com/profile/${username}/` },
+      { name: 'Dumpor', url: `https://dumpoir.com/v/${username}` },
+      { name: 'Greatfon', url: `https://greatfon.com/v/${username}` },
+      { name: 'Anonymously', url: `https://anonymously.io/profile/${username}/` }
+    ];
+
+    for (const mirror of mirrors) {
+      try {
+        this.logsService.log('INFO', `Polling ${mirror.name} mirror for user @${username}...`);
+        const res = await fetch(mirror.url, { headers, redirect: 'follow' });
+        if (res.ok) {
+          const html = await res.text();
+          const matches = html.match(/(?:\/p\/|\/reel\/|\/post\/|\/v\/[^\/]+\/)([A-Za-z0-9_-]{10,15})/i) || html.match(/shortcode["':\s]+([A-Za-z0-9_-]{10,15})/i);
+          if (matches && matches[1]) {
+            const shortcode = matches[1];
+            const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
+            this.logsService.log('INFO', `SUCCESS: Found latest Reel shortcode (${shortcode}) via ${mirror.name}!`);
+            return {
+              id: shortcode,
+              url: reelUrl,
+              title: `Instagram Reel`,
+              timestamp: Math.floor(Date.now() / 1000)
+            };
+          } else {
+            this.logsService.log('WARN', `${mirror.name}: Connected but no video shortcode found in HTML.`);
+          }
+        } else {
+          this.logsService.log('WARN', `${mirror.name} returned HTTP ${res.status} (Cloud blocking)`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`Failed to poll ${mirror.name}: ${e.message}`);
+      }
+    }
+
+    // Worker fallback
+    const igWorkerUrl = process.env.IG_WORKER_URL;
+    if (igWorkerUrl) {
+      this.logsService.log('INFO', `Public mirrors blocked by cloud ASN. Falling back to IG Worker for @${username}...`);
+      let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
+      if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+      try {
+        const res = await fetch(`${baseUrl}?username=${username}`);
+        if (res.ok) {
+          const data = await res.json();
+          const user = data?.data?.user;
+          const edges = user?.edge_owner_to_timeline_media?.edges;
+          if (edges && edges.length > 0) {
+            const latestMedia = edges.find((e: any) => e.node && e.node.is_video)?.node || edges[0]?.node;
+            if (latestMedia) {
+              const shortcode = latestMedia.shortcode;
+              const reelUrl = `https://www.instagram.com/reel/${shortcode}/`;
+              this.logsService.log('INFO', `Found Reel via IG Worker: ${reelUrl}`);
+              return {
+                id: shortcode,
+                url: reelUrl,
+                title: `Instagram Reel`,
+                timestamp: latestMedia.taken_at_timestamp || Math.floor(Date.now() / 1000)
+              };
+            }
+          }
+        } else {
+          this.logsService.log('ERROR', `IG Worker fallback returned HTTP ${res.status}.`);
+        }
+      } catch (e: any) {
+        this.logsService.log('ERROR', `IG Worker request failed: ${e.message}`);
+      }
+    }
+
+    return null;
   }
 
   private async fetchLatestFromRssHub(route: string): Promise<any> {
