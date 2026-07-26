@@ -12,12 +12,14 @@ export default function DashboardLayout({
   useEffect(() => {
     try {
       const token = localStorage.getItem('token');
-      if (token) {
-        // Decode JWT token payload (base64)
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload && payload.role) {
-          setRole(payload.role);
-        }
+      if (!token) {
+        window.location.replace('/login');
+        return;
+      }
+      // Decode JWT token payload (base64)
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload && payload.role) {
+        setRole(payload.role);
       }
 
       // Initialize App Theme from localStorage
@@ -29,6 +31,7 @@ export default function DashboardLayout({
       }
     } catch (e) {
       console.error('Failed to parse token or apply theme', e);
+      window.location.replace('/login');
     }
   }, []);
 

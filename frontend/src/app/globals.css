@@ -117,6 +117,7 @@ body.day-mode aside .bg-\[\#07090e\] {
 
 body.day-mode img[src*="logo.png"] {
   filter: invert(1) hue-rotate(180deg) brightness(1.05) contrast(1.05) !important;
+  mix-blend-mode: darken !important;
 }
 
 /* 3. WHITE CARDS & PANELS */

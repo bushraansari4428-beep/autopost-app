@@ -27,16 +27,13 @@ export default function Home() {
           The ultimate command center for your social media workflow. Automatically sync videos from any platform to your Facebook Pages.
         </p>
         
-        <div className="flex flex-col sm:flex-row gap-6">
-          <Link href="/dashboard" className="group relative px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-500 transition-all font-bold shadow-[0_0_40px_-10px_rgba(59,130,246,0.6)] flex items-center justify-center gap-3 overflow-hidden text-white">
+        <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+          <Link href="/login" className="group relative px-10 py-4 rounded-full bg-blue-600 hover:bg-blue-500 transition-all font-bold text-lg shadow-[0_0_40px_-10px_rgba(59,130,246,0.6)] flex items-center justify-center gap-3 overflow-hidden text-white">
             <span className="relative z-10 flex items-center gap-2">
-              Launch Dashboard
+              Sign In to Portal
               <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
             </span>
             <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-[200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-          </Link>
-          <Link href="/login" className="px-8 py-4 rounded-full glass hover:bg-white/10 transition-all font-semibold flex items-center justify-center border border-white/10 text-white">
-            Sign In
           </Link>
         </div>
 
