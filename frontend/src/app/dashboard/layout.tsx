@@ -28,8 +28,10 @@ export default function DashboardLayout({
     <div className="flex h-screen bg-gray-950 text-gray-100">
       {/* Sidebar */}
       <aside className="w-64 bg-gray-900 border-r border-gray-800 p-6 flex flex-col">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">AutoPost</h2>
+        <div className="mb-8 px-1">
+          <Link href="/dashboard" className="block focus:outline-none">
+            <img src="/logo.png" alt="AutoPost by NOOR Ali" className="h-14 w-auto object-contain drop-shadow-md hover:scale-[1.02] transition-all" />
+          </Link>
         </div>
         <nav className="flex-1 space-y-2">
           <Link href="/dashboard" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Dashboard</Link>

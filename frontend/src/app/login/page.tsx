@@ -49,10 +49,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
       <div className="max-w-md w-full animate-in fade-in zoom-in-95 duration-500">
         <div className="bg-gray-900/60 backdrop-blur-2xl border border-gray-800 p-8 rounded-3xl shadow-2xl">
-          <div className="text-center mb-10">
-            <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 mb-2">
-              AutoPost
-            </h1>
+          <div className="text-center mb-10 flex flex-col items-center">
+            <img src="/logo.png" alt="AutoPost by NOOR Ali" className="h-16 w-auto object-contain mb-4 drop-shadow-lg hover:scale-[1.02] transition-transform" />
             <p className="text-gray-400">
               {isRegistering ? 'Create your admin account.' : 'Sign in to manage your cross-posting.'}
             </p>
