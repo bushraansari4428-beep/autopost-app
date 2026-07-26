@@ -27,24 +27,24 @@ export default function DashboardLayout({
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col justify-between overflow-hidden">
+      <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col justify-between overflow-hidden shrink-0">
         <div>
-          <div className="pt-5 pb-5 px-3 mb-6 border-b border-gray-800/80 flex items-center justify-center overflow-hidden bg-gray-950/40">
-            <Link href="/dashboard" className="w-full flex items-center justify-center focus:outline-none">
-              <img src="/logo.png" alt="AutoPost by NOOR Ali" className="w-full h-20 object-contain transform sm:scale-[1.35] hover:scale-[1.40] transition-transform drop-shadow-lg" />
+          <div className="w-full h-32 mb-4 border-b border-gray-800 flex items-center justify-center overflow-hidden bg-[#07090e]">
+            <Link href="/dashboard" className="w-full h-full flex items-center justify-center focus:outline-none overflow-hidden">
+              <img src="/logo.png" alt="AutoPost by NOOR Ali" className="w-full h-32 object-cover transform scale-[1.85] hover:scale-[1.90] transition-transform duration-300 drop-shadow-2xl" />
             </Link>
           </div>
           <nav className="space-y-2 px-5">
-            <Link href="/dashboard" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Dashboard</Link>
-            <Link href="/dashboard/sources" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Sources</Link>
-            <Link href="/dashboard/pages" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Facebook Pages</Link>
-            <Link href="/dashboard/mappings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Mappings</Link>
-            <Link href="/dashboard/history" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Upload History</Link>
+            <Link href="/dashboard" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Dashboard</Link>
+            <Link href="/dashboard/sources" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Sources</Link>
+            <Link href="/dashboard/pages" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Facebook Pages</Link>
+            <Link href="/dashboard/mappings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Mappings</Link>
+            <Link href="/dashboard/history" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Upload History</Link>
             {role === 'ADMIN' && (
               <>
-                <Link href="/dashboard/logs" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Logs</Link>
-                <Link href="/dashboard/users" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Users</Link>
-                <Link href="/dashboard/settings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Settings</Link>
+                <Link href="/dashboard/logs" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Logs</Link>
+                <Link href="/dashboard/users" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Users</Link>
+                <Link href="/dashboard/settings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors font-medium">Settings</Link>
               </>
             )}
           </nav>
