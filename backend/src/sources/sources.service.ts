@@ -42,13 +42,44 @@ export class SourcesService {
   }
 
   update(id: string, updateSourceDto: any) {
+    const { name, platform, url, status } = updateSourceDto;
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (platform !== undefined) data.platform = platform;
+    if (url !== undefined) data.url = url;
+    if (status !== undefined) data.status = status;
     return this.prisma.source.update({
       where: { id },
-      data: updateSourceDto,
+      data,
     });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    // 1. Find all videos associated with this source
+    const videos = await this.prisma.video.findMany({
+      where: { sourceId: id },
+      select: { id: true },
+    });
+    const videoIds = videos.map(v => v.id);
+
+    // 2. Delete any upload histories tied to those videos
+    if (videoIds.length > 0) {
+      await this.prisma.uploadHistory.deleteMany({
+        where: { videoId: { in: videoIds } },
+      });
+    }
+
+    // 3. Delete videos tied to this source
+    await this.prisma.video.deleteMany({
+      where: { sourceId: id },
+    });
+
+    // 4. Delete mappings tied to this source
+    await this.prisma.mapping.deleteMany({
+      where: { sourceId: id },
+    });
+
+    // 5. Finally delete the source cleanly without FK errors
     return this.prisma.source.delete({
       where: { id },
     });

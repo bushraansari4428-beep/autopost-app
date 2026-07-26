@@ -5,12 +5,15 @@ export default function SourcesPage() {
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingSource, setEditingSource] = useState<any | null>(null);
   
   // Form state
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState('YOUTUBE');
   const [url, setUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const fetchSources = async () => {
     try {
@@ -22,7 +25,7 @@ export default function SourcesPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSources(data);
+        setSources(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Failed to fetch sources:', err);
@@ -35,25 +38,59 @@ export default function SourcesPage() {
     fetchSources();
   }, []);
 
-  const deleteSource = async (id: string) => {
-    const token = localStorage.getItem('token');
-    await fetch(`/api/sources/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    fetchSources();
+  const handleOpenAddModal = () => {
+    setEditingSource(null);
+    setName('');
+    setUrl('');
+    setPlatform('YOUTUBE');
+    setErrorMsg('');
+    setShowModal(true);
   };
 
-  const [errorMsg, setErrorMsg] = useState('');
+  const handleOpenEditModal = (source: any) => {
+    setEditingSource(source);
+    setName(source.name || '');
+    setPlatform(source.platform || 'YOUTUBE');
+    setUrl(source.url || '');
+    setErrorMsg('');
+    setShowModal(true);
+  };
 
-  const handleAddSource = async (e: React.FormEvent) => {
+  const deleteSource = async (id: string, sourceName: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${sourceName}"? This will also remove associated mappings and upload history.`)) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/sources/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        alert(`Failed to delete source: ${text}`);
+      }
+      await fetchSources();
+    } catch (error: any) {
+      console.error('Error deleting source:', error);
+      alert('Network error while deleting source.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMsg('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/sources', {
-        method: 'POST',
+      const endpoint = editingSource ? `/api/sources/${editingSource.id}` : '/api/sources';
+      const method = editingSource ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -66,14 +103,15 @@ export default function SourcesPage() {
         setName('');
         setUrl('');
         setPlatform('YOUTUBE');
-        fetchSources();
+        setEditingSource(null);
+        await fetchSources();
       } else {
         const errText = await res.text();
         console.error('Failed response:', errText);
         setErrorMsg('Error: ' + errText);
       }
     } catch (err: any) {
-      console.error('Failed to add source', err);
+      console.error('Failed to save source', err);
       setErrorMsg('Network error: ' + err.message);
     } finally {
       setIsSubmitting(false);
@@ -88,7 +126,7 @@ export default function SourcesPage() {
           <p className="text-gray-400 mt-1">Manage all your connected source platforms (YouTube, Instagram, TikTok).</p>
         </div>
         <button 
-          onClick={() => setShowModal(true)}
+          onClick={handleOpenAddModal}
           className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-blue-500/25 transition-all transform hover:scale-105 active:scale-95"
         >
           + Add Source
@@ -140,10 +178,21 @@ export default function SourcesPage() {
                     </div>
                   </td>
                   <td className="px-6 py-5">{source.lastChecked ? new Date(source.lastChecked).toLocaleString() : 'Never'}</td>
-                  <td className="px-6 py-5 text-right">
-                    <button className="text-gray-400 hover:text-white transition-colors">Edit</button>
+                  <td className="px-6 py-5 text-right font-medium">
+                    <button 
+                      onClick={() => handleOpenEditModal(source)}
+                      className="text-blue-400 hover:text-blue-300 transition-colors focus:outline-none"
+                    >
+                      Edit
+                    </button>
                     <span className="mx-2 text-gray-700">|</span>
-                    <button onClick={() => deleteSource(source.id)} className="text-red-400 hover:text-red-300 transition-colors">Delete</button>
+                    <button 
+                      disabled={deletingId === source.id}
+                      onClick={() => deleteSource(source.id, source.name)} 
+                      className="text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors focus:outline-none"
+                    >
+                      {deletingId === source.id ? 'Deleting...' : 'Delete'}
+                    </button>
                   </td>
                 </tr>
               ))
@@ -153,32 +202,34 @@ export default function SourcesPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-6">Add New Source</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">
+              {editingSource ? 'Edit Source Account' : 'Add New Source'}
+            </h2>
             {errorMsg && (
               <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm">
                 {errorMsg}
               </div>
             )}
-            <form onSubmit={handleAddSource} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Source Name</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Source Name</label>
                 <input 
                   type="text" 
                   value={name} 
                   onChange={(e) => setName(e.target.value)} 
                   required 
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" 
+                  className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
                   placeholder="e.g. My Tech Channel"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Platform</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Platform</label>
                 <select 
                   value={platform} 
                   onChange={(e) => setPlatform(e.target.value)} 
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 >
                   <option value="YOUTUBE">YouTube</option>
                   <option value="INSTAGRAM">Instagram</option>
@@ -188,31 +239,31 @@ export default function SourcesPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Profile URL / Handle</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Profile URL / Handle</label>
                 <input 
                   type="text" 
                   value={url} 
                   onChange={(e) => setUrl(e.target.value)} 
                   required 
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500" 
+                  className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
                   placeholder="https://youtube.com/@channel"
                 />
               </div>
               
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-3 pt-4">
                 <button 
                   type="button" 
                   onClick={() => setShowModal(false)} 
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors"
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/30"
                 >
-                  {isSubmitting ? 'Saving...' : 'Add Source'}
+                  {isSubmitting ? 'Saving...' : editingSource ? 'Update Source' : 'Add Source'}
                 </button>
               </div>
             </form>
