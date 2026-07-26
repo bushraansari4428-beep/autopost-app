@@ -27,28 +27,30 @@ export default function DashboardLayout({
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800 p-6 flex flex-col">
-        <div className="mb-8 px-1">
-          <Link href="/dashboard" className="block focus:outline-none">
-            <img src="/logo.png" alt="AutoPost by NOOR Ali" className="h-14 w-auto object-contain drop-shadow-md hover:scale-[1.02] transition-all" />
-          </Link>
+      <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col justify-between overflow-hidden">
+        <div>
+          <div className="pt-5 pb-5 px-3 mb-6 border-b border-gray-800/80 flex items-center justify-center overflow-hidden bg-gray-950/40">
+            <Link href="/dashboard" className="w-full flex items-center justify-center focus:outline-none">
+              <img src="/logo.png" alt="AutoPost by NOOR Ali" className="w-full h-20 object-contain transform sm:scale-[1.35] hover:scale-[1.40] transition-transform drop-shadow-lg" />
+            </Link>
+          </div>
+          <nav className="space-y-2 px-5">
+            <Link href="/dashboard" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Dashboard</Link>
+            <Link href="/dashboard/sources" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Sources</Link>
+            <Link href="/dashboard/pages" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Facebook Pages</Link>
+            <Link href="/dashboard/mappings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Mappings</Link>
+            <Link href="/dashboard/history" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Upload History</Link>
+            {role === 'ADMIN' && (
+              <>
+                <Link href="/dashboard/logs" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Logs</Link>
+                <Link href="/dashboard/users" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Users</Link>
+                <Link href="/dashboard/settings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Settings</Link>
+              </>
+            )}
+          </nav>
         </div>
-        <nav className="flex-1 space-y-2">
-          <Link href="/dashboard" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Dashboard</Link>
-          <Link href="/dashboard/sources" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Sources</Link>
-          <Link href="/dashboard/pages" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Facebook Pages</Link>
-          <Link href="/dashboard/mappings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Mappings</Link>
-          <Link href="/dashboard/history" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Upload History</Link>
-          {role === 'ADMIN' && (
-            <>
-              <Link href="/dashboard/logs" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Logs</Link>
-              <Link href="/dashboard/users" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Users</Link>
-              <Link href="/dashboard/settings" className="block px-4 py-3 rounded-xl hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">Settings</Link>
-            </>
-          )}
-        </nav>
-        <div className="pt-6 border-t border-gray-800">
-          <Link href="/" className="block px-4 py-2 text-gray-400 hover:text-white" onClick={() => localStorage.removeItem('token')}>Logout</Link>
+        <div className="p-5 border-t border-gray-800 mt-4">
+          <Link href="/" className="block px-4 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors font-medium" onClick={() => localStorage.removeItem('token')}>Logout</Link>
         </div>
       </aside>
 
