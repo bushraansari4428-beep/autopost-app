@@ -107,12 +107,20 @@ body.day-mode aside {
   box-shadow: 2px 0 15px -3px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Make logo sidebar container pure white and seamlessly invert logo image colors for daylight radiance! */
+/* Make logo sidebar container and navigation sections pure white with crisp contrast in Day Mode! */
 body.day-mode aside .bg-\[\#06080d\],
-body.day-mode aside .bg-\[\#07090e\] {
+body.day-mode aside .bg-\[\#07090e\],
+body.day-mode aside .bg-\[\#05070c\],
+body.day-mode aside .bg-\[\#070a12\]\/80 {
   background: #ffffff !important;
   background-color: #ffffff !important;
-  border-bottom: 1px solid #cbd5e1 !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.day-mode aside .bg-gray-950\/30 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 body.day-mode img[src*="logo.png"] {
