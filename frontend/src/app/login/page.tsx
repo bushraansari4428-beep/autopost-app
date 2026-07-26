@@ -44,10 +44,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-950 to-black flex items-center justify-center p-4">
       <div className="max-w-md w-full animate-in fade-in zoom-in-95 duration-500">
-        <div className="bg-gray-900/80 backdrop-blur-2xl border border-gray-800 p-8 rounded-3xl shadow-2xl">
-          <div className="text-center mb-8 flex flex-col items-center justify-center overflow-hidden py-2">
+        <div className="bg-[#000000] border-2 border-gray-800/80 p-8 rounded-3xl shadow-2xl shadow-blue-500/10">
+          <div className="text-center mb-8 flex flex-col items-center justify-center overflow-hidden py-2 bg-[#000000]">
             <img 
               src="/logo.png" 
               alt="AutoPost by NOOR Ali" 
