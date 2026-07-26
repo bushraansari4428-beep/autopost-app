@@ -5,8 +5,49 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HistoryService {
   constructor(private prisma: PrismaService) {}
 
-  findAll() {
+  findAll(user?: any) {
+    if (!user) {
+      return this.prisma.uploadHistory.findMany({
+        include: {
+          video: {
+            include: {
+              source: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
+    if (user.role === 'ADMIN') {
+      return this.prisma.uploadHistory.findMany({
+        where: {
+          video: {
+            source: {
+              OR: [
+                { userId: user.id },
+                { userId: null }
+              ]
+            }
+          }
+        },
+        include: {
+          video: {
+            include: {
+              source: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
     return this.prisma.uploadHistory.findMany({
+      where: {
+        video: {
+          source: {
+            userId: user.id
+          }
+        }
+      },
       include: {
         video: {
           include: {
@@ -14,9 +55,7 @@ export class HistoryService {
           }
         }
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
+      orderBy: { createdAt: 'desc' }
     });
   }
 

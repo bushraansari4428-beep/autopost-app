@@ -10,14 +10,16 @@ datasource db {
 }
 
 model User {
-  id               String    @id @default(uuid())
-  email            String    @unique
+  id               String         @id @default(uuid())
+  email            String         @unique
   password         String?
-  googleId         String?   @unique
-  resetToken       String?   @unique
+  googleId         String?        @unique
+  resetToken       String?        @unique
   resetTokenExpiry DateTime?
-  role             Role      @default(USER)
-  createdAt        DateTime  @default(now())
+  role             Role           @default(USER)
+  facebookPages    FacebookPage[]
+  sources          Source[]
+  createdAt        DateTime       @default(now())
 }
 
 enum Role {
@@ -26,27 +28,31 @@ enum Role {
 }
 
 model FacebookPage {
-  id           String    @id @default(uuid())
-  pageId       String    @unique
+  id           String          @id @default(uuid())
+  pageId       String          @unique
   name         String
   accessToken  String
   tokenExpiry  DateTime?
-  status       Status    @default(ACTIVE)
+  status       Status          @default(ACTIVE)
+  userId       String?
+  user         User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   mappings     Mapping[]
   uploads      UploadHistory[]
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime        @default(now())
 }
 
 model Source {
-  id           String    @id @default(uuid())
+  id           String          @id @default(uuid())
   platform     Platform
   url          String
   name         String
-  status       Status    @default(ACTIVE)
+  status       Status          @default(ACTIVE)
   lastChecked  DateTime?
+  userId       String?
+  user         User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   mappings     Mapping[]
   videos       Video[]
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime        @default(now())
 }
 
 enum Platform {

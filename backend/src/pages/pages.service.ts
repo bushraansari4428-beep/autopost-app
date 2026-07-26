@@ -11,8 +11,25 @@ export class PagesService {
     });
   }
 
-  findAll() {
-    return this.prisma.facebookPage.findMany();
+  findAll(user?: any) {
+    if (!user) {
+      return this.prisma.facebookPage.findMany();
+    }
+    if (user.role === 'ADMIN') {
+      return this.prisma.facebookPage.findMany({
+        where: {
+          OR: [
+            { userId: user.id },
+            { userId: null }
+          ]
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
+    return this.prisma.facebookPage.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' }
+    });
   }
 
   findOne(id: string) {

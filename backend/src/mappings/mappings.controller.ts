@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request } from '@nestjs/common';
 import { MappingsService } from './mappings.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -13,8 +13,8 @@ export class MappingsController {
   }
 
   @Get()
-  findAll() {
-    return this.mappingsService.findAll();
+  findAll(@Request() req: any) {
+    return this.mappingsService.findAll(req.user);
   }
 
   @Delete(':id')

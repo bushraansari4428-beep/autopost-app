@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Request } from '@nestjs/common';
 import { SourcesService } from './sources.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -8,8 +8,11 @@ export class SourcesController {
   constructor(private readonly sourcesService: SourcesService) {}
 
   @Post()
-  async create(@Body() createSourceDto: any) {
+  async create(@Body() createSourceDto: any, @Request() req: any) {
     try {
+      if (req.user && req.user.id) {
+        createSourceDto.userId = req.user.id;
+      }
       return await this.sourcesService.create(createSourceDto);
     } catch (error: any) {
       console.error('Source creation error:', error);
@@ -21,8 +24,8 @@ export class SourcesController {
   }
 
   @Get()
-  findAll() {
-    return this.sourcesService.findAll();
+  findAll(@Request() req: any) {
+    return this.sourcesService.findAll(req.user);
   }
 
   @Get('debug-env')

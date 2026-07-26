@@ -8,13 +8,16 @@ export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
 
   @Post()
-  create(@Body() createPageDto: any) {
+  create(@Body() createPageDto: any, @Request() req: any) {
+    if (req.user && req.user.id) {
+      createPageDto.userId = req.user.id;
+    }
     return this.pagesService.create(createPageDto);
   }
 
   @Get()
-  findAll() {
-    return this.pagesService.findAll();
+  findAll(@Request() req: any) {
+    return this.pagesService.findAll(req.user);
   }
 
   @Get(':id')

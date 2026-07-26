@@ -31,8 +31,25 @@ export class SourcesService {
     });
   }
 
-  findAll() {
-    return this.prisma.source.findMany();
+  findAll(user?: any) {
+    if (!user) {
+      return this.prisma.source.findMany();
+    }
+    if (user.role === 'ADMIN') {
+      return this.prisma.source.findMany({
+        where: {
+          OR: [
+            { userId: user.id },
+            { userId: null }
+          ]
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
+    return this.prisma.source.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' }
+    });
   }
 
   findOne(id: string) {
