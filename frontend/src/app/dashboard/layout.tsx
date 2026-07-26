@@ -29,9 +29,9 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col justify-between overflow-hidden shrink-0">
         <div>
-          <div className="w-full h-28 mb-4 border-b border-gray-800 flex items-center justify-center bg-[#06080d] px-2">
+          <div className="w-full h-28 mb-4 border-b border-gray-800 flex items-center justify-center bg-[#06080d] px-2 overflow-hidden">
             <Link href="/dashboard" className="w-full h-full flex items-center justify-center focus:outline-none">
-              <img src="/logo.png" alt="AutoPost by NOOR Ali" className="w-full h-full max-w-[240px] object-contain drop-shadow-lg transition-transform duration-200 hover:scale-[1.03]" />
+              <img src="/logo.png" alt="AutoPost by NOOR Ali" className="w-full h-full max-w-[240px] object-contain transform scale-[1.2] drop-shadow-lg transition-transform duration-200 hover:scale-[1.25]" />
             </Link>
           </div>
           <nav className="space-y-2 px-5">
