@@ -7,7 +7,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -22,10 +21,9 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
     
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -37,7 +35,7 @@ export default function LoginPage() {
         throw new Error(data.message || 'Authentication failed');
       }
 
-      // Save token (basic client-side approach)
+      // Save token
       localStorage.setItem('token', data.access_token);
       router.push('/dashboard');
     } catch (err: any) {
@@ -52,13 +50,13 @@ export default function LoginPage() {
           <div className="text-center mb-8 flex flex-col items-center overflow-hidden">
             <img src="/logo.png" alt="AutoPost by NOOR Ali" className="w-80 h-28 object-contain transform scale-[1.5] mb-2 drop-shadow-2xl hover:scale-[1.55] transition-transform" />
             <p className="text-gray-400 text-sm font-medium">
-              {isRegistering ? 'Create your admin account.' : 'Sign in to manage your cross-posting.'}
+              Sign in to manage your automated cross-posting vault.
             </p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm">
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm font-medium">
                 {error}
               </div>
             )}
@@ -68,19 +66,17 @@ export default function LoginPage() {
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@example.com"
+                placeholder="user@example.com"
                 required
-                className="w-full bg-black/50 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-gray-600"
+                className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-gray-500"
               />
             </div>
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-gray-300">Password</label>
-                {!isRegistering && (
-                  <a href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                    Forgot password?
-                  </a>
-                )}
+                <a href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                  Forgot password?
+                </a>
               </div>
               <div className="relative">
                 <input 
@@ -89,7 +85,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full bg-black/50 border border-gray-700 rounded-xl px-4 py-3 pr-12 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-gray-600"
+                  className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 pr-12 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-gray-500"
                 />
                 <button
                   type="button"
@@ -112,18 +108,14 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-[1.02] active:scale-95">
-              {isRegistering ? 'Sign Up' : 'Sign In'}
+              Sign In
             </button>
           </form>
 
-
-          <div className="mt-8 text-center">
-            <button 
-              type="button"
-              onClick={() => setIsRegistering(!isRegistering)}
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
-              {isRegistering ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
-            </button>
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-500">
+              🔒 Authorized Customer Portal • Accounts managed by Noor Ali
+            </p>
           </div>
         </div>
       </div>

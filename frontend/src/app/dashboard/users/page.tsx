@@ -15,7 +15,6 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('USER');
   const [error, setError] = useState('');
 
   const fetchUsers = async () => {
@@ -50,13 +49,12 @@ export default function UsersPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ email, password, role })
+        body: JSON.stringify({ email, password, role: 'USER' })
       });
       if (res.ok) {
         setShowModal(false);
         setEmail('');
         setPassword('');
-        setRole('USER');
         fetchUsers();
       } else {
         const data = await res.json();
@@ -88,14 +86,17 @@ export default function UsersPage() {
   if (loading) return <div className="p-8">Loading users...</div>;
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-6xl p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">User Management</h1>
+          <p className="text-gray-400 mt-1">Generate and manage standard customer access accounts.</p>
+        </div>
         <button
           onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/25 transition flex items-center gap-2"
         >
-          + Add New User
+          <span className="text-xl">+</span> Create New User
         </button>
       </div>
 
@@ -143,7 +144,8 @@ export default function UsersPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-md p-6 shadow-2xl">
-            <h2 className="text-2xl font-bold mb-6 text-white">Create New User</h2>
+            <h2 className="text-2xl font-bold mb-2 text-white">Create New User</h2>
+            <p className="text-xs text-gray-400 mb-6">Generated credentials will grant standard customer dashboard access.</p>
             {error && <div className="mb-4 text-red-400 text-sm bg-red-500/10 border border-red-500/20 p-3 rounded-xl">{error}</div>}
             
             <form onSubmit={handleCreateUser}>
@@ -169,17 +171,6 @@ export default function UsersPage() {
                     className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-xl focus:border-blue-500 focus:outline-none placeholder-gray-500 font-medium"
                     placeholder="Set a password"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Role</label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-xl focus:border-blue-500 focus:outline-none font-medium"
-                  >
-                    <option value="USER" className="bg-gray-800 text-white">User (Standard Access)</option>
-                    <option value="ADMIN" className="bg-gray-800 text-white">Admin (Full Access)</option>
-                  </select>
                 </div>
               </div>
 

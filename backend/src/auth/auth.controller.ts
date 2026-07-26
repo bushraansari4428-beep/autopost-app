@@ -16,10 +16,7 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() req: any) {
-    if (!req.email || !req.password) {
-      throw new UnauthorizedException('Email and password required');
-    }
-    return this.authService.register(req.email, req.password);
+    throw new UnauthorizedException('Public sign-up is disabled. Accounts can only be created by the Administrator.');
   }
 
 
