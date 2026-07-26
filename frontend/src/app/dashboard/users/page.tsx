@@ -99,34 +99,34 @@ export default function UsersPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-gray-900 rounded-2xl shadow-xl border border-gray-800 overflow-hidden">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-100">
+          <thead className="bg-gray-800/80 border-b border-gray-800">
             <tr>
-              <th className="p-4 font-semibold text-gray-600">Email</th>
-              <th className="p-4 font-semibold text-gray-600">Role</th>
-              <th className="p-4 font-semibold text-gray-600">Created At</th>
-              <th className="p-4 font-semibold text-gray-600 text-right">Actions</th>
+              <th className="p-4 font-semibold text-gray-400">Email</th>
+              <th className="p-4 font-semibold text-gray-400">Role</th>
+              <th className="p-4 font-semibold text-gray-400">Created At</th>
+              <th className="p-4 font-semibold text-gray-400 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {users.map(user => (
-              <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
-                <td className="p-4 text-gray-800">{user.email}</td>
+              <tr key={user.id} className="border-b border-gray-800/60 hover:bg-gray-800/40 transition">
+                <td className="p-4 text-white font-medium">{user.email}</td>
                 <td className="p-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                    user.role === 'ADMIN' ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-blue-500/20 border border-blue-500/30 text-blue-400'
                   }`}>
                     {user.role}
                   </span>
                 </td>
-                <td className="p-4 text-gray-500 text-sm">
+                <td className="p-4 text-gray-400 text-sm">
                   {new Date(user.createdAt).toLocaleDateString()}
                 </td>
                 <td className="p-4 text-right">
                   <button
                     onClick={() => handleDeleteUser(user.id)}
-                    className="text-red-500 hover:text-red-700 text-sm font-medium"
+                    className="text-red-400 hover:text-red-300 text-sm font-semibold px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition"
                   >
                     Delete
                   </button>
@@ -136,49 +136,49 @@ export default function UsersPage() {
           </tbody>
         </table>
         {users.length === 0 && (
-          <div className="p-8 text-center text-gray-500">No users found.</div>
+          <div className="p-8 text-center text-gray-400">No users found.</div>
         )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
-            <h2 className="text-xl font-bold mb-4 text-gray-800">Create New User</h2>
-            {error && <div className="mb-4 text-red-500 text-sm bg-red-50 p-3 rounded">{error}</div>}
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-md p-6 shadow-2xl">
+            <h2 className="text-2xl font-bold mb-6 text-white">Create New User</h2>
+            {error && <div className="mb-4 text-red-400 text-sm bg-red-500/10 border border-red-500/20 p-3 rounded-xl">{error}</div>}
             
             <form onSubmit={handleCreateUser}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Email Address</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-xl focus:border-blue-500 focus:outline-none placeholder-gray-500 font-medium"
                     placeholder="user@example.com"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
                   <input
                     type="text"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-xl focus:border-blue-500 focus:outline-none placeholder-gray-500 font-medium"
                     placeholder="Set a password"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Role</label>
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-xl focus:border-blue-500 focus:outline-none font-medium"
                   >
-                    <option value="USER">User (Standard Access)</option>
-                    <option value="ADMIN">Admin (Full Access)</option>
+                    <option value="USER" className="bg-gray-800 text-white">User (Standard Access)</option>
+                    <option value="ADMIN" className="bg-gray-800 text-white">Admin (Full Access)</option>
                   </select>
                 </div>
               </div>
@@ -187,13 +187,13 @@ export default function UsersPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                  className="px-5 py-2.5 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700 rounded-xl transition font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/25 transition"
                 >
                   Create User
                 </button>
