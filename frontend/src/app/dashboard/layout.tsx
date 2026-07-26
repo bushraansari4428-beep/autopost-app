@@ -19,8 +19,16 @@ export default function DashboardLayout({
           setRole(payload.role);
         }
       }
+
+      // Initialize App Theme from localStorage
+      const savedTheme = localStorage.getItem('app_theme');
+      if (savedTheme === 'day') {
+        document.body.classList.add('day-mode');
+      } else {
+        document.body.classList.remove('day-mode');
+      }
     } catch (e) {
-      console.error('Failed to parse token');
+      console.error('Failed to parse token or apply theme', e);
     }
   }, []);
 

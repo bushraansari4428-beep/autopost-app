@@ -74,3 +74,120 @@ body {
 .animate-pulse-glow {
   animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* ==========================================================================
+   DAY MODE / LIGHT THEME ENGINE (Zero-Touch Clean Transformation)
+   ========================================================================== */
+body.day-mode {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  background: #f1f5f9 !important;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(249, 115, 22, 0.08) 0px, transparent 50%) !important;
+  color: #0f172a !important;
+}
+
+/* Surfaces & Backgrounds */
+body.day-mode .bg-gray-950,
+body.day-mode .bg-black {
+  background-color: #f8fafc !important;
+}
+
+body.day-mode .bg-gray-900,
+body.day-mode .bg-gray-900\/60,
+body.day-mode .bg-gray-900\/50,
+body.day-mode .bg-gray-900\/40,
+body.day-mode .bg-gray-900\/80,
+body.day-mode .bg-gray-900\/90 {
+  background-color: #ffffff !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
+}
+
+body.day-mode .bg-gray-800,
+body.day-mode .bg-gray-800\/80,
+body.day-mode .bg-gray-800\/50,
+body.day-mode .bg-gray-800\/60,
+body.day-mode .bg-gray-950\/60 {
+  background-color: #f1f5f9 !important;
+}
+
+body.day-mode .hover\:bg-gray-800:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Keep top logo sidebar container sleek & dark for branding prominence */
+body.day-mode .bg-\[\#06080d\],
+body.day-mode .bg-\[\#07090e\] {
+  background-color: #0d111c !important;
+}
+
+/* Typography & Text Contrast */
+body.day-mode .text-white {
+  color: #0f172a !important;
+}
+
+body.day-mode .text-gray-100,
+body.day-mode .text-gray-200,
+body.day-mode .text-gray-300 {
+  color: #1e293b !important;
+}
+
+body.day-mode .text-gray-400 {
+  color: #475569 !important;
+}
+
+body.day-mode .text-gray-500 {
+  color: #64748b !important;
+}
+
+body.day-mode .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+/* Borders & Dividers */
+body.day-mode .border-gray-800,
+body.day-mode .border-gray-800\/80,
+body.day-mode .border-gray-700,
+body.day-mode .border-gray-700\/50 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Preserve Gradients and Primary/Action Button Text Colors */
+body.day-mode .bg-gradient-to-r,
+body.day-mode .bg-gradient-to-r *,
+body.day-mode button.bg-blue-600,
+body.day-mode button.bg-blue-500,
+body.day-mode button.bg-green-600,
+body.day-mode button.bg-red-600 {
+  color: #ffffff !important;
+}
+
+/* Inputs & Form Controls */
+body.day-mode input,
+body.day-mode select,
+body.day-mode textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.day-mode input::placeholder,
+body.day-mode textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Table Enhancements in Day Mode */
+body.day-mode table thead tr {
+  background-color: #f8fafc !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+body.day-mode table tbody tr {
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+body.day-mode table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
