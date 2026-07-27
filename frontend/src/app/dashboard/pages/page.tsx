@@ -102,27 +102,81 @@ export default function FacebookPagesPage() {
             <p className="text-sm">Click "+ Add FB Page" to authorize.</p>
           </div>
         ) : (
-          pages.map(page => (
-            <div key={page.id} className="p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-xl hover:border-gray-700 transition-all hover:shadow-2xl group">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 rounded-full bg-[#1877F2]/20 flex items-center justify-center text-[#1877F2] font-bold text-xl">
-                  {page.name.charAt(0).toUpperCase()}
+          pages.map(page => {
+            const connectDate = new Date(page.createdAt || Date.now());
+            const formattedConnectDate = connectDate.toLocaleDateString('en-US', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric'
+            });
+
+            // Access token valid for 90 days from attachment date
+            const totalValidityDays = 90;
+            const msPerDay = 1000 * 60 * 60 * 24;
+            const daysElapsed = Math.max(0, Math.floor((Date.now() - connectDate.getTime()) / msPerDay));
+            const remainingDays = Math.max(0, totalValidityDays - daysElapsed);
+            const percentRemaining = Math.min(100, Math.max(0, (remainingDays / totalValidityDays) * 100));
+
+            return (
+              <div key={page.id} className="p-6 bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-xl hover:border-gray-700 transition-all hover:shadow-2xl flex flex-col justify-between group">
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="w-12 h-12 rounded-full bg-[#1877F2]/20 flex items-center justify-center text-[#1877F2] font-extrabold text-xl shadow-inner">
+                      {page.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      page.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                    } border shadow-sm`}>
+                      {page.status}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{page.name}</h3>
+                  <p className="text-gray-500 text-xs font-mono mb-4">ID: {page.pageId}</p>
+                  
+                  {/* Token Validity & Attached Date Box */}
+                  <div className="bg-gray-950/60 rounded-2xl p-4 mb-4 border border-gray-800/80 space-y-2.5 text-sm shadow-inner">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 font-medium text-xs uppercase tracking-wider">
+                        Attached Date:
+                      </span>
+                      <span className="text-white font-bold text-sm bg-gray-800/50 px-2.5 py-0.5 rounded-md border border-gray-700/50">
+                        {formattedConnectDate}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-gray-400 font-medium text-xs uppercase tracking-wider">
+                        Token Reminder:
+                      </span>
+                      <span className={`font-bold px-2.5 py-1 rounded-lg text-xs tracking-wide shadow-sm ${
+                        remainingDays <= 10 ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      }`}>
+                        Expires in {remainingDays} {remainingDays === 1 ? 'day' : 'days'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-800/80 rounded-full h-1.5 mt-2 overflow-hidden border border-gray-700/50">
+                      <div 
+                        className={`h-full transition-all duration-500 ${remainingDays <= 10 ? 'bg-red-500' : 'bg-gradient-to-r from-blue-500 to-indigo-500'}`} 
+                        style={{ width: `${percentRemaining}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                  page.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                } border`}>
-                  {page.status}
-                </span>
+                
+                <div className="pt-3 border-t border-gray-800/60 flex justify-between items-center text-sm">
+                  <span className="text-emerald-400 font-bold flex items-center gap-2 text-xs uppercase tracking-wider">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+                    Token Active
+                  </span>
+                  <button 
+                    onClick={() => deletePage(page.id)} 
+                    className="text-red-400 hover:text-red-300 font-bold hover:underline px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition"
+                  >
+                    Disconnect
+                  </button>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{page.name}</h3>
-              <p className="text-gray-500 text-sm font-mono mb-4">ID: {page.pageId}</p>
-              
-              <div className="pt-4 border-t border-gray-800/50 flex justify-between items-center text-sm">
-                <span className="text-gray-400">Token valid: <span className="text-gray-300">Active</span></span>
-                <button onClick={() => deletePage(page.id)} className="text-red-400 hover:text-red-300 font-medium">Disconnect</button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
