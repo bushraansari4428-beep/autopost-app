@@ -161,34 +161,21 @@ export class SyncService {
                timestamp: Math.floor(Date.now() / 1000)
              };
           }
+        } else if (mapping.source.platform === 'TIKTOK') {
+          this.logsService.log('INFO', `Executing high-res TikTok extraction with original caption preservation for ${mapping.source.url}...`);
+          const tkVideo = await this.extractTikTokVideo(mapping.source.url);
+          if (tkVideo) {
+            latestVideo = tkVideo;
+            this.logsService.log('INFO', `Successfully found TikTok Video: ${latestVideo.title?.substring(0, 80)}...`);
+          }
         } else {
           for (const url of urlsToScan) {
-            let cmd: string;
-            if (mapping.source.platform === 'TIKTOK') {
-              cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
-            } else {
-              cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
-            }
-
+            const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
             try {
               const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-              
               if (stdout && stdout.trim()) {
-                if (mapping.source.platform === 'TIKTOK') {
-                  const videoId = stdout.trim().split('\n')[0].trim();
-                  if (videoId) {
-                    latestVideo = {
-                      id: videoId,
-                      url: `${url}/video/${videoId}`,
-                      title: `TikTok Video ${videoId}`,
-                      timestamp: Math.floor(Date.now() / 1000)
-                    };
-                    break;
-                  }
-                } else {
-                  latestVideo = JSON.parse(stdout);
-                  break;
-                }
+                latestVideo = JSON.parse(stdout);
+                break;
               }
             } catch (e: any) {
               this.logsService.log('ERROR', `yt-dlp error: ${e.message.substring(0, 200)}...`);
@@ -369,43 +356,32 @@ export class SyncService {
       }
       
       if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM') {
-        for (const url of urlsToScan) {
-          let cmd: string;
-          if (source.platform === 'TIKTOK') {
-            cmd = `./yt-dlp --flat-playlist --playlist-end 1 --print id "${url}"`;
-          } else {
-            cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+        if (source.platform === 'TIKTOK') {
+          this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
+          const tkVideo = await this.extractTikTokVideo(source.url);
+          if (tkVideo) {
+            latestVideos.push(tkVideo);
+            this.logger.log(`Found TikTok video: ${tkVideo.title?.substring(0, 80)}`);
           }
+        } else {
+          for (const url of urlsToScan) {
+            const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+            try {
+              this.logger.log(`Scanning URL: ${url}`);
+              const { stdout, stderr } = await execPromise(cmd, {
+                maxBuffer: 1024 * 1024 * 50,
+              });
 
-          try {
-            this.logger.log(`Scanning URL: ${url}`);
-            const { stdout, stderr } = await execPromise(cmd, {
-              maxBuffer: 1024 * 1024 * 50,
-            });
-
-            if (stdout && stdout.trim()) {
-              if (source.platform === 'TIKTOK') {
-                const videoId = stdout.trim().split('\n')[0].trim();
-                if (videoId) {
-                  latestVideos.push({
-                    id: videoId,
-                    url: `${url}/video/${videoId}`,
-                    title: `TikTok Video ${videoId}`,
-                    timestamp: Math.floor(Date.now() / 1000)
-                  });
-                  this.logger.log(`Found TikTok video: ${videoId}`);
-                  break;
-                }
-              } else {
+              if (stdout && stdout.trim()) {
                 latestVideos.push(JSON.parse(stdout));
                 this.logger.log(`Found YouTube video: ${latestVideos[0].title}`);
                 break;
+              } else if (stderr) {
+                this.logger.warn(`yt-dlp stderr for ${url}: ${stderr}`);
               }
-            } else if (stderr) {
-              this.logger.warn(`yt-dlp stderr for ${url}: ${stderr}`);
+            } catch (error) {
+              this.logger.warn(`Failed to scan ${url}: ${error.message}`);
             }
-          } catch (error) {
-            this.logger.warn(`Failed to scan ${url}: ${error.message}`);
           }
         }
       }
@@ -518,15 +494,28 @@ export class SyncService {
     let videoUrl = null;
 
     if (targetUrl.includes('tiktok.com')) {
-      this.logger.log(`Requesting tikwm for TikTok video: ${targetUrl}`);
-      const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodedUrl}`);
-      const tikwmData = await tikwmRes.json();
+      this.logger.log(`Requesting high-quality watermark-free stream for TikTok video: ${targetUrl}`);
+      const cleanTargetUrl = targetUrl.split('?')[0].trim();
+      const cleanEncoded = encodeURIComponent(cleanTargetUrl);
+      const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${cleanEncoded}`).catch(() => null);
+      const tikwmData = tikwmRes ? await tikwmRes.json().catch(() => null) : null;
       
-      if (tikwmData && tikwmData.code === 0 && tikwmData.data && tikwmData.data.play) {
-        videoUrl = tikwmData.data.play;
-        this.logsService.log('INFO', `Successfully got TikTok video URL from tikwm.`);
+      if (tikwmData && tikwmData.code === 0 && tikwmData.data && (tikwmData.data.hdplay || tikwmData.data.play)) {
+        // Prioritize HD watermark-free stream (hdplay) as requested by user
+        videoUrl = tikwmData.data.hdplay || tikwmData.data.play;
+        this.logsService.log('INFO', `Successfully acquired TikTok stream (${tikwmData.data.hdplay ? 'HD 1080p/720p Watermark-Free' : 'Standard Quality'}) via TikWM.`);
       } else {
-        throw new Error(`Failed to get TikTok video URL from tikwm. Response: ${JSON.stringify(tikwmData)}`);
+        this.logger.warn(`TikWM API unreachable or failed. Attempting direct yt-dlp high-res stream extraction...`);
+        try {
+          const cmdGet = `./yt-dlp -g -f "best[ext=mp4]/best" --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/121.0.0.0" "${cleanTargetUrl}"`;
+          const { stdout } = await execPromise(cmdGet, { maxBuffer: 1024 * 1024 * 5 });
+          if (stdout && stdout.trim()) {
+            videoUrl = stdout.trim().split('\n')[0];
+            this.logsService.log('INFO', `Successfully acquired direct TikTok video stream via fallback extractor.`);
+          }
+        } catch (fallbackErr: any) {
+          throw new Error(`Failed to get TikTok video stream from all extraction layers. Last error: ${fallbackErr.message}`);
+        }
       }
     } else if (targetUrl.includes('instagram.com')) {
       const match = targetUrl.match(/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
@@ -875,6 +864,140 @@ export class SyncService {
     } catch (error: any) {
       this.logger.error(`SSR Scrape error: ${error.message}`);
     }
+    return null;
+  }
+
+  private async extractTikTokVideo(rawUrl: string): Promise<any> {
+    // 1. Sanitize & clean URL (strip trailing ?, &, slashes or tracking parameters)
+    const cleanUrl = rawUrl.split('?')[0].replace(/\/$/, '').trim();
+    this.logger.log(`Extracting TikTok video from sanitized URL: ${cleanUrl}`);
+
+    // Check if it's a specific video link
+    if (cleanUrl.includes('/video/') || cleanUrl.includes('/photo/')) {
+      try {
+        const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(cleanUrl)}`).catch(() => null);
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data && data.code === 0 && data.data) {
+            const v = data.data;
+            const fullCaption = v.title || v.id || `TikTok Video ${v.id}`;
+            return {
+              id: String(v.id || v.video_id),
+              title: fullCaption,
+              description: fullCaption,
+              url: `https://www.tiktok.com/@${v.author?.unique_id || 'user'}/video/${v.id || v.video_id}`,
+              mp4Url: v.hdplay || v.play,
+              timestamp: v.create_time || Math.floor(Date.now() / 1000)
+            };
+          }
+        }
+      } catch (e: any) {
+        this.logger.warn(`Single video TikWM fetch error: ${e.message}`);
+      }
+    }
+
+    // Extract TikTok username from URL (e.g., @camm.wrldd -> camm.wrldd)
+    const usernameMatch = cleanUrl.match(/@([A-Za-z0-9_.-]+)/);
+    const username = usernameMatch ? usernameMatch[1] : cleanUrl.split('/').filter(Boolean).pop()?.replace(/^@/, '');
+
+    if (username) {
+      this.logger.log(`Querying TikWM Posts API for user @${username}...`);
+      try {
+        const postsUrl = `https://www.tikwm.com/api/user/posts?unique_id=${encodeURIComponent(username)}&count=5`;
+        const resPosts = await fetch(postsUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*'
+          }
+        }).catch(() => null);
+
+        if (resPosts && resPosts.ok) {
+          const postsData = await resPosts.json();
+          const list = postsData?.data?.videos || postsData?.data?.list || postsData?.data?.posts || [];
+          
+          if (list && list.length > 0) {
+            const topVid = list[0];
+            const vidId = String(topVid.video_id || topVid.id);
+            const fullCaption = topVid.title || topVid.desc || `TikTok Video ${vidId}`;
+            const vidWebUrl = `https://www.tiktok.com/@${username}/video/${vidId}`;
+            
+            this.logger.log(`Successfully extracted latest TikTok video '${fullCaption.substring(0, 50)}...' for @${username}`);
+            
+            return {
+              id: vidId,
+              title: fullCaption,
+              description: fullCaption,
+              url: vidWebUrl,
+              mp4Url: topVid.hdplay || topVid.play,
+              timestamp: topVid.create_time || Math.floor(Date.now() / 1000)
+            };
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`TikWM user posts fetch exception for @${username}: ${err.message}`);
+      }
+    }
+
+    // FALLBACK LAYER 2: Enhanced yt-dlp extraction with anti-bot headers and JSON dump to preserve original captions
+    this.logger.log(`Executing enhanced yt-dlp fallback for TikTok source: ${cleanUrl}`);
+    try {
+      const cmdJson = `./yt-dlp --dump-json --playlist-end 1 --extractor-args "tiktok:api_hostname=api22-normal-c-useast1a.tiktokv.com;app_name=musical_ly;app_version=26.1.3;manifest_app_version=2613" --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36" "${cleanUrl}"`;
+      const { stdout: outJson } = await execPromise(cmdJson, { maxBuffer: 1024 * 1024 * 50 });
+      
+      if (outJson && outJson.trim()) {
+        const info = JSON.parse(outJson.trim().split('\n')[0]);
+        const fullCaption = info.description || info.title || `TikTok Video ${info.id}`;
+        return {
+          id: String(info.id),
+          title: fullCaption,
+          description: fullCaption,
+          url: info.webpage_url || `${cleanUrl}/video/${info.id}`,
+          mp4Url: info.url,
+          timestamp: info.timestamp || Math.floor(Date.now() / 1000)
+        };
+      }
+    } catch (e: any) {
+      this.logger.warn(`yt-dlp JSON dump fallback failed: ${e.message.substring(0, 150)}...`);
+    }
+
+    // FALLBACK LAYER 3: Quick ID discovery + automatic TikWM metadata hydration to ensure full captions & HD video
+    try {
+      const cmdId = `./yt-dlp --flat-playlist --playlist-end 1 --print id --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanUrl}"`;
+      const { stdout: outId } = await execPromise(cmdId, { maxBuffer: 1024 * 1024 * 10 });
+      const foundId = outId?.trim().split('\n')[0]?.trim();
+      
+      if (foundId) {
+        this.logger.log(`Found TikTok ID via quick-scan: ${foundId}. Hydrating full metadata & HD video stream...`);
+        const targetVidUrl = username ? `https://www.tiktok.com/@${username}/video/${foundId}` : `https://www.tiktok.com/video/${foundId}`;
+        
+        const metaRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(targetVidUrl)}`).catch(() => null);
+        if (metaRes && metaRes.ok) {
+          const metaData = await metaRes.json();
+          if (metaData && metaData.code === 0 && metaData.data) {
+            const v = metaData.data;
+            const fullCaption = v.title || v.id || `TikTok Video ${foundId}`;
+            return {
+              id: String(foundId),
+              title: fullCaption,
+              description: fullCaption,
+              url: targetVidUrl,
+              mp4Url: v.hdplay || v.play,
+              timestamp: v.create_time || Math.floor(Date.now() / 1000)
+            };
+          }
+        }
+
+        return {
+          id: String(foundId),
+          title: `TikTok Video ${foundId}`,
+          url: targetVidUrl,
+          timestamp: Math.floor(Date.now() / 1000)
+        };
+      }
+    } catch (finalErr: any) {
+      this.logger.error(`All TikTok extraction layers exhausted for ${rawUrl}: ${finalErr.message}`);
+    }
+
     return null;
   }
 }
