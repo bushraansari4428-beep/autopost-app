@@ -5,8 +5,11 @@ import { LogsService } from '../logs/logs.service';
 import { execPromise } from '../utils/exec.util';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import Parser from 'rss-parser';
 import { InstagramRelayClient } from './instagram-relay.client';
+import { getLatestTikTokVideo, downloadTikTokVideo } from './tiktok.scraper';
+import { extractXiaohongshuVideo, downloadXiaohongshuVideo } from './xiaohongshu.scraper';
 
 @Injectable()
 export class SyncService {
@@ -142,7 +145,14 @@ export class SyncService {
             this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
           }
 
-        } else if (mapping.source.platform === 'XIAOHONGSHU' || mapping.source.platform === 'KUAISHOU') {
+        } else if (mapping.source.platform === 'XIAOHONGSHU') {
+          this.logsService.log('INFO', `Executing RedNote/Xiaohongshu multi-layer extraction for ${mapping.source.url}...`);
+          const xhsVideo = await extractXiaohongshuVideo(mapping.source.url);
+          if (xhsVideo) {
+            latestVideo = xhsVideo;
+            this.logsService.log('INFO', `Successfully found Xiaohongshu Video: ${latestVideo.title?.substring(0, 80)}...`);
+          }
+        } else if (mapping.source.platform === 'KUAISHOU') {
           // Extract user ID from URL
           const urlParts = mapping.source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
@@ -324,7 +334,13 @@ export class SyncService {
             this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
           }
 
-        } else if (source.platform === 'XIAOHONGSHU' || source.platform === 'KUAISHOU') {
+        } else if (source.platform === 'XIAOHONGSHU') {
+          this.logger.log(`Executing RedNote/Xiaohongshu multi-layer extraction for ${source.url}...`);
+          const xhsVideo = await extractXiaohongshuVideo(source.url);
+          if (xhsVideo) {
+             latestVideos.push(xhsVideo);
+          }
+        } else if (source.platform === 'KUAISHOU') {
           const urlParts = source.url.split('/').filter(Boolean);
           const userId = urlParts[urlParts.length - 1];
           
@@ -494,27 +510,43 @@ export class SyncService {
     let videoUrl = null;
 
     if (targetUrl.includes('tiktok.com')) {
-      this.logger.log(`Requesting high-quality watermark-free stream for TikTok video: ${targetUrl}`);
+      this.logger.log(`Extracting high-quality TikTok MP4 via Kuaishou mobile SSR method for: ${targetUrl}`);
       const cleanTargetUrl = targetUrl.split('?')[0].trim();
-      const cleanEncoded = encodeURIComponent(cleanTargetUrl);
-      const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${cleanEncoded}`).catch(() => null);
-      const tikwmData = tikwmRes ? await tikwmRes.json().catch(() => null) : null;
+      const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
       
-      if (tikwmData && tikwmData.code === 0 && tikwmData.data && (tikwmData.data.hdplay || tikwmData.data.play)) {
-        // Prioritize HD watermark-free stream (hdplay) as requested by user
-        videoUrl = tikwmData.data.hdplay || tikwmData.data.play;
-        this.logsService.log('INFO', `Successfully acquired TikTok stream (${tikwmData.data.hdplay ? 'HD 1080p/720p Watermark-Free' : 'Standard Quality'}) via TikWM.`);
-      } else {
-        this.logger.warn(`TikWM API unreachable or failed. Attempting direct yt-dlp high-res stream extraction...`);
+      try {
+        const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(cleanTargetUrl)}` : cleanTargetUrl;
+        const res = await fetch(finalUrl, { 
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          } 
+        }).catch(() => null);
+        
+        if (res && res.ok) {
+          const html = await res.text();
+          // Extract MP4 stream from HTML or Rehydration JSON state (Kuaishou method)
+          const playMatch = html.match(/"(?:playAddr|downloadAddr|video_url|url)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*\.mp4[^"\\]*)"/i) || html.match(/(https?:\/\/[^"'\s\\]+\.mp4[^"'\s\\]*)/i);
+          if (playMatch && playMatch[1]) {
+            videoUrl = playMatch[1].replace(/\\\//g, '/').replace(/\\u0026/g, '&');
+            this.logsService.log('INFO', `Successfully extracted high-res TikTok MP4 stream via Kuaishou mobile SSR method.`);
+          }
+        }
+      } catch (ssrErr: any) {
+        this.logger.warn(`Kuaishou SSR stream extraction failed for TikTok: ${ssrErr.message}`);
+      }
+      
+      if (!videoUrl) {
+        this.logger.log(`SSR stream not matched directly. Attempting direct local fallback stream extraction...`);
         try {
-          const cmdGet = `./yt-dlp -g -f "best[ext=mp4]/best" --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/121.0.0.0" "${cleanTargetUrl}"`;
+          const cmdGet = `./yt-dlp --cookies cookies.txt -g -f "best[ext=mp4]/best" --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanTargetUrl}"`;
           const { stdout } = await execPromise(cmdGet, { maxBuffer: 1024 * 1024 * 5 });
           if (stdout && stdout.trim()) {
             videoUrl = stdout.trim().split('\n')[0];
-            this.logsService.log('INFO', `Successfully acquired direct TikTok video stream via fallback extractor.`);
+            this.logsService.log('INFO', `Successfully acquired direct TikTok video stream via local extractor.`);
           }
         } catch (fallbackErr: any) {
-          throw new Error(`Failed to get TikTok video stream from all extraction layers. Last error: ${fallbackErr.message}`);
+          throw new Error(`Failed to extract TikTok video stream. Last error: ${fallbackErr.message}`);
         }
       }
     } else if (targetUrl.includes('instagram.com')) {
@@ -555,23 +587,17 @@ export class SyncService {
       } else {
         throw new Error(`Failed to extract MP4 URL from Kuaishou HTML.`);
       }
-    } else if (targetUrl.includes('xiaohongshu.com')) {
-       this.logger.log(`Xiaohongshu download bypass for URL: ${targetUrl}`);
-       const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
-       const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}` : targetUrl;
-       
-       const res = await fetch(finalUrl, { 
-           headers: { 
-             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-           } 
-       });
-       const html = await res.text();
-       const mp4Match = html.match(/(https?:\/\/[^"]+\.mp4[^"]*)/);
-       if (mp4Match && mp4Match[1]) {
-           videoUrl = mp4Match[1];
-           this.logsService.log('INFO', `Successfully got Xiaohongshu MP4 video URL via Cloudflare Proxy.`);
+    } else if (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote') || targetUrl.includes('xhs')) {
+       this.logger.log(`Xiaohongshu / RedNote video stream extraction for URL: ${targetUrl}`);
+       const xhsRes = await extractXiaohongshuVideo(targetUrl);
+       if (xhsRes && xhsRes.mp4Url) {
+           videoUrl = xhsRes.mp4Url;
+           if (!video.title || video.title === 'Xiaohongshu Video') {
+               video.title = xhsRes.title;
+           }
+           this.logsService.log('INFO', `Successfully extracted Xiaohongshu / RedNote MP4 video URL.`);
        } else {
-           throw new Error(`Failed to extract MP4 URL from Xiaohongshu HTML. Post might be images only or rate limited.`);
+           throw new Error(`Failed to extract MP4 video stream from RedNote / Xiaohongshu URL: ${targetUrl}`);
        }
     } else {
       this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
@@ -609,20 +635,58 @@ export class SyncService {
     this.logsService.log('INFO', `Successfully got direct video URL! Sending to Facebook...`);
     this.logger.log(`Direct URL: ${videoUrl}`);
     
-    // Upload to Facebook using file_url
-    const fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        access_token: accessToken,
-        file_url: videoUrl,
-        description: video.title
-      })
-    });
+    let fbRes: any;
+    let fbData: any;
+
+    const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
+    const isXhsOrRedNote = targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote') || videoUrl.includes('xhs') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu');
+
+    // Direct CDN links (like TikTok, Xiaohongshu/RedNote, Akamai) return 403 to Facebook servers if sent via file_url without headers.
+    // Download locally with anti-403 headers first, then send physical video bytes directly to Facebook.
+    if (isTiktokOrCdn || isXhsOrRedNote) {
+      this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
+      const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
+      try {
+        if (isXhsOrRedNote) {
+          await downloadXiaohongshuVideo(videoUrl, tempPath);
+        } else {
+          await downloadTikTokVideo(videoUrl, tempPath);
+        }
+        this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath}. Uploading physical video directly to Facebook...`);
+        
+        const fileBuffer = fs.readFileSync(tempPath);
+        const blob = new Blob([fileBuffer], { type: 'video/mp4' });
+        const formData = new FormData();
+        formData.append('access_token', accessToken);
+        formData.append('description', video.title || '');
+        formData.append('source', blob, 'video.mp4');
+
+        fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
+          method: 'POST',
+          body: formData as any
+        });
+      } finally {
+        if (fs.existsSync(tempPath)) {
+          try { fs.unlinkSync(tempPath); } catch (_) {}
+        }
+      }
+    } else {
+      // Upload to Facebook using file_url
+      fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          access_token: accessToken,
+          file_url: videoUrl,
+          description: video.title
+        })
+      });
+    }
     
-    const fbData = await fbRes.json();
+    fbData = await fbRes.json();
+
     
     if (!fbRes.ok || fbData.error) {
       throw new Error(`Facebook API Error: ${JSON.stringify(fbData.error || fbData)}`);
@@ -805,29 +869,8 @@ export class SyncService {
       };
 
       if (platform === 'XIAOHONGSHU') {
-        const targetUrl = `https://www.xiaohongshu.com/user/profile/${userId}`;
-        const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}` : targetUrl;
-        
-        const response = await fetch(finalUrl, { headers });
-        const html = await response.text();
-        
-        // Extract __INITIAL_STATE__
-        const match = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s) || html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\})<\/script>/s);
-        if (match && match[1]) {
-          try {
-             const jsonStr = match[1].replace(/undefined/g, 'null');
-             const state = JSON.parse(jsonStr);
-             const notes = state?.user?.notes ?? state?.user?.noteList ?? state?.user?.profile?.notes ?? [];
-             if (notes && notes.length > 0) {
-                const latestNoteId = notes[0].noteId ?? notes[0].id;
-                return `https://www.xiaohongshu.com/explore/${latestNoteId}`;
-             }
-          } catch (e) {
-             this.logger.warn(`Failed to parse XHS JSON state: ${e}`);
-          }
-        } else {
-           this.logger.warn(`Could not find __INITIAL_STATE__ in XHS HTML`);
-        }
+        const xhsRes = await extractXiaohongshuVideo(profileUrl || `https://www.xiaohongshu.com/user/profile/${userId}`);
+        return xhsRes ? (xhsRes.mp4Url || xhsRes.url) : null;
       } else if (platform === 'KUAISHOU') {
         const targetUrl = `https://c.kuaishou.com/fw/user/3x${userId.replace(/^3x/, '')}`;
         const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetUrl)}` : targetUrl;
@@ -870,134 +913,195 @@ export class SyncService {
   private async extractTikTokVideo(rawUrl: string): Promise<any> {
     // 1. Sanitize & clean URL (strip trailing ?, &, slashes or tracking parameters)
     const cleanUrl = rawUrl.split('?')[0].replace(/\/$/, '').trim();
-    this.logger.log(`Extracting TikTok video from sanitized URL: ${cleanUrl}`);
+    this.logger.log(`Extracting TikTok video via Kuaishou mobile SSR & indexing method from sanitized URL: ${cleanUrl}`);
+    const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
 
-    // Check if it's a specific video link
-    if (cleanUrl.includes('/video/') || cleanUrl.includes('/photo/')) {
+    // Determine if URL is already a single video link or a profile link
+    let targetVidUrl = cleanUrl;
+    let vidId = '';
+
+    if (cleanUrl.includes('/video/') || cleanUrl.includes('/photo/') || cleanUrl.includes('/v/')) {
+      const vidMatch = cleanUrl.match(/(?:video|photo|v)\/(\d{18,20})/);
+      vidId = vidMatch ? vidMatch[1] : 'video_' + Date.now();
+    } else {
+      // Extract TikTok username from profile URL (e.g., @camm.wrldd -> camm.wrldd)
+      const usernameMatch = cleanUrl.match(/@([A-Za-z0-9_.-]+)/);
+      const username = usernameMatch ? usernameMatch[1] : cleanUrl.split('/').filter(Boolean).pop()?.replace(/^@/, '');
+
+      if (username) {
+        this.logger.log(`Discovering latest video ID for user @${username} using Kuaishou relay index method (No APIs)...`);
+        try {
+          // LAYER 1: DuckDuckGo HTML Index discovery (Same reliable technique used in Python residential relay)
+          const ddgQuery = `site:tiktok.com/@${username}/video`;
+          const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(ddgQuery)}`;
+          const ddgRes = await fetch(ddgUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.9'
+            }
+          }).catch(() => null);
+
+          if (ddgRes && ddgRes.ok) {
+            const ddgHtml = await ddgRes.text();
+            const idRegex = new RegExp(`tiktok\\.com(?:%2F|\\/)(?:%40|@)${username.replace(/\./g, '\\.')}(?:%2F|\\/)video(?:%2F|\\/)(\\d{18,20})`, 'gi');
+            let match;
+            const discoveredIds: string[] = [];
+            while ((match = idRegex.exec(ddgHtml)) !== null) {
+              if (match[1] && !discoveredIds.includes(match[1])) {
+                discoveredIds.push(match[1]);
+              }
+            }
+
+            if (discoveredIds.length > 0) {
+              vidId = discoveredIds[0];
+              targetVidUrl = `https://www.tiktok.com/@${username}/video/${vidId}`;
+              this.logger.log(`Successfully discovered newest TikTok video ID (${vidId}) for @${username} via Kuaishou index method!`);
+            }
+          }
+        } catch (e: any) {
+          this.logger.warn(`DDG index discovery exception for @${username}: ${e.message}`);
+        }
+
+        // LAYER 2: Direct Mobile SSR HTML profile check as fallback
+        if (!vidId) {
+          try {
+            const profileUrl = `https://www.tiktok.com/@${username}`;
+            const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(profileUrl)}` : profileUrl;
+            const res = await fetch(finalUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+              }
+            }).catch(() => null);
+
+            if (res && res.ok) {
+              const html = await res.text();
+              const directIdMatch = html.match(/(?:video\/|v\/|videoId["':\s]+)(\d{18,20})/i);
+              if (directIdMatch && directIdMatch[1]) {
+                vidId = directIdMatch[1];
+                targetVidUrl = `https://www.tiktok.com/@${username}/video/${vidId}`;
+                this.logger.log(`Found TikTok ID via direct SSR HTML matching: ${vidId}`);
+              }
+            }
+          } catch (e: any) {
+            this.logger.warn(`Direct SSR profile fallback exception: ${e.message}`);
+          }
+        }
+
+        // LAYER 3: Local CLI quick scan as final profile fallback
+        if (!vidId) {
+          try {
+            const cmdId = `./yt-dlp --cookies cookies.txt --flat-playlist --playlist-end 1 --print id --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanUrl}"`;
+            const { stdout: outId } = await execPromise(cmdId, { maxBuffer: 1024 * 1024 * 10 });
+            const foundId = outId?.trim().split('\n')[0]?.trim();
+            if (foundId && !foundId.includes(' ') && foundId.length >= 15) {
+              vidId = foundId;
+              targetVidUrl = `https://www.tiktok.com/@${username}/video/${vidId}`;
+            }
+          } catch (e) {
+            // fallback exhausted
+          }
+        }
+      }
+    }
+
+    // Now we have targetVidUrl (either single video or discovered from profile) and vidId
+    if (vidId || targetVidUrl.includes('/video/')) {
+      if (!vidId) {
+        const m = targetVidUrl.match(/\d{18,20}/);
+        vidId = m ? m[0] : 'video_' + Date.now();
+      }
+
+      this.logger.log(`Extracting metadata and video stream for single video URL: ${targetVidUrl}`);
+
+      // STEP A: Kuaishou Mobile SSR Extraction (Direct HTML State without APIs)
       try {
-        const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(cleanUrl)}`).catch(() => null);
+        const finalVidUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetVidUrl)}` : targetVidUrl;
+        const res = await fetch(finalVidUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          }
+        }).catch(() => null);
+
         if (res && res.ok) {
-          const data = await res.json();
-          if (data && data.code === 0 && data.data) {
-            const v = data.data;
-            const fullCaption = v.title || v.id || `TikTok Video ${v.id}`;
+          const html = await res.text();
+          const descMatch = html.match(/"desc"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/) || html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          let fullCaption = descMatch ? descMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim() : `TikTok Video ${vidId}`;
+          if (fullCaption.includes(' | TikTok')) fullCaption = fullCaption.split(' | TikTok')[0].trim();
+
+          const playMatch = html.match(/"(?:playAddr|downloadAddr|video_url|url)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*\.mp4[^"\\]*)"/i) || html.match(/(https?:\/\/[^"'\s\\]+\.mp4[^"'\s\\]*)/i);
+          const mp4Url = playMatch ? playMatch[1].replace(/\\\//g, '/').replace(/\\u0026/g, '&') : undefined;
+
+          if (fullCaption && mp4Url) {
+            this.logger.log(`Successfully extracted high-res TikTok stream & original caption via Kuaishou SSR method!`);
             return {
-              id: String(v.id || v.video_id),
+              id: String(vidId),
               title: fullCaption,
               description: fullCaption,
-              url: `https://www.tiktok.com/@${v.author?.unique_id || 'user'}/video/${v.id || v.video_id}`,
-              mp4Url: v.hdplay || v.play,
-              timestamp: v.create_time || Math.floor(Date.now() / 1000)
+              url: targetVidUrl,
+              mp4Url,
+              timestamp: Math.floor(Date.now() / 1000)
             };
           }
         }
       } catch (e: any) {
-        this.logger.warn(`Single video TikWM fetch error: ${e.message}`);
+        this.logger.warn(`Single video SSR extraction fallback failed: ${e.message}`);
       }
-    }
 
-    // Extract TikTok username from URL (e.g., @camm.wrldd -> camm.wrldd)
-    const usernameMatch = cleanUrl.match(/@([A-Za-z0-9_.-]+)/);
-    const username = usernameMatch ? usernameMatch[1] : cleanUrl.split('/').filter(Boolean).pop()?.replace(/^@/, '');
-
-    if (username) {
-      this.logger.log(`Querying TikWM Posts API for user @${username}...`);
+      // STEP A.2: Playwright Headless Interception (Local browser solution without APIs)
       try {
-        const postsUrl = `https://www.tikwm.com/api/user/posts?unique_id=${encodeURIComponent(username)}&count=5`;
-        const resPosts = await fetch(postsUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*'
-          }
-        }).catch(() => null);
-
-        if (resPosts && resPosts.ok) {
-          const postsData = await resPosts.json();
-          const list = postsData?.data?.videos || postsData?.data?.list || postsData?.data?.posts || [];
-          
-          if (list && list.length > 0) {
-            const topVid = list[0];
-            const vidId = String(topVid.video_id || topVid.id);
-            const fullCaption = topVid.title || topVid.desc || `TikTok Video ${vidId}`;
-            const vidWebUrl = `https://www.tiktok.com/@${username}/video/${vidId}`;
-            
-            this.logger.log(`Successfully extracted latest TikTok video '${fullCaption.substring(0, 50)}...' for @${username}`);
-            
-            return {
-              id: vidId,
-              title: fullCaption,
-              description: fullCaption,
-              url: vidWebUrl,
-              mp4Url: topVid.hdplay || topVid.play,
-              timestamp: topVid.create_time || Math.floor(Date.now() / 1000)
-            };
-          }
+        this.logger.log(`Attempting Playwright headless interception for: ${targetVidUrl}`);
+        const pwMeta = await getLatestTikTokVideo(targetVidUrl);
+        if (pwMeta && pwMeta.playUrl) {
+          this.logger.log(`Successfully intercepted high-res TikTok metadata & direct stream via Playwright!`);
+          return {
+            id: pwMeta.id || String(vidId),
+            title: pwMeta.caption,
+            description: pwMeta.caption,
+            url: pwMeta.url || targetVidUrl,
+            mp4Url: pwMeta.playUrl,
+            timestamp: pwMeta.createTime
+          };
         }
-      } catch (err: any) {
-        this.logger.warn(`TikWM user posts fetch exception for @${username}: ${err.message}`);
+      } catch (pwErr: any) {
+        this.logger.warn(`Playwright interception fallback warning: ${pwErr.message}`);
       }
-    }
 
-    // FALLBACK LAYER 2: Enhanced yt-dlp extraction with anti-bot headers and JSON dump to preserve original captions
-    this.logger.log(`Executing enhanced yt-dlp fallback for TikTok source: ${cleanUrl}`);
-    try {
-      const cmdJson = `./yt-dlp --dump-json --playlist-end 1 --extractor-args "tiktok:api_hostname=api22-normal-c-useast1a.tiktokv.com;app_name=musical_ly;app_version=26.1.3;manifest_app_version=2613" --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36" "${cleanUrl}"`;
-      const { stdout: outJson } = await execPromise(cmdJson, { maxBuffer: 1024 * 1024 * 50 });
-      
-      if (outJson && outJson.trim()) {
-        const info = JSON.parse(outJson.trim().split('\n')[0]);
-        const fullCaption = info.description || info.title || `TikTok Video ${info.id}`;
-        return {
-          id: String(info.id),
-          title: fullCaption,
-          description: fullCaption,
-          url: info.webpage_url || `${cleanUrl}/video/${info.id}`,
-          mp4Url: info.url,
-          timestamp: info.timestamp || Math.floor(Date.now() / 1000)
-        };
-      }
-    } catch (e: any) {
-      this.logger.warn(`yt-dlp JSON dump fallback failed: ${e.message.substring(0, 150)}...`);
-    }
+      // STEP B: Non-API Local Fallback via yt-dlp on discovered targetVidUrl
+      this.logger.log(`Executing local command fallback for target video without third-party APIs: ${targetVidUrl}`);
+      try {
+        const cmdJson = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 --extractor-args "tiktok:api_hostname=api22-normal-c-useast1a.tiktokv.com;app_name=musical_ly;app_version=26.1.3" --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${targetVidUrl}"`;
+        const { stdout: outJson } = await execPromise(cmdJson, { maxBuffer: 1024 * 1024 * 50 });
 
-    // FALLBACK LAYER 3: Quick ID discovery + automatic TikWM metadata hydration to ensure full captions & HD video
-    try {
-      const cmdId = `./yt-dlp --flat-playlist --playlist-end 1 --print id --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanUrl}"`;
-      const { stdout: outId } = await execPromise(cmdId, { maxBuffer: 1024 * 1024 * 10 });
-      const foundId = outId?.trim().split('\n')[0]?.trim();
-      
-      if (foundId) {
-        this.logger.log(`Found TikTok ID via quick-scan: ${foundId}. Hydrating full metadata & HD video stream...`);
-        const targetVidUrl = username ? `https://www.tiktok.com/@${username}/video/${foundId}` : `https://www.tiktok.com/video/${foundId}`;
-        
-        const metaRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(targetVidUrl)}`).catch(() => null);
-        if (metaRes && metaRes.ok) {
-          const metaData = await metaRes.json();
-          if (metaData && metaData.code === 0 && metaData.data) {
-            const v = metaData.data;
-            const fullCaption = v.title || v.id || `TikTok Video ${foundId}`;
-            return {
-              id: String(foundId),
-              title: fullCaption,
-              description: fullCaption,
-              url: targetVidUrl,
-              mp4Url: v.hdplay || v.play,
-              timestamp: v.create_time || Math.floor(Date.now() / 1000)
-            };
-          }
+        if (outJson && outJson.trim()) {
+          const info = JSON.parse(outJson.trim().split('\n')[0]);
+          const fullCaption = info.description || info.title || `TikTok Video ${info.id}`;
+          return {
+            id: String(info.id || vidId),
+            title: fullCaption,
+            description: fullCaption,
+            url: info.webpage_url || targetVidUrl,
+            mp4Url: info.url,
+            timestamp: info.timestamp || Math.floor(Date.now() / 1000)
+          };
         }
-
-        return {
-          id: String(foundId),
-          title: `TikTok Video ${foundId}`,
-          url: targetVidUrl,
-          timestamp: Math.floor(Date.now() / 1000)
-        };
+      } catch (e: any) {
+        this.logger.warn(`Local yt-dlp single video extraction failed: ${e.message.substring(0, 150)}...`);
       }
-    } catch (finalErr: any) {
-      this.logger.error(`All TikTok extraction layers exhausted for ${rawUrl}: ${finalErr.message}`);
+
+      // If step B didn't get MP4 immediately, return basic metadata so downloader can retry
+      return {
+        id: String(vidId),
+        title: `TikTok Video ${vidId}`,
+        description: `TikTok Video ${vidId}`,
+        url: targetVidUrl,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
     }
 
+    this.logger.error(`All local non-API TikTok extraction methods exhausted for: ${cleanUrl}`);
     return null;
   }
 }
