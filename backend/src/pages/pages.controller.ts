@@ -20,6 +20,11 @@ export class PagesController {
     return this.pagesService.findAll(req.user);
   }
 
+  @Get(':id/statistics')
+  getStatistics(@Param('id') id: string) {
+    return this.pagesService.getStatistics(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.pagesService.findOne(id);

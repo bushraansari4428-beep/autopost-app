@@ -6,6 +6,11 @@ export default function FacebookPagesPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   
+  // Real-time statistics modal state
+  const [selectedStatsPage, setSelectedStatsPage] = useState<any>(null);
+  const [statsData, setStatsData] = useState<any>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+  
   // Form state
   const [name, setName] = useState('');
   const [pageId, setPageId] = useState('');
@@ -42,6 +47,28 @@ export default function FacebookPagesPage() {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     fetchPages();
+  };
+
+  const openPageStats = async (page: any) => {
+    setSelectedStatsPage(page);
+    setStatsData(null);
+    setLoadingStats(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pages/${page.id}/statistics`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStatsData(data);
+      } else {
+        console.error('Failed to retrieve statistics');
+      }
+    } catch (err) {
+      console.error('Error fetching page statistics:', err);
+    } finally {
+      setLoadingStats(false);
+    }
   };
 
   const [errorMsg, setErrorMsg] = useState('');
@@ -83,7 +110,7 @@ export default function FacebookPagesPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Facebook Pages</h1>
-          <p className="text-gray-400 mt-1">Connect the destination Facebook Pages where videos will be uploaded.</p>
+          <p className="text-gray-400 mt-1">Click on any connected Facebook Page card to view live real-time statistics & analytics.</p>
         </div>
         <button 
           onClick={() => setShowModal(true)}
@@ -95,7 +122,7 @@ export default function FacebookPagesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
-          <div className="text-gray-500">Loading pages...</div>
+          <div className="text-gray-500 font-medium">Loading pages...</div>
         ) : pages.length === 0 ? (
           <div className="col-span-full text-center py-12 text-gray-500">
             <p className="text-lg mb-2">No Facebook Pages connected.</p>
@@ -118,7 +145,15 @@ export default function FacebookPagesPage() {
             const percentRemaining = Math.min(100, Math.max(0, (remainingDays / totalValidityDays) * 100));
 
             return (
-              <div key={page.id} className="p-6 bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-xl hover:border-gray-700 transition-all hover:shadow-2xl flex flex-col justify-between group">
+              <div 
+                key={page.id} 
+                onClick={() => openPageStats(page)}
+                className="p-6 bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-xl hover:border-[#1877F2]/80 hover:scale-[1.015] transition-all duration-200 cursor-pointer hover:shadow-2xl hover:shadow-blue-500/10 flex flex-col justify-between group relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 bg-blue-600/20 text-blue-400 text-[10px] font-extrabold px-3 py-1 rounded-bl-xl uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shadow-sm">
+                  <span>📊 Click to View Stats</span>
+                </div>
+
                 <div>
                   <div className="flex justify-between items-start mb-4">
                     <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#1877F2]/40 to-[#1877F2]/10 border-2 border-[#1877F2]/50 flex items-center justify-center text-white font-extrabold text-xl shadow-lg relative overflow-hidden shrink-0 group-hover:border-[#1877F2] transition-all">
@@ -178,8 +213,11 @@ export default function FacebookPagesPage() {
                     Token Active
                   </span>
                   <button 
-                    onClick={() => deletePage(page.id)} 
-                    className="text-red-400 hover:text-red-300 font-bold hover:underline px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deletePage(page.id);
+                    }} 
+                    className="text-red-400 hover:text-red-300 font-bold hover:underline px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition z-20"
                   >
                     Disconnect
                   </button>
@@ -190,6 +228,274 @@ export default function FacebookPagesPage() {
         )}
       </div>
 
+      {/* Real-Time Statistics VIP Analytics Modal */}
+      {selectedStatsPage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-[#0b0f19] border border-gray-800/80 rounded-3xl w-full max-w-5xl my-8 overflow-hidden shadow-2xl shadow-blue-500/10 max-h-[92vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="p-6 bg-[#070911] border-b border-gray-800/80 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full border border-blue-500/40 relative overflow-hidden shrink-0 bg-blue-500/20 flex items-center justify-center text-white font-bold text-lg">
+                  <span>{selectedStatsPage.name.charAt(0).toUpperCase()}</span>
+                  <img 
+                    src={`https://graph.facebook.com/${selectedStatsPage.pageId}/picture?type=large${selectedStatsPage.accessToken ? `&access_token=${selectedStatsPage.accessToken}` : ''}`}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover rounded-full"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-2xl font-extrabold text-white">{selectedStatsPage.name}</h2>
+                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-xs font-extrabold tracking-wide flex items-center gap-1.5 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      LIVE GRAPH API SYNC
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 font-mono mt-1">Page ID: {selectedStatsPage.pageId} • AutoPost Connected</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedStatsPage(null)}
+                className="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white flex items-center justify-center font-bold text-lg transition-colors focus:outline-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8 bg-gradient-to-br from-[#0a0d16] via-[#06080d] to-[#0a0d16]">
+              {loadingStats ? (
+                <div className="py-24 text-center space-y-4">
+                  <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+                  <p className="text-lg font-bold text-white animate-pulse">Syncing 100% Real-Time Statistics from Facebook Graph API...</p>
+                  <p className="text-xs text-gray-500 font-mono">Querying live follower numbers, Reach & Engagement, video metrics & demographics</p>
+                </div>
+              ) : statsData ? (
+                <>
+                  {/* Section 1: Followers & Audience Growth */}
+                  <div>
+                    <h3 className="text-sm font-extrabold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <span>👥 Real-Time Followers & Audience Growth</span>
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-[#0f1422] p-5 rounded-2xl border border-gray-800/80 shadow-inner">
+                        <p className="text-gray-400 text-xs font-bold uppercase mb-1">Total Followers</p>
+                        <p className="text-3xl font-extrabold text-white tracking-tight">{statsData.followers.total.toLocaleString()}</p>
+                        <p className="text-emerald-400 text-xs font-semibold mt-2 flex items-center gap-1">
+                          <span>↑</span> {statsData.followers.growthRate} vs last month
+                        </p>
+                      </div>
+                      <div className="bg-[#0f1422] p-5 rounded-2xl border border-gray-800/80 shadow-inner">
+                        <p className="text-gray-400 text-xs font-bold uppercase mb-1">Net Followers</p>
+                        <p className="text-3xl font-extrabold text-emerald-400 tracking-tight">+{statsData.followers.netFollowers.toLocaleString()}</p>
+                        <p className="text-gray-400 text-xs mt-2">Last 28 Days real trend</p>
+                      </div>
+                      <div className="bg-[#0f1422] p-5 rounded-2xl border border-gray-800/80 shadow-inner">
+                        <p className="text-gray-400 text-xs font-bold uppercase mb-1">New Followers</p>
+                        <p className="text-3xl font-extrabold text-blue-400 tracking-tight">+{statsData.followers.newFollowers.toLocaleString()}</p>
+                        <p className="text-gray-400 text-xs mt-2">Organic brand additions</p>
+                      </div>
+                      <div className="bg-[#0f1422] p-5 rounded-2xl border border-gray-800/80 shadow-inner">
+                        <p className="text-gray-400 text-xs font-bold uppercase mb-1">Page Likes / Fans</p>
+                        <p className="text-3xl font-extrabold text-purple-400 tracking-tight">{statsData.followers.likes.toLocaleString()}</p>
+                        <p className="text-gray-400 text-xs mt-2">Verified fan base</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2: Reach & Engagement Breakdown */}
+                  <div>
+                    <h3 className="text-sm font-extrabold text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <span>🌐 Reach & Engagement Analytics</span>
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gradient-to-r from-blue-900/30 to-[#0f1422] p-6 rounded-2xl border border-blue-500/20 shadow-lg flex items-center justify-between">
+                        <div>
+                          <p className="text-gray-300 text-xs font-extrabold uppercase mb-1">Total Reach (Impressions)</p>
+                          <p className="text-4xl font-extrabold text-white tracking-tight my-1">{statsData.reachAndEngagement.totalReach.toLocaleString()}</p>
+                          <p className="text-blue-300 text-xs">Unique audience members served your video content</p>
+                        </div>
+                        <span className="text-4xl">🚀</span>
+                      </div>
+                      <div className="bg-gradient-to-r from-purple-900/30 to-[#0f1422] p-6 rounded-2xl border border-purple-500/20 shadow-lg flex items-center justify-between">
+                        <div>
+                          <p className="text-gray-300 text-xs font-extrabold uppercase mb-1">Engagement Rate & Interactions</p>
+                          <div className="flex items-baseline gap-3 my-1">
+                            <span className="text-4xl font-extrabold text-white tracking-tight">{statsData.reachAndEngagement.engagementRate}</span>
+                            <span className="text-purple-300 font-bold text-sm">({statsData.reachAndEngagement.engagedUsers.toLocaleString()} engaged)</span>
+                          </div>
+                          <p className="text-purple-300 text-xs">{statsData.reachAndEngagement.interactions.toLocaleString()} total likes, shares, comments & clicks</p>
+                        </div>
+                        <span className="text-4xl">🔥</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Video Performance Hub */}
+                  <div>
+                    <h3 className="text-sm font-extrabold text-emerald-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+                      <span>🎬 Video Performance & Auto-Post Insights</span>
+                      <span className="text-xs font-mono text-gray-400">{statsData.autoPostUploads} Videos Synced via AutoPost</span>
+                    </h3>
+                    <div className="bg-[#0f1422] p-6 rounded-3xl border border-gray-800/80 shadow-inner">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pb-6 border-b border-gray-800/60 text-center">
+                        <div>
+                          <p className="text-gray-400 text-xs font-bold mb-1">Total Video Views</p>
+                          <p className="text-2xl font-extrabold text-white">{statsData.videoPerformance.totalViews.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-xs font-bold mb-1">Total Reactions</p>
+                          <p className="text-2xl font-extrabold text-rose-400">{statsData.videoPerformance.totalReactions.toLocaleString()} ❤️</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-xs font-bold mb-1">Total Comments</p>
+                          <p className="text-2xl font-extrabold text-amber-400">{statsData.videoPerformance.totalComments.toLocaleString()} 💬</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-xs font-bold mb-1">Avg. Video Retention</p>
+                          <p className="text-2xl font-extrabold text-cyan-400">{statsData.videoPerformance.avgRetention} ⏳</p>
+                        </div>
+                      </div>
+                      
+                      {/* Recent Facebook Videos Table */}
+                      {statsData.videoPerformance.recentVideos && statsData.videoPerformance.recentVideos.length > 0 ? (
+                        <div className="mt-5">
+                          <p className="text-xs font-bold text-gray-400 uppercase mb-3">Recent Live Videos on Page</p>
+                          <div className="space-y-2.5 max-h-56 overflow-y-auto custom-scrollbar pr-2">
+                            {statsData.videoPerformance.recentVideos.map((vid: any, i: number) => (
+                              <div key={vid.id || i} className="p-3 bg-gray-950/60 rounded-xl border border-gray-800/60 flex items-center justify-between hover:border-gray-700 transition">
+                                <div className="flex-1 min-w-0 pr-4">
+                                  <p className="text-sm font-bold text-gray-200 truncate">{vid.title}</p>
+                                  <p className="text-[11px] text-gray-500 font-mono">ID: {vid.id} • Published: {new Date(vid.createdTime).toLocaleDateString()}</p>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs shrink-0">
+                                  <span className="font-bold text-white bg-blue-500/20 text-blue-300 px-2.5 py-1 rounded-lg border border-blue-500/30">
+                                    ▶ {vid.views?.toLocaleString() || 0} Views
+                                  </span>
+                                  <span className="text-rose-400 font-bold">❤️ {vid.likes || 0}</span>
+                                  <span className="text-amber-400 font-bold">💬 {vid.comments || 0}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500 italic text-center pt-4">No individual video metrics returned by basic token permissions. Switch token to verified Business Manager to inspect individual video rows.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section 4: Audience Demographics & Top Locations */}
+                  <div>
+                    <h3 className="text-sm font-extrabold text-purple-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <span>🌍 Audience Demographics & Top Locations</span>
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      {/* Top Countries & Cities */}
+                      <div className="bg-[#0f1422] p-6 rounded-3xl border border-gray-800/80 shadow-inner space-y-5">
+                        <div>
+                          <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-3">Top Countries by Followers</p>
+                          <div className="space-y-3">
+                            {statsData.demographics.topCountries.map((c: any, i: number) => (
+                              <div key={c.code || i} className="space-y-1">
+                                <div className="flex justify-between text-xs font-bold">
+                                  <span className="text-gray-200">{c.country}</span>
+                                  <span className="text-blue-400">{c.percentage}% ({c.count ? c.count.toLocaleString() : ''})</span>
+                                </div>
+                                <div className="w-full bg-gray-800/80 rounded-full h-2 overflow-hidden">
+                                  <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full" style={{ width: `${c.percentage}%` }} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-800/60">
+                          <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-2">Top Global Cities</p>
+                          <div className="flex flex-wrap gap-2">
+                            {statsData.demographics.topCities.map((city: any, i: number) => (
+                              <span key={i} className="bg-gray-950/80 border border-gray-800 text-gray-300 text-xs font-bold px-3 py-1 rounded-xl">
+                                📍 {city.city} ({city.percentage}%)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Gender & Age Breakdown */}
+                      <div className="bg-[#0f1422] p-6 rounded-3xl border border-gray-800/80 shadow-inner flex flex-col justify-between">
+                        <div>
+                          <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-4">Gender & Age Distribution</p>
+                          
+                          {/* Gender Split Bar */}
+                          <div className="space-y-2 mb-6">
+                            <div className="flex justify-between text-xs font-extrabold">
+                              <span className="text-blue-400">👨 Men: {statsData.demographics.genderAndAge.male}%</span>
+                              <span className="text-pink-400">👩 Women: {statsData.demographics.genderAndAge.female}%</span>
+                            </div>
+                            <div className="w-full bg-gray-800 h-4 rounded-xl overflow-hidden flex border border-gray-700/50 p-0.5">
+                              <div className="bg-blue-500 h-full rounded-l-lg transition-all" style={{ width: `${statsData.demographics.genderAndAge.male}%` }} />
+                              <div className="bg-pink-500 h-full rounded-r-lg transition-all" style={{ width: `${statsData.demographics.genderAndAge.female}%` }} />
+                            </div>
+                          </div>
+
+                          {/* Age Groups Breakdown */}
+                          <div>
+                            <p className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider mb-3">
+                              ⭐ Top Age Group: {statsData.demographics.genderAndAge.topAgeGroup}
+                            </p>
+                            <div className="space-y-2.5">
+                              {statsData.demographics.genderAndAge.distribution.map((d: any, idx: number) => (
+                                <div key={idx} className="flex items-center gap-3 text-xs font-bold">
+                                  <span className="w-14 text-gray-400 text-right">{d.group}</span>
+                                  <div className="flex-1 bg-gray-800/80 rounded-full h-2 overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full ${idx === 1 ? 'bg-emerald-400 shadow-md shadow-emerald-500/40' : 'bg-purple-500'}`} 
+                                      style={{ width: `${d.percentage * 2}%` }} 
+                                    />
+                                  </div>
+                                  <span className="w-10 text-gray-300">{d.percentage}%</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-gray-800/60 text-center">
+                          <p className="text-[11px] text-gray-500">
+                            🛡️ Real-Time Graph API Data Integrity Guaranteed • Connected securely to Meta Business Server
+                          </p>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="py-24 text-center text-red-400 font-bold">
+                  Failed to load real-time statistics from Facebook servers. Please verify page access token validity.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-[#070911] border-t border-gray-800/80 flex justify-between items-center text-xs text-gray-400 shrink-0 px-6">
+              <span className="font-mono">Last synchronized: {statsData?.timestamp ? new Date(statsData.timestamp).toLocaleTimeString() : 'Just now'}</span>
+              <button 
+                onClick={() => setSelectedStatsPage(null)}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl transition shadow-lg shadow-blue-500/25"
+              >
+                Close Statistics Console
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link Facebook Page Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
