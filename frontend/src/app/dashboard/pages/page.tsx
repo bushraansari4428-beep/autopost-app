@@ -121,8 +121,18 @@ export default function FacebookPagesPage() {
               <div key={page.id} className="p-6 bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-xl hover:border-gray-700 transition-all hover:shadow-2xl flex flex-col justify-between group">
                 <div>
                   <div className="flex justify-between items-start mb-4">
-                    <div className="w-12 h-12 rounded-full bg-[#1877F2]/20 flex items-center justify-center text-[#1877F2] font-extrabold text-xl shadow-inner">
-                      {page.name.charAt(0).toUpperCase()}
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#1877F2]/40 to-[#1877F2]/10 border-2 border-[#1877F2]/50 flex items-center justify-center text-white font-extrabold text-xl shadow-lg relative overflow-hidden shrink-0 group-hover:border-[#1877F2] transition-all">
+                      <span className="absolute inset-0 flex items-center justify-center text-blue-300 font-black text-xl pointer-events-none">
+                        {page.name.charAt(0).toUpperCase()}
+                      </span>
+                      <img 
+                        src={`https://graph.facebook.com/${page.pageId}/picture?type=large${page.accessToken ? `&access_token=${page.accessToken}` : ''}`}
+                        alt={page.name}
+                        className="w-full h-full object-cover rounded-full z-10 transition-transform duration-300 group-hover:scale-110"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                       page.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
