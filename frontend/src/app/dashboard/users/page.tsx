@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react';
 interface User {
   id: string;
   email: string;
+  name?: string | null;
+  expiresAt?: string | null;
   role: string;
   createdAt: string;
 }
@@ -16,6 +18,8 @@ export default function UsersPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState('');
 
   const fetchUsers = async () => {
     try {
@@ -83,10 +87,69 @@ export default function UsersPage() {
     }
   };
 
+  const handleUpdateUser = async (id: string, updates: { name?: string, expiresAt?: string | null }) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/users/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        fetchUsers();
+      } else {
+        alert('Failed to update user');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAutoDeleteChange = (id: string, option: string) => {
+    let expiresAt: string | null = null;
+    const now = new Date();
+    switch (option) {
+      case '1day':
+        expiresAt = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case '2days':
+        expiresAt = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case '3days':
+        expiresAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case '1week':
+        expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case '2weeks':
+        expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case '1month':
+        expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case 'never':
+      default:
+        expiresAt = null;
+        break;
+    }
+    handleUpdateUser(id, { expiresAt });
+  };
+
+  const calculateRemainingDays = (expiresAt: string | null | undefined) => {
+    if (!expiresAt) return 'Never';
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    if (diff <= 0) return 'Expired';
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return `${days} day${days > 1 ? 's' : ''}`;
+  };
+
   if (loading) return <div className="p-8">Loading users...</div>;
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-6xl p-8">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">User Management</h1>
@@ -105,8 +168,10 @@ export default function UsersPage() {
           <thead className="bg-gray-800/80 border-b border-gray-800">
             <tr>
               <th className="p-4 font-semibold text-gray-400">Email</th>
+              <th className="p-4 font-semibold text-gray-400 w-1/4">Name</th>
               <th className="p-4 font-semibold text-gray-400">Role</th>
               <th className="p-4 font-semibold text-gray-400">Created At</th>
+              <th className="p-4 font-semibold text-gray-400">Auto Delete</th>
               <th className="p-4 font-semibold text-gray-400 text-right">Actions</th>
             </tr>
           </thead>
@@ -114,6 +179,39 @@ export default function UsersPage() {
             {users.map(user => (
               <tr key={user.id} className="border-b border-gray-800/60 hover:bg-gray-800/40 transition">
                 <td className="p-4 text-white font-medium">{user.email}</td>
+                <td className="p-4">
+                  {editingNameId === user.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        className="px-2 py-1 bg-gray-950 border border-blue-500 rounded text-white text-sm focus:outline-none w-full"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleUpdateUser(user.id, { name: editNameValue });
+                            setEditingNameId(null);
+                          } else if (e.key === 'Escape') {
+                            setEditingNameId(null);
+                          }
+                        }}
+                      />
+                      <button onClick={() => {
+                        handleUpdateUser(user.id, { name: editNameValue });
+                        setEditingNameId(null);
+                      }} className="text-blue-400 text-xs font-bold px-2 py-1 bg-blue-500/10 rounded">Save</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
+                      setEditingNameId(user.id);
+                      setEditNameValue(user.name || '');
+                    }}>
+                      <span className="text-gray-300 font-medium">{user.name || <span className="text-gray-600 italic">No name</span>}</span>
+                      <span className="text-gray-600 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition text-xs">✏️ Edit</span>
+                    </div>
+                  )}
+                </td>
                 <td className="p-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                     user.role === 'ADMIN' ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-blue-500/20 border border-blue-500/30 text-blue-400'
@@ -123,6 +221,29 @@ export default function UsersPage() {
                 </td>
                 <td className="p-4 text-gray-400 text-sm">
                   {new Date(user.createdAt).toLocaleDateString()}
+                </td>
+                <td className="p-4">
+                  <div className="flex flex-col gap-1">
+                    <select
+                      className="bg-gray-950 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                      onChange={(e) => handleAutoDeleteChange(user.id, e.target.value)}
+                      value={user.expiresAt ? 'custom' : 'never'} // Since we can't easily reverse engineer the exact dropdown option if it's already set to a date without being complex, we can just show 'Active' vs 'Never' or a generic approach.
+                      // A better approach is to reset the value to 'never' if no expiresAt, or let the user choose and we just display the remaining days below it.
+                    >
+                      <option value="never">Never</option>
+                      <option value="1day">1 Day</option>
+                      <option value="2days">2 Days</option>
+                      <option value="3days">3 Days</option>
+                      <option value="1week">1 Week</option>
+                      <option value="2weeks">2 Weeks</option>
+                      <option value="1month">1 Month</option>
+                    </select>
+                    {user.expiresAt && (
+                      <span className={`text-xs font-semibold ${new Date(user.expiresAt).getTime() < Date.now() ? 'text-red-400' : 'text-orange-400'}`}>
+                        {calculateRemainingDays(user.expiresAt)} left
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="p-4 text-right">
                   <button
@@ -196,3 +317,4 @@ export default function UsersPage() {
     </div>
   );
 }
+

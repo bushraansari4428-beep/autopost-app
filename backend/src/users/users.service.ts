@@ -11,7 +11,9 @@ export class UsersService {
       select: {
         id: true,
         email: true,
+        name: true,
         role: true,
+        expiresAt: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' }
@@ -19,7 +21,7 @@ export class UsersService {
     return users;
   }
 
-  async create(data: { email: string; password?: string; role: Role }) {
+  async create(data: { email: string; password?: string; role: Role; name?: string; expiresAt?: Date | null }) {
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email }
     });
@@ -33,11 +35,15 @@ export class UsersService {
         email: data.email,
         password: data.password, // Ideally use bcrypt.hashSync(data.password, 10) here in production
         role: data.role,
+        name: data.name,
+        expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       },
       select: {
         id: true,
         email: true,
+        name: true,
         role: true,
+        expiresAt: true,
         createdAt: true,
       }
     });
@@ -55,5 +61,30 @@ export class UsersService {
 
     await this.prisma.user.delete({ where: { id } });
     return { success: true, message: 'User deleted successfully' };
+  }
+
+  async update(id: string, data: { name?: string; expiresAt?: Date | null }) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: {
+        name: data.name !== undefined ? data.name : undefined,
+        expiresAt: data.expiresAt !== undefined ? (data.expiresAt ? new Date(data.expiresAt) : null) : undefined,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        expiresAt: true,
+        createdAt: true,
+      }
+    });
+
+    return updatedUser;
   }
 }

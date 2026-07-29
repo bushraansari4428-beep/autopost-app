@@ -16,6 +16,8 @@ model User {
   googleId         String?        @unique
   resetToken       String?        @unique
   resetTokenExpiry DateTime?
+  name             String?
+  expiresAt        DateTime?
   role             Role           @default(USER)
   facebookPages    FacebookPage[]
   sources          Source[]

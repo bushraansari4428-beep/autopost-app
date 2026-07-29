@@ -1,0 +1,6 @@
+async fetchLatestFromHuggingFace(platform: string, profileUrl: string): Promise<string | null> {
+    const hfApiUrl = process.env.HUGGINGFACE_API_URL;
+    if (!hfApiUrl) {
+      this.logger.error('HUGGINGFACE_API_URL is not set in environment variables');
+      return null;
+    }

@@ -1,0 +1,29 @@
+async fetchLatestFromHuggingFace(platform: string, profileUrl: string): Promise<string | null> {
+    const hfApiUrl = process.env.HUGGINGFACE_API_URL;
+    if (!hfApiUrl) {
+      this.logger.error('HUGGINGFACE_API_URL is not set in environment variables');
+      return null;
+    }
+
+    try {
+      const platformParam = platform === 'XIAOHONGSHU' ? 'xiaohongshu' : 'kuaishou';
+      const response = await fetch(
+        `${hfApiUrl.replace(/\/$/, '')}/scrape?url=${encodeURIComponent(profileUrl)}&platform=${platformParam}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+          },
+        },
+      );
+      const result = await response.json();
+      if (result && result.success && result.url) {
+        return result.url;
+      } else {
+        this.logger.error(`Hugging Face API returned error: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Hugging Face fetch error: ${error.message}`);
+    }
+    return null;
+  }
+}
