@@ -201,6 +201,7 @@ export default function MappingsPage() {
                 </button>
                 <button onClick={() => deleteMapping(mapping.id)} className="text-red-400 hover:text-red-300">Remove</button>
               </div>
+              </div>
             </div>
           ))
         )}
