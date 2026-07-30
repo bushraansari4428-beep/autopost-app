@@ -35,19 +35,52 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
   async handleCron() {
     this.logsService.log('INFO', 'Starting scheduled source monitoring...');
     try {
-      const sources = await this.prisma.source.findMany();
+      const sources = await this.prisma.source.findMany({
+        include: { mappings: true }
+      });
       if (sources.length === 0) {
         this.logsService.log('INFO', 'No sources found to monitor.');
         return;
       }
 
+      // Calculate current PKT time (UTC+5)
+      const nowUTC = new Date();
+      const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
+      const currentPktTimeStr = `${pktTime.getUTCHours().toString().padStart(2, '0')}:${pktTime.getUTCMinutes().toString().padStart(2, '0')}`;
+      const todayPktDateString = pktTime.toISOString().split('T')[0];
+
       let count = 0;
       for (const source of sources) {
-        await this.syncService.monitorSource(source.id);
-        count++;
+        const dueMappingIds: string[] = [];
+        
+        for (const mapping of source.mappings) {
+          if (!mapping.scheduledTime) {
+            dueMappingIds.push(mapping.id);
+            continue;
+          }
+
+          if (currentPktTimeStr >= mapping.scheduledTime) {
+            if (!mapping.lastScheduledRun) {
+              dueMappingIds.push(mapping.id);
+            } else {
+               const lastRunUTC = new Date(mapping.lastScheduledRun);
+               const lastRunPkt = new Date(lastRunUTC.getTime() + (5 * 60 * 60 * 1000));
+               const lastRunDateString = lastRunPkt.toISOString().split('T')[0];
+               
+               if (lastRunDateString !== todayPktDateString) {
+                 dueMappingIds.push(mapping.id);
+               }
+            }
+          }
+        }
+
+        if (dueMappingIds.length > 0) {
+          await this.syncService.monitorSource(source.id, dueMappingIds);
+          count++;
+        }
       }
 
-      this.logsService.log('INFO', `Checked ${count} sources for monitoring.`);
+      this.logsService.log('INFO', `Checked ${count} sources with due mappings.`);
 
       // After checking sources, process any pending uploads
       await this.syncService.processPendingUploads();

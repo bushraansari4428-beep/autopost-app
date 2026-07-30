@@ -72,11 +72,13 @@ enum Status {
 }
 
 model Mapping {
-  id             String       @id @default(uuid())
-  sourceId       String
-  facebookPageId String
-  source         Source       @relation(fields: [sourceId], references: [id])
-  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id])
+  id               String       @id @default(uuid())
+  sourceId         String
+  facebookPageId   String
+  scheduledTime    String?
+  lastScheduledRun DateTime?
+  source           Source       @relation(fields: [sourceId], references: [id])
+  facebookPage     FacebookPage @relation(fields: [facebookPageId], references: [id])
 
   @@unique([sourceId, facebookPageId])
 }

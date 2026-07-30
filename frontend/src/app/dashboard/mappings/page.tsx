@@ -83,6 +83,23 @@ export default function MappingsPage() {
     fetchMappings();
   };
 
+  const updateScheduleTime = async (id: string, time: string) => {
+    setMappings(prev => prev.map(m => m.id === id ? { ...m, scheduledTime: time } : m));
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/mappings/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ scheduledTime: time || null })
+      });
+    } catch (err) {
+      console.error('Failed to update scheduled time', err);
+    }
+  };
+
   const handleAddMapping = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sourceId || !facebookPageId) return;
@@ -158,7 +175,19 @@ export default function MappingsPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-6">
+                <div className="flex flex-col items-center">
+                  <span className="text-xs text-gray-400 mb-1">Schedule (PKT)</span>
+                  <input
+                    type="time"
+                    value={mapping.scheduledTime || ''}
+                    onChange={(e) => updateScheduleTime(mapping.id, e.target.value)}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500"
+                    title="Leave empty to post immediately on new video"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <span className="text-xs font-bold text-green-400">ACTIVE</span>

@@ -233,7 +233,7 @@ export class SyncService {
     }
   }
 
-  async monitorSource(sourceId: string) {
+  async monitorSource(sourceId: string, dueMappingIds?: string[]) {
     this.logger.log(`Processing monitoring job for source: ${sourceId}`);
     
     const source = await this.prisma.source.findUnique({ 
@@ -406,17 +406,18 @@ export class SyncService {
         try {
           const platformVideoId = videoData.id;
           
-          const existing = await this.prisma.video.findFirst({
+          let videoRecord = await this.prisma.video.findFirst({
             where: {
               sourceId: source.id,
               originalId: platformVideoId
-            }
+            },
+            include: { uploads: true }
           });
 
-          if (!existing) {
+          if (!videoRecord) {
             this.logsService.log('INFO', `Found new video: ${videoData.title}`);
             const publishedAt = videoData.timestamp ? new Date(videoData.timestamp * 1000) : new Date();
-            const newVideo = await this.prisma.video.create({
+            videoRecord = await this.prisma.video.create({
               data: {
                 title: videoData.title,
                 description: videoData.description || '',
@@ -424,17 +425,32 @@ export class SyncService {
                 publishedAt: publishedAt,
                 url: videoData.webpage_url || videoData.url || '',
                 sourceId: source.id,
-              }
+              },
+              include: { uploads: true }
             });
+          }
 
-            for (const mapping of source.mappings) {
+          const targetMappings = dueMappingIds 
+            ? source.mappings.filter(m => dueMappingIds.includes(m.id))
+            : source.mappings;
+
+          for (const mapping of targetMappings) {
+            const alreadyQueued = videoRecord.uploads?.some(u => u.facebookPageId === mapping.facebookPageId);
+            if (!alreadyQueued) {
               await this.prisma.uploadHistory.create({
                 data: {
-                  videoId: newVideo.id,
+                  videoId: videoRecord.id,
                   facebookPageId: mapping.facebookPageId,
                   status: 'PENDING'
                 }
               });
+
+              if (mapping.scheduledTime) {
+                await this.prisma.mapping.update({
+                  where: { id: mapping.id },
+                  data: { lastScheduledRun: new Date() }
+                });
+              }
             }
           }
         } catch (e) {

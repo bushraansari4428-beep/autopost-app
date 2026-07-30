@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Delete, UseGuards, Request } from '@nestjs/common';
 import { MappingsService } from './mappings.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -25,5 +25,10 @@ export class MappingsController {
   @Post(':id/test')
   testMapping(@Param('id') id: string) {
     return this.mappingsService.testMapping(id);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() updateData: any) {
+    return this.mappingsService.update(id, updateData);
   }
 }

@@ -62,4 +62,11 @@ export class MappingsService {
   async testMapping(id: string) {
     return this.syncService.testMapping(id);
   }
+
+  update(id: string, updateData: any) {
+    return this.prisma.mapping.update({
+      where: { id },
+      data: updateData,
+    });
+  }
 }
