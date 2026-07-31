@@ -54,12 +54,30 @@ export async function extractXiaohongshuVideo(rawUrl: string): Promise<Xiaohongs
 
   // LAYER 1: Fast Direct HTTP SSR extraction
   try {
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    let cookieString = '';
+    try {
+      const cookiePath = path.join(process.cwd(), 'cookies.txt');
+      if (fs.existsSync(cookiePath)) {
+        const cookieContent = fs.readFileSync(cookiePath, 'utf8');
+        cookieString = cookieContent.split('\n')
+          .filter(line => line.includes('xiaohongshu.com'))
+          .map(line => {
+            const parts = line.split('\t');
+            if (parts.length >= 7) return `${parts[5]}=${parts[6].trim()}`;
+            return null;
+          }).filter(Boolean).join('; ');
+      }
+    } catch (e) {}
+
+    const headers: any = {
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/124.0.0.0 Mobile Safari/604.1',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
       'Referer': 'https://www.xiaohongshu.com/'
     };
+    if (cookieString) {
+      headers['Cookie'] = cookieString;
+    }
     const res = await fetch(targetUrl, { headers }).catch(() => null);
     if (res && res.ok) {
       const html = await res.text();
@@ -149,8 +167,8 @@ export async function extractXiaohongshuVideo(rawUrl: string): Promise<Xiaohongs
     if (browser) {
       try {
         const context = await browser.newContext({
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          viewport: { width: 1280, height: 720 }
+          userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/124.0.0.0 Mobile Safari/604.1',
+          viewport: { width: 375, height: 812 }
         });
         const page: Page = await context.newPage();
 

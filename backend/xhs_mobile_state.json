@@ -1,0 +1,351 @@
+{
+  "global": {
+    "appSettings": {
+      "fakeModalPercent": 0.02,
+      "fakeModalWhiteList": [],
+      "launchAppConfig": "{\n  \"dslVersion\": 1,\n  \"strategies\": {\n    \"launchApp\": {\n      \"android\": {\n        \"wechat\": [\n          \"wxopentag\",\n          \"tencentAppStore\"\n        ],\n        \"qqclient\": [\n          \"tencentAppStore\"\n        ],\n        \"qqbrowser\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"weibo\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"sogou\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"uc\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"other\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ]\n      },\n      \"ios\": {\n        \"wechat\": [\n          \"wxopentag\",\n          \"universallink\"\n        ],\n        \"qqclient\": [\n          \"urlschemataga\"\n        ],\n        \"weibo\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"sogou\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"qqbrowser\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"uc\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"other\": [\n          \"universallink\"\n        ]\n      },\n      \"harmonyos\": {\n        \"harmonyos\": [\n          \"universallink\"\n        ],\n        \"wechat\": [\n          \"universallink\"\n        ],\n        \"qqclient\": [\n          \"universallink\"\n        ],\n        \"weibo\": [\n          \"universallink\"\n        ],\n        \"sogou\": [\n          \"universallink\"\n        ],\n        \"qqbrowser\": [\n          \"universallink\"\n        ],\n        \"uc\": [\n          \"universallink\"\n        ],\n        \"other\": [\n          \"universallink\"\n        ]\n      },\n      \"other\": {\n        \"wechat\": [\n          \"wxopentag\",\n          \"tencentAppStore\"\n        ],\n        \"qqclient\": [\n          \"tencentAppStore\"\n        ],\n        \"weibo\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"sogou\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"qqbrowser\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"uc\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ],\n        \"other\": [\n          \"urlschema\",\n          \"jumpinstallurl\"\n        ]\n      }\n    }\n  }\n}",
+      "noteBackProfile": true,
+      "cacheLimit": 100001,
+      "playLaunch": "enable",
+      "jsAssetsList": null,
+      "scrollLaunchAppPercent": null,
+      "xhsRealIp": "",
+      "userNotPreLoad": [
+        "6883c078000000001e0095de",
+        "678867e7000000000801f9fa",
+        "623c763b000000001000b5e7",
+        "621b5446000000001000f525",
+        "5f0a7dfb0000000001007eaa",
+        "5b17cb8bb1da146e8bb5941c",
+        "6a169d45000000000103f004",
+        "6a169c87000000000103f005",
+        "686bbb0c000000001d035b2e",
+        "59b3829850c4b4197d115edf",
+        "6a212ef4000000000103ec00"
+      ],
+      "enableWriteShareCode": true,
+      "disabledAutoLaunchXhsChannelBiz": [
+        "oppo_breeno",
+        "oppo_negative_one_screen",
+        "shengtai_scenecoop_oppofuyiping_laxinlahuo",
+        "shengtai_scenecoop_honorfuyiping_xinhuihuo"
+      ],
+      "enableIdleLaunch": false,
+      "enableVideoPlayingLaunch": false,
+      "relatedFeedLoadStrategy": "await",
+      "floatingWidget": "{\n  \"imgUrl\": \"\",\n  \"link\": \"xhsdiscover://webview/fe.xiaohongshu.com/ditto/vincent/aa66670b592045bda22151bb91020ff7?naviHidden=yes&fullscreen=true&source=h5_share_widget\",\n  \"retireNoClickSeconds\": 259200,\n  \"suppressSeconds\": 604800\n}",
+      "pcWorldCupH5Home": "https://ditto.xiaohongshu.net/ditto/vincent/2ce6ff1a797e4982b4000a160bd250f1?naviHidden=yes&fullscreen=true&source=xhs_pc",
+      "pcWorldCupH5Fixtures": "https://fe.xiaohongshu.com/ditto/vincent/dc7eae39ff8c403daaad498dcacd1c47?naviHidden=yes&fullscreen=true&source=xhs_pc",
+      "pcWorldCupH5Preview": "https://fe.xiaohongshu.com/ditto/vincent/3579f63a9d614b3bb94425997dbcd19d?naviHidden=yes&fullscreen=true&source=xhs_pc"
+    },
+    "visitMobileFromAndroidWxGuide": false,
+    "androidWxWebId": "",
+    "shareContext": null,
+    "supportWebp": false,
+    "acceptLanguageFromHeader": "*",
+    "language": "*",
+    "cityPullConfig": null
+  },
+  "fakeModal": {
+    "fakeModalVisible": false,
+    "modalAppendParams": {
+      "source": "",
+      "deeplink": ""
+    },
+    "enableFakeModal": false,
+    "launchSuccessCallback": null
+  },
+  "noteData": {
+    "routeQuery": {
+      "source": "xhs_sec_server",
+      "originalUrl": "http://www.xiaohongshu.com/explore/6a3d6e310000000007026fa4"
+    },
+    "data": {},
+    "config": {
+      "articleExpand": false
+    },
+    "flags": "",
+    "serverFlags": "",
+    "initializedLaunchOpenAppTag": [],
+    "openTagMetaData": {},
+    "collectionData": {
+      "id": "",
+      "name": "",
+      "desc": "",
+      "noteNum": 0,
+      "paid": false,
+      "totalEpisodes": 0,
+      "deeplink": "xhsdiscover://home/explore",
+      "userInfo": {
+        "nickName": "",
+        "avatarUrl": ""
+      },
+      "type": 0,
+      "shareInfo": {
+        "shareDesc": "",
+        "shareImage": "",
+        "shareLink": "",
+        "stareTitle": ""
+      },
+      "noteList": [],
+      "error": {
+        "msg": "",
+        "status": 200
+      }
+    },
+    "realUserId": "",
+    "hasError": false,
+    "expGroups": "",
+    "hotlistData": [
+      {
+        "type": "normal",
+        "word_type": "热",
+        "score": "920.8w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "用万能旅行拍照姿势美美出片",
+        "id": "dora_2178732",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png"
+      },
+      {
+        "word_type": "热",
+        "score": "911.2w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "耗时三年拍下古诗词里的中国",
+        "id": "dora_2161449",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal"
+      },
+      {
+        "rank_change": 0,
+        "title_img": "",
+        "title": "我拍到了海鸥雨",
+        "id": "dora_2176591",
+        "type": "normal",
+        "word_type": "无",
+        "score": "887.4w"
+      },
+      {
+        "title": "超日常美食教程速来get",
+        "id": "dora_2302795",
+        "type": "normal",
+        "word_type": "无",
+        "score": "869w",
+        "rank_change": 0,
+        "title_img": ""
+      },
+      {
+        "type": "normal",
+        "word_type": "无",
+        "score": "858.3w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "定格这一刻的日照金山",
+        "id": "dora_2179007"
+      },
+      {
+        "score": "848.8w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "你可以永远相信赛里木湖的美景",
+        "id": "dora_2178980",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热"
+      },
+      {
+        "score": "835.5w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "拼豆上也可以作画了",
+        "id": "dora_2171736",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热"
+      },
+      {
+        "title": "我的家庭旅行更像是打副本",
+        "id": "dora_2176059",
+        "type": "normal",
+        "word_type": "无",
+        "score": "815.6w",
+        "rank_change": 0,
+        "title_img": ""
+      },
+      {
+        "rank_change": 0,
+        "title_img": "",
+        "title": "原来古诗词里的河南真的存在",
+        "id": "dora_2171324",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热",
+        "score": "805.2w"
+      },
+      {
+        "title": "蒸出了奶香爆米花馒头",
+        "id": "dora_2171598",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热",
+        "score": "791.4w",
+        "rank_change": 0,
+        "title_img": ""
+      },
+      {
+        "type": "normal",
+        "word_type": "无",
+        "score": "777.1w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "这可能是江西最被低估的一座山",
+        "id": "dora_2178382"
+      },
+      {
+        "title_img": "",
+        "title": "海边日落赴一场温柔约会",
+        "id": "dora_2179016",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热",
+        "score": "767.2w",
+        "rank_change": 0
+      },
+      {
+        "title": "拼豆也能当火漆印章玩",
+        "id": "dora_2166532",
+        "type": "normal",
+        "word_type": "无",
+        "score": "753.5w",
+        "rank_change": 0,
+        "title_img": ""
+      },
+      {
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热",
+        "score": "735.9w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "我创造了新型遛狗法",
+        "id": "dora_2172061"
+      },
+      {
+        "score": "725.9w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "用镜头捕捉四季如画",
+        "id": "dora_2178966",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热"
+      },
+      {
+        "title_img": "",
+        "title": "笔墨重现课本诗意",
+        "id": "dora_2171684",
+        "type": "normal",
+        "word_type": "无",
+        "score": "711w",
+        "rank_change": 0
+      },
+      {
+        "type": "normal",
+        "word_type": "热",
+        "score": "697.9w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "拍到了洱海的丁达尔效应",
+        "id": "dora_2171508",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png"
+      },
+      {
+        "title_img": "",
+        "title": "珠圆玉润妆完全是淡颜天菜",
+        "id": "dora_2178991",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热",
+        "score": "663.4w",
+        "rank_change": 0
+      },
+      {
+        "title": "碎钻美甲指尖藏着细碎星光",
+        "id": "dora_2178964",
+        "type": "normal",
+        "word_type": "无",
+        "score": "648.3w",
+        "rank_change": 0,
+        "title_img": ""
+      },
+      {
+        "id": "dora_2143343",
+        "icon": "https://picasso-static.xiaohongshu.com/fe-platform/cfd317ff14757c7ede6ef5176ec487589565e49e.png",
+        "type": "normal",
+        "word_type": "热",
+        "score": "637.5w",
+        "rank_change": 0,
+        "title_img": "",
+        "title": "我来当旅行中的颜色猎手"
+      }
+    ],
+    "errorNoteData": {
+      "noteData": {},
+      "userNotes": [],
+      "showLaunchAppModal": false,
+      "show": false,
+      "routeQuery": {
+        "code": "200"
+      },
+      "launchAppModalParams": {
+        "source": "",
+        "deeplink": ""
+      }
+    },
+    "normalNotePreloadData": {},
+    "widgetSceneMap": {}
+  },
+  "profile": {
+    "userInfo": {
+      "follows": "-",
+      "fans": "-",
+      "likeAndCollect": "-",
+      "nickname": "",
+      "images": "",
+      "bannerImage": "",
+      "desc": "",
+      "redId": "",
+      "id": "",
+      "tags": [],
+      "tabs": [
+        {
+          "id": "note",
+          "name": "笔记",
+          "public": true,
+          "visible": true
+        }
+      ],
+      "collectionList": [],
+      "userAccountStatus": null,
+      "userPageWidgetsInfo": {
+        "normalWidgetList": [],
+        "shopWidgetList": []
+      }
+    },
+    "noteCollectionList": [],
+    "noteData": [],
+    "notePage": 1,
+    "categoryInfo": [],
+    "sortType": [],
+    "goodsCardList": [],
+    "tab": "note",
+    "activeTab": "0",
+    "showBottomBar": true,
+    "canShowExpand": false,
+    "jumpBackLink": ""
+  },
+  "notFoundPage": {
+    "noteType": "video"
+  }
+}
