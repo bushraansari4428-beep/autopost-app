@@ -6,6 +6,7 @@ interface User {
   id: string;
   email: string;
   name?: string | null;
+  note?: string | null;
   expiresAt?: string | null;
   role: string;
   createdAt: string;
@@ -18,8 +19,8 @@ export default function UsersPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [editingNameId, setEditingNameId] = useState<string | null>(null);
-  const [editNameValue, setEditNameValue] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteValue, setEditNoteValue] = useState('');
 
   const fetchUsers = async () => {
     try {
@@ -87,7 +88,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleUpdateUser = async (id: string, updates: { name?: string, expiresAt?: string | null }) => {
+  const handleUpdateUser = async (id: string, updates: { note?: string, expiresAt?: string | null }) => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/users/${id}`, {
@@ -167,8 +168,7 @@ export default function UsersPage() {
         <table className="w-full text-left">
           <thead className="bg-gray-800/80 border-b border-gray-800">
             <tr>
-              <th className="p-4 font-semibold text-gray-400">Email</th>
-              <th className="p-4 font-semibold text-gray-400 w-1/4">Name</th>
+              <th className="p-4 font-semibold text-gray-400 w-1/3">User & Note</th>
               <th className="p-4 font-semibold text-gray-400">Role</th>
               <th className="p-4 font-semibold text-gray-400">Created At</th>
               <th className="p-4 font-semibold text-gray-400">Auto Delete</th>
@@ -178,36 +178,37 @@ export default function UsersPage() {
           <tbody>
             {users.map(user => (
               <tr key={user.id} className="border-b border-gray-800/60 hover:bg-gray-800/40 transition">
-                <td className="p-4 text-white font-medium">{user.email}</td>
                 <td className="p-4">
-                  {editingNameId === user.id ? (
+                  <div className="font-medium text-white mb-1.5">{user.email}</div>
+                  {editingNoteId === user.id ? (
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        value={editNameValue}
-                        onChange={(e) => setEditNameValue(e.target.value)}
-                        className="px-2 py-1 bg-gray-950 border border-blue-500 rounded text-white text-sm focus:outline-none w-full"
+                        value={editNoteValue}
+                        onChange={(e) => setEditNoteValue(e.target.value)}
+                        className="px-2 py-1 bg-gray-950 border border-blue-500 rounded text-gray-300 text-xs focus:outline-none w-full"
                         autoFocus
+                        placeholder="Note..."
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            handleUpdateUser(user.id, { name: editNameValue });
-                            setEditingNameId(null);
+                            handleUpdateUser(user.id, { note: editNoteValue });
+                            setEditingNoteId(null);
                           } else if (e.key === 'Escape') {
-                            setEditingNameId(null);
+                            setEditingNoteId(null);
                           }
                         }}
                       />
                       <button onClick={() => {
-                        handleUpdateUser(user.id, { name: editNameValue });
-                        setEditingNameId(null);
-                      }} className="text-blue-400 text-xs font-bold px-2 py-1 bg-blue-500/10 rounded">Save</button>
+                        handleUpdateUser(user.id, { note: editNoteValue });
+                        setEditingNoteId(null);
+                      }} className="text-blue-400 text-xs font-bold px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 rounded transition">Save</button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
-                      setEditingNameId(user.id);
-                      setEditNameValue(user.name || '');
+                      setEditingNoteId(user.id);
+                      setEditNoteValue(user.note || '');
                     }}>
-                      <span className="text-gray-300 font-medium">{user.name || <span className="text-gray-600 italic">No name</span>}</span>
+                      <span className="text-gray-400 text-sm">{user.note || <span className="text-gray-600 italic text-xs">Add a note to remember this user...</span>}</span>
                       <span className="text-gray-600 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition text-xs">✏️ Edit</span>
                     </div>
                   )}

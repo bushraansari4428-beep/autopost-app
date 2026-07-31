@@ -19,6 +19,7 @@ model User {
   name             String?
   expiresAt        DateTime?
   role             Role           @default(USER)
+  note             String?
   facebookPages    FacebookPage[]
   sources          Source[]
   createdAt        DateTime       @default(now())

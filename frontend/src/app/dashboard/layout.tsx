@@ -31,6 +31,21 @@ export default function DashboardLayout({
       } else {
         document.body.classList.remove('day-mode');
       }
+
+      // Global Fetch Interceptor for Auto-Logout when user is deleted/expires
+      const originalFetch = window.fetch;
+      window.fetch = async function (...args) {
+        const response = await originalFetch.apply(this, args);
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          window.location.replace('/login');
+        }
+        return response;
+      };
+
+      return () => {
+        window.fetch = originalFetch;
+      };
     } catch (e) {
       console.error('Failed to parse token or apply theme', e);
       window.location.replace('/login');

@@ -84,6 +84,24 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
 
       // After checking sources, process any pending uploads
       await this.syncService.processPendingUploads();
+
+      // Auto-delete expired users
+      try {
+        const expiredUsers = await this.prisma.user.findMany({
+          where: {
+            expiresAt: { lt: new Date() },
+            role: { not: 'ADMIN' }
+          }
+        });
+        if (expiredUsers.length > 0) {
+          for (const u of expiredUsers) {
+            await this.prisma.user.delete({ where: { id: u.id } }).catch(() => null);
+            this.logsService.log('INFO', `Auto-deleted expired user: ${u.email}`);
+          }
+        }
+      } catch (err) {
+        this.logsService.log('ERROR', `Error auto-deleting users: ${err.message}`);
+      }
     } catch (error) {
       this.logsService.log('ERROR', `Error in scheduled monitoring: ${error.message}`);
     }

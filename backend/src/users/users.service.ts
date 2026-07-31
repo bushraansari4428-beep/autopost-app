@@ -12,6 +12,7 @@ export class UsersService {
         id: true,
         email: true,
         name: true,
+        note: true,
         role: true,
         expiresAt: true,
         createdAt: true,
@@ -21,7 +22,7 @@ export class UsersService {
     return users;
   }
 
-  async create(data: { email: string; password?: string; role: Role; name?: string; expiresAt?: Date | null }) {
+  async create(data: { email: string; password?: string; role: Role; name?: string; note?: string; expiresAt?: Date | null }) {
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email }
     });
@@ -36,12 +37,14 @@ export class UsersService {
         password: data.password, // Ideally use bcrypt.hashSync(data.password, 10) here in production
         role: data.role,
         name: data.name,
+        note: data.note,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       },
       select: {
         id: true,
         email: true,
         name: true,
+        note: true,
         role: true,
         expiresAt: true,
         createdAt: true,
@@ -63,7 +66,7 @@ export class UsersService {
     return { success: true, message: 'User deleted successfully' };
   }
 
-  async update(id: string, data: { name?: string; expiresAt?: Date | null }) {
+  async update(id: string, data: { name?: string; note?: string; expiresAt?: Date | null }) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -73,12 +76,14 @@ export class UsersService {
       where: { id },
       data: {
         name: data.name !== undefined ? data.name : undefined,
+        note: data.note !== undefined ? data.note : undefined,
         expiresAt: data.expiresAt !== undefined ? (data.expiresAt ? new Date(data.expiresAt) : null) : undefined,
       },
       select: {
         id: true,
         email: true,
         name: true,
+        note: true,
         role: true,
         expiresAt: true,
         createdAt: true,
