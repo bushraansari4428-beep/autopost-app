@@ -1,4 +1,3 @@
-import { chromium, Page } from 'playwright';
 import axios from 'axios';
 import * as fs from 'fs';
 
@@ -34,145 +33,96 @@ export async function resolveXhsUrl(rawUrl: string): Promise<string> {
 }
 
 /**
- * Extracts raw unwatermarked MP4 URL from a Xiaohongshu post
+ * Extracts raw unwatermarked MP4 URL from a Xiaohongshu post using Native HTTP requests
  */
 export async function extractXiaohongshuVideo(shareUrl: string): Promise<XiaohongshuMetadata | null> {
-  const fullUrl = await resolveXhsUrl(shareUrl);
-  console.log(`Extracting Xiaohongshu (RedNote) video for resolved URL: ${fullUrl}`);
+  const targetUrl = await resolveXhsUrl(shareUrl);
+  console.log(`Extracting Xiaohongshu (RedNote) video natively for resolved URL: ${targetUrl}`);
 
-  // Determine Note ID for fallback metadata
-  const noteMatch = fullUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || fullUrl.match(/([a-zA-Z0-9]{24,32})/);
+  const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
   const noteId = noteMatch ? noteMatch[1] : 'xhs_' + Date.now();
-
-  const browser = await chromium.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-blink-features=AutomationControlled',
-    ],
-  });
-
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 720 },
-    locale: 'zh-CN',
-  });
-
-  const page = await context.newPage();
+  const isProfile = targetUrl.includes('/user/profile/');
 
   let extractedTitle = `RedNote Video ${noteId}`;
   let extractedMp4: string | undefined = undefined;
 
   try {
-    // 1. Block client-side login redirect scripts and tracking
-    await page.route('**/*', (route) => {
-      const request = route.request();
-      const url = request.url();
-
-      // Cancel requests forcing redirect or captcha walls or unnecessary assets to speed up load
-      if (url.includes('/login') || url.includes('captcha') || url.includes('analytics') || url.match(/\.(png|jpg|jpeg|gif|webp|svg|woff|woff2|css)$/)) {
-        return route.abort();
-      }
-      return route.continue();
+    const response = await axios({
+      method: 'GET',
+      url: targetUrl,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+      },
+      timeout: 15000,
     });
 
-    // 2. Intercept API responses containing note metadata
-    page.on('response', async (response) => {
-      const url = response.url();
+    const html = response.data;
 
-      if (url.includes('/api/sns/web/v1/feed') || url.includes('/api/sns/web/v1/note') || url.includes('/api/sns/web/v1/user/otherinfo')) {
-        try {
-          const json = await response.json();
-          const noteData = json?.data?.items?.[0]?.note_card || json?.data?.note_list?.[0] || json?.data?.items?.[0] || json?.items?.[0];
-
-          if (noteData) {
-             if (noteData.title || noteData.desc) {
-               extractedTitle = `${noteData.title || ''} ${noteData.desc || ''}`.trim();
-             }
-             if (noteData.video) {
-               const mediaStream = noteData.video.media?.stream?.h264?.[0] || noteData.video.media?.stream?.h265?.[0] || noteData.video.media?.stream?.av1?.[0];
-               const directMp4Url = mediaStream?.master_url || mediaStream?.masterUrl || noteData.video.url || noteData.video.originVideoKey;
-               if (directMp4Url && !extractedMp4) {
-                 extractedMp4 = directMp4Url.replace(/^http:/, 'https:');
-               }
-             }
-          }
-        } catch {
-          // Ignore non-JSON errors
-        }
-      }
-    });
-
-    // 3. Navigate with generous timeout
-    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => null);
-
-    // Fallback: Check window.__INITIAL_STATE__ if API interception didn't trigger
-    if (!extractedMp4) {
-      await page.waitForTimeout(2000); // Allow inline state to render
-
-      const initialState = await page.evaluate(() => {
-        const w = window as any;
-        const st = w.__INITIAL_STATE__ || w.__INITIAL_SSR_STATE__;
-        let mp4 = null;
-        let title = document.title;
-        let isProfile = window.location.href.includes('/user/profile/');
-        let profileNoteId = null;
-
-        if (st) {
-          if (isProfile) {
-            const notes = st?.user?.notes?.[0] || st?.user?.notes || [];
-            if (notes.length > 0) {
-              profileNoteId = notes[0].id || notes[0].noteId;
-            }
-          } else {
-            const noteDetail = st?.note?.noteDetailMap ?? st?.noteData;
-            if (noteDetail) {
-              const firstKey = Object.keys(noteDetail)[0];
-              const note = noteDetail[firstKey]?.note ?? noteDetail[firstKey];
-              if (note?.title || note?.desc) title = `${note?.title || ''} ${note?.desc || ''}`.trim();
-              const videoInfo = note?.video;
-
-              if (videoInfo) {
-                const streamUrl = videoInfo.media?.stream?.h264?.[0]?.master_url ||
-                                  videoInfo.media?.stream?.h264?.[0]?.masterUrl ||
-                                  videoInfo.media?.stream?.h265?.[0]?.master_url ||
-                                  videoInfo.media?.stream?.av1?.[0]?.masterUrl ||
-                                  videoInfo.url || videoInfo.originVideoKey;
-                if (streamUrl) {
-                  mp4 = streamUrl.replace(/^http:/, 'https:');
-                }
-              }
-            }
-          }
-        }
-        return { mp4, title, profileNoteId };
-      }).catch(() => null);
-
-      if (initialState) {
-        if (initialState.title) extractedTitle = initialState.title.replace(/ - 小红书$| \| RedNote$/i, '').trim();
+    // Check for __INITIAL_STATE__
+    const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});?</s) || html.match(/window\.__INITIAL_SSR_STATE__\s*=\s*(\{.+?\});?</s);
+    if (stateMatch && stateMatch[1]) {
+      try {
+        const state = JSON.parse(stateMatch[1].replace(/undefined/g, 'null'));
         
-        // Handle profile recursive fetch
-        if (initialState.profileNoteId) {
-          console.log(`Profile latest note found: ${initialState.profileNoteId}, recursively fetching...`);
-          await browser.close().catch(() => null);
-          return await extractXiaohongshuVideo(`https://www.xiaohongshu.com/explore/${initialState.profileNoteId}`);
+        // If profile, find latest note ID and redirect extraction to that note
+        if (isProfile) {
+          const notes = state?.user?.notes ?? state?.user?.noteList ?? state?.user?.profile?.notes ?? [];
+          if (notes && notes.length > 0) {
+            const latestNoteId = notes[0].noteId ?? notes[0].id;
+            if (latestNoteId) {
+              const newNoteUrl = `https://www.xiaohongshu.com/explore/${latestNoteId}`;
+              console.log(`Discovered latest note (${latestNoteId}) from RedNote profile. Recursively extracting note...`);
+              return await extractXiaohongshuVideo(newNoteUrl);
+            }
+          }
         }
 
-        if (initialState.mp4) {
-          extractedMp4 = initialState.mp4;
+        // Search inside note detail map for video stream
+        const noteMap = state?.note?.noteDetailMap ?? state?.noteData ?? {};
+        const firstNoteKey = Object.keys(noteMap)[0] || noteId;
+        const noteObj = noteMap[firstNoteKey]?.note ?? noteMap[firstNoteKey] ?? {};
+
+        if (noteObj.title) extractedTitle = noteObj.title;
+        if (noteObj.desc && noteObj.desc.trim()) {
+          extractedTitle = `${noteObj.title || ''} ${noteObj.desc}`.trim();
         }
+
+        // Locate video stream URL in JSON
+        const videoObj = noteObj.video?.media?.stream?.h264?.[0] ?? noteObj.video?.media?.stream?.av1?.[0] ?? noteObj.video;
+        if (videoObj?.masterUrl || videoObj?.url || videoObj?.originVideoKey) {
+          extractedMp4 = videoObj.masterUrl || videoObj.url || videoObj.originVideoKey;
+        }
+      } catch (e) {
+        console.warn(`Error parsing XHS initial state JSON:`, e);
       }
     }
 
-    if (!extractedMp4) {
-      console.warn(`Failed to locate MP4 stream for RedNote: ${fullUrl}`);
-      return null;
+    // Regex fallback if state parsing didn't find mp4
+    if (!extractedMp4 && !isProfile) {
+      const urlMatch = html.match(/"(?:masterUrl|originVideoKey|urlDefault|backupUrl|url)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*(?:sns-video-[^"\\]*|\.mp4[^"\\]*))"/i) ||
+                       html.match(/(https?:\/\/[^"'\s\\]*sns-video-[^"'\s\\]*)/i) ||
+                       html.match(/(https?:\/\/[^"'\s\\]*\.mp4[^"'\s\\]*)/i);
+      if (urlMatch && urlMatch[1]) {
+        extractedMp4 = urlMatch[1];
+      }
     }
+  } catch (err: any) {
+    console.warn(`Direct HTTP extraction for RedNote failed: ${err.message}`);
+  }
 
+  if (extractedMp4) {
     // Cleanup URL
     extractedMp4 = extractedMp4.replace(/\\\//g, '/').replace(/\\u0026/g, '&');
-
+    
     // Fix malformed protocols missing slashes (e.g., https:sns-video...)
     if (extractedMp4.startsWith('http:') && !extractedMp4.startsWith('http://')) {
       extractedMp4 = extractedMp4.replace('http:', 'http://');
@@ -190,14 +140,13 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       id: noteId,
       title: extractedTitle || `RedNote Video ${noteId}`,
       description: extractedTitle || `RedNote Video ${noteId}`,
-      url: fullUrl,
+      url: targetUrl,
       mp4Url: extractedMp4,
       timestamp: Math.floor(Date.now() / 1000)
     };
-
-  } finally {
-    await browser.close().catch(() => null);
   }
+
+  return null;
 }
 
 /**
