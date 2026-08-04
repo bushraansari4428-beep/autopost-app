@@ -661,6 +661,7 @@ export class SyncService {
     // Download locally with anti-403 headers first, then send physical video bytes directly to Facebook.
     if (isTiktokOrCdn || isXhsOrRedNote) {
       this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
+      this.logsService.log('INFO', `[DEBUG] The EXACT URL being sent to Axios is: ${videoUrl}`);
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
       try {
         if (isXhsOrRedNote) {

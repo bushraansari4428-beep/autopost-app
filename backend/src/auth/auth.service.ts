@@ -12,7 +12,8 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
-  async validateUser(email: string, pass: string): Promise<any> {
+  async validateUser(email: string, pass: string, deviceId?: string): Promise<any> {
+    email = email.toLowerCase();
     let user = await this.prisma.user.findUnique({ where: { email } });
     
     // Auto-create default admin account on first login attempt if it doesn't exist
@@ -27,6 +28,22 @@ export class AuthService {
     }
 
     if (user && user.password === pass) {
+      if (user.role !== 'ADMIN') {
+        if (!deviceId) {
+          throw new UnauthorizedException('Device identification failed. Please try again from a supported browser.');
+        }
+
+        if (!user.deviceId) {
+          // Bind the user to this device on first login
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { deviceId }
+          });
+        } else if (user.deviceId !== deviceId) {
+          throw new UnauthorizedException('Device limit reached. You can only log in from your registered device.');
+        }
+      }
+
       const { password, ...result } = user;
       return result;
     }
@@ -34,6 +51,7 @@ export class AuthService {
   }
 
   async register(email: string, pass: string): Promise<any> {
+    email = email.toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new UnauthorizedException('Email already exists');
@@ -62,6 +80,7 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
+    email = email.toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       throw new BadRequestException('User with this email does not exist');
