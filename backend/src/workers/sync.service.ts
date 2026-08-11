@@ -56,14 +56,6 @@ export class SyncService {
   }
 
   public formatFacebookCaption(rawCaption?: string): string {
-    const defaultCatchphrases = [
-      "Wait for the end!",
-      "Watch till the end!",
-      "Don't miss this!",
-      "Unbelievable moment!",
-      "You need to see this!"
-    ];
-
     let caption = (rawCaption || '').trim();
 
     // If caption is generic fallback like "TikTok Video 123456", treat as empty
@@ -77,18 +69,16 @@ export class SyncService {
       caption = caption.replace(platformTagsRegex, '').replace(/\s+/g, ' ').trim();
     }
 
-    // IF caption IS empty after cleaning, pick a random catchy line from Default Catchphrase List
-    if (!caption) {
-      const randomIndex = Math.floor(Math.random() * defaultCatchphrases.length);
-      caption = defaultCatchphrases[randomIndex];
-    }
-
     // Combine with fixed hashtags: #FBReels #Reels
-    if (!caption.includes('#FBReels')) {
-      caption = `${caption} #FBReels`;
-    }
-    if (!caption.includes('#Reels')) {
-      caption = `${caption} #Reels`;
+    if (caption) {
+      if (!caption.includes('#FBReels')) {
+        caption = `${caption} #FBReels`;
+      }
+      if (!caption.includes('#Reels')) {
+        caption = `${caption} #Reels`;
+      }
+    } else {
+      caption = '#FBReels #Reels';
     }
 
     return caption.trim();
