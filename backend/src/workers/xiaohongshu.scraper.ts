@@ -202,7 +202,7 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
     }
   }
 
-  // Fallback to yt-dlp stream download if axios headers failed
+  // Fallback to yt-dlp stream download with anti-403 headers if axios headers failed
   try {
     const execPromise = promisify(exec);
     let ytCmd = process.platform === 'win32' ? 'yt-dlp.exe' : './yt-dlp';
@@ -211,7 +211,7 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
       try { fs.chmodSync(linuxPath, '755'); } catch (_) {}
       ytCmd = `"${linuxPath}"`;
     }
-    await execPromise(`${ytCmd} -o "${outputPath}" "${videoUrl}"`);
+    await execPromise(`${ytCmd} --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" --add-header "Referer: https://www.xiaohongshu.com/" -o "${outputPath}" "${videoUrl}"`);
     if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
       return outputPath;
     }
@@ -219,10 +219,10 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
     console.warn(`yt-dlp stream download fallback warning: ${ytErr.message}`);
   }
 
-  // Fallback to curl
+  // Fallback to curl with anti-403 headers
   try {
     const execPromise = promisify(exec);
-    await execPromise(`curl -L -s -H "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15" -o "${outputPath}" "${videoUrl}"`);
+    await execPromise(`curl -L -s -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" -H "Referer: https://www.xiaohongshu.com/" -o "${outputPath}" "${videoUrl}"`);
     if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
       return outputPath;
     }
