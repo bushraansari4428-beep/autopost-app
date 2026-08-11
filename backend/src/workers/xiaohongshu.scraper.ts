@@ -1,5 +1,7 @@
 import axios from 'axios';
 import * as fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 export interface XiaohongshuMetadata {
   id: string;
@@ -198,6 +200,18 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
     } catch (e) {
       lastErr = e;
     }
+  }
+
+  // Fallback to yt-dlp stream download if axios headers failed
+  try {
+    const execPromise = promisify(exec);
+    const ytCmd = process.platform === 'win32' ? 'yt-dlp.exe' : './yt-dlp';
+    await execPromise(`${ytCmd} -o "${outputPath}" "${videoUrl}"`);
+    if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
+      return outputPath;
+    }
+  } catch (ytErr) {
+    console.warn(`yt-dlp stream download fallback warning: ${ytErr.message}`);
   }
 
   throw lastErr || new Error('Failed to download Xiaohongshu video after multiple header attempts');
