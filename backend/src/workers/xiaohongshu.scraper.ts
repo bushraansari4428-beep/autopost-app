@@ -205,14 +205,28 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
   // Fallback to yt-dlp stream download if axios headers failed
   try {
     const execPromise = promisify(exec);
-    const ytCmd = process.platform === 'win32' ? 'yt-dlp.exe' : './yt-dlp';
+    let ytCmd = process.platform === 'win32' ? 'yt-dlp.exe' : './yt-dlp';
+    const linuxPath = fs.existsSync('./yt-dlp') ? './yt-dlp' : (fs.existsSync('/opt/render/project/src/yt-dlp') ? '/opt/render/project/src/yt-dlp' : 'yt-dlp');
+    if (process.platform !== 'win32' && fs.existsSync(linuxPath)) {
+      try { fs.chmodSync(linuxPath, '755'); } catch (_) {}
+      ytCmd = `"${linuxPath}"`;
+    }
     await execPromise(`${ytCmd} -o "${outputPath}" "${videoUrl}"`);
     if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
       return outputPath;
     }
-  } catch (ytErr) {
+  } catch (ytErr: any) {
     console.warn(`yt-dlp stream download fallback warning: ${ytErr.message}`);
   }
+
+  // Fallback to curl
+  try {
+    const execPromise = promisify(exec);
+    await execPromise(`curl -L -s -H "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15" -o "${outputPath}" "${videoUrl}"`);
+    if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
+      return outputPath;
+    }
+  } catch (curlErr) {}
 
   throw lastErr || new Error('Failed to download Xiaohongshu video after multiple header attempts');
 }

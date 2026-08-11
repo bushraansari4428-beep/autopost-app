@@ -51,8 +51,16 @@ export class SyncService {
       return 'yt-dlp.exe';
     }
     const linuxPath = path.join(process.cwd(), 'yt-dlp');
-    if (fs.existsSync(linuxPath)) return `"${linuxPath}"`;
-    return './yt-dlp';
+    if (fs.existsSync(linuxPath)) {
+      try { fs.chmodSync(linuxPath, '755'); } catch (_) {}
+      return `"${linuxPath}"`;
+    }
+    const linuxBackendPath = path.join(process.cwd(), 'backend', 'yt-dlp');
+    if (fs.existsSync(linuxBackendPath)) {
+      try { fs.chmodSync(linuxBackendPath, '755'); } catch (_) {}
+      return `"${linuxBackendPath}"`;
+    }
+    return 'yt-dlp';
   }
 
   public formatFacebookCaption(rawCaption?: string, platform?: string, url?: string): string {
