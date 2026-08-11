@@ -55,6 +55,45 @@ export class SyncService {
     return './yt-dlp';
   }
 
+  public formatFacebookCaption(rawCaption?: string): string {
+    const defaultCatchphrases = [
+      "Wait for the end!",
+      "Watch till the end!",
+      "Don't miss this!",
+      "Unbelievable moment!",
+      "You need to see this!"
+    ];
+
+    let caption = (rawCaption || '').trim();
+
+    // If caption is generic fallback like "TikTok Video 123456", treat as empty
+    if (/^(TikTok|Instagram|Kuaishou|Xiaohongshu)?\s*Video\s*\d+$/i.test(caption)) {
+      caption = '';
+    }
+
+    if (caption) {
+      // Clean TikTok/platform specific tags (#fyp, #tiktok, #viral, #foryou, #foryoupage, etc.)
+      const platformTagsRegex = /#(fyp|tiktok|viral|foryou|foryoupage|trending|short|shorts|reels|explore)\b/gi;
+      caption = caption.replace(platformTagsRegex, '').replace(/\s+/g, ' ').trim();
+    }
+
+    // IF caption IS empty after cleaning, pick a random catchy line from Default Catchphrase List
+    if (!caption) {
+      const randomIndex = Math.floor(Math.random() * defaultCatchphrases.length);
+      caption = defaultCatchphrases[randomIndex];
+    }
+
+    // Combine with fixed hashtags: #FBReels #Reels
+    if (!caption.includes('#FBReels')) {
+      caption = `${caption} #FBReels`;
+    }
+    if (!caption.includes('#Reels')) {
+      caption = `${caption} #Reels`;
+    }
+
+    return caption.trim();
+  }
+
   async testMapping(mappingId: string) {
     const mapping = await this.prisma.mapping.findUnique({
       where: { id: mappingId },
@@ -217,11 +256,11 @@ export class SyncService {
       
       const publishedAt = latestVideo.timestamp ? new Date(latestVideo.timestamp * 1000) : new Date();
       
-      // Use random ID for test to avoid unique constraint
+      const formattedCaption = this.formatFacebookCaption(latestVideo.description || latestVideo.title);
       const newVideo = await this.prisma.video.create({
         data: {
-          title: latestVideo.title,
-          description: latestVideo.description || '',
+          title: formattedCaption,
+          description: formattedCaption,
           originalId: 'test_' + latestVideo.id + '_' + Date.now(),
           publishedAt: publishedAt,
           url: latestVideo.webpage_url || latestVideo.url || '',
@@ -432,10 +471,11 @@ export class SyncService {
           if (!videoRecord) {
             this.logsService.log('INFO', `Found new video: ${videoData.title}`);
             const publishedAt = videoData.timestamp ? new Date(videoData.timestamp * 1000) : new Date();
+            const formattedCaption = this.formatFacebookCaption(videoData.description || videoData.title);
             videoRecord = await this.prisma.video.create({
               data: {
-                title: videoData.title,
-                description: videoData.description || '',
+                title: formattedCaption,
+                description: formattedCaption,
                 originalId: platformVideoId,
                 publishedAt: publishedAt,
                 url: videoData.webpage_url || videoData.url || '',
@@ -673,6 +713,8 @@ export class SyncService {
     const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
     const isXhsOrRedNote = targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote') || videoUrl.includes('xhs') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu');
 
+    const finalDescription = this.formatFacebookCaption(video.description || video.title);
+
     // Direct CDN links (like TikTok, Xiaohongshu/RedNote, Akamai) return 403 to Facebook servers if sent via file_url without headers.
     // Download locally with anti-403 headers first, then send physical video bytes directly to Facebook.
     if (isTiktokOrCdn || isXhsOrRedNote) {
@@ -691,7 +733,7 @@ export class SyncService {
         const blob = new Blob([fileBuffer], { type: 'video/mp4' });
         const formData = new FormData();
         formData.append('access_token', accessToken);
-        formData.append('description', video.title || '');
+        formData.append('description', finalDescription);
         formData.append('source', blob, 'video.mp4');
 
         fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
@@ -713,7 +755,7 @@ export class SyncService {
         body: JSON.stringify({
           access_token: accessToken,
           file_url: videoUrl,
-          description: video.title
+          description: finalDescription
         })
       });
     }
