@@ -707,9 +707,26 @@ export class SyncService {
 
     // Direct CDN links (like TikTok, Xiaohongshu/RedNote, Akamai) return 403 to Facebook servers if sent via file_url without headers.
     // Download locally with anti-403 headers first, then send physical video bytes directly to Facebook.
-    if (isTiktokOrCdn || isXhsOrRedNote) {
-      this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
-      this.logsService.log('INFO', `[DEBUG] The EXACT URL being sent to Axios is: ${videoUrl}`);
+    // Bandwidth Optimization: Try direct file_url upload to Facebook first (0 Render Egress Bandwidth)
+    try {
+      this.logsService.log('INFO', `Attempting zero-bandwidth direct URL posting to Facebook...`);
+      fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: accessToken,
+          file_url: videoUrl,
+          description: finalDescription
+        })
+      });
+      fbData = await fbRes.json();
+    } catch (urlErr) {
+      fbData = { error: urlErr };
+    }
+
+    // If direct file_url failed or CDN returned 403 to Facebook, fallback to local anti-403 download & stream
+    if (!fbRes || !fbRes.ok || fbData?.error) {
+      this.logsService.log('INFO', `Direct URL posting not accepted by FB. Fallback: Downloading MP4 stream locally with anti-403 headers...`);
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
       try {
         if (isXhsOrRedNote) {
@@ -718,7 +735,7 @@ export class SyncService {
           await downloadTikTokVideo(videoUrl, tempPath);
         }
         this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath}. Uploading physical video directly to Facebook...`);
-        
+
         const fileBuffer = fs.readFileSync(tempPath);
         const blob = new Blob([fileBuffer], { type: 'video/mp4' });
         const formData = new FormData();
@@ -730,24 +747,12 @@ export class SyncService {
           method: 'POST',
           body: formData as any
         });
+        fbData = await fbRes.json();
       } finally {
         if (fs.existsSync(tempPath)) {
           try { fs.unlinkSync(tempPath); } catch (_) {}
         }
       }
-    } else {
-      // Upload to Facebook using file_url
-      fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          access_token: accessToken,
-          file_url: videoUrl,
-          description: finalDescription
-        })
-      });
     }
     
     fbData = await fbRes.json();
