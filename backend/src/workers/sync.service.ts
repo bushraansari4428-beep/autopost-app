@@ -220,7 +220,7 @@ export class SyncService {
       // Use random ID for test to avoid unique constraint
       const newVideo = await this.prisma.video.create({
         data: {
-          title: '[TEST] ' + latestVideo.title,
+          title: latestVideo.title,
           description: latestVideo.description || '',
           originalId: 'test_' + latestVideo.id + '_' + Date.now(),
           publishedAt: publishedAt,
