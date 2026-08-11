@@ -153,25 +153,52 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
  * Downloads RedNote/Xiaohongshu MP4 locally with anti-403 CDN headers.
  */
 export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: string): Promise<string> {
-  const response = await axios({
-    method: 'GET',
-    url: videoUrl,
-    responseType: 'stream',
-    headers: {
+  const headerOptions = [
+    {
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+      'Accept': '*/*',
+    },
+    {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+    },
+    {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'Referer': 'https://www.rednote.com/',
+      'Accept': '*/*',
+    },
+    {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Referer': 'https://www.xiaohongshu.com/',
       'Accept': '*/*'
     }
-  });
+  ];
 
-  const writer = fs.createWriteStream(outputPath);
-  response.data.pipe(writer);
+  let lastErr: any = null;
+  for (const headers of headerOptions) {
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: videoUrl,
+        responseType: 'stream',
+        headers,
+        timeout: 20000
+      });
 
-  return new Promise((resolve, reject) => {
-    writer.on('finish', () => resolve(outputPath));
-    writer.on('error', (err) => {
-      writer.close();
-      reject(err);
-    });
-  });
+      const writer = fs.createWriteStream(outputPath);
+      response.data.pipe(writer);
+
+      return await new Promise((resolve, reject) => {
+        writer.on('finish', () => resolve(outputPath));
+        writer.on('error', (err) => {
+          writer.close();
+          reject(err);
+        });
+      });
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error('Failed to download Xiaohongshu video after multiple header attempts');
 }

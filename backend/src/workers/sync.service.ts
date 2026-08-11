@@ -728,28 +728,8 @@ export class SyncService {
     const sourcePlatform = uploadHistory.video?.source?.platform;
     const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl);
 
-    // Direct CDN links (like TikTok, Xiaohongshu/RedNote, Akamai) return 403 to Facebook servers if sent via file_url without headers.
-    // Download locally with anti-403 headers first, then send physical video bytes directly to Facebook.
-    // Bandwidth Optimization: Try direct file_url upload to Facebook first (0 Render Egress Bandwidth)
-    try {
-      this.logsService.log('INFO', `Attempting zero-bandwidth direct URL posting to Facebook...`);
-      fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          access_token: accessToken,
-          file_url: videoUrl,
-          description: finalDescription
-        })
-      });
-      fbData = await fbRes.json();
-    } catch (urlErr) {
-      fbData = { error: urlErr };
-    }
-
-    // If direct file_url failed or CDN returned 403 to Facebook, fallback to local anti-403 download & stream
-    if (!fbRes || !fbRes.ok || fbData?.error) {
-      this.logsService.log('INFO', `Direct URL posting not accepted by FB. Fallback: Downloading MP4 stream locally with anti-403 headers...`);
+    if (isTiktokOrCdn || isXhsOrRedNote) {
+      this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
       try {
         if (isXhsOrRedNote) {
@@ -776,11 +756,18 @@ export class SyncService {
           try { fs.unlinkSync(tempPath); } catch (_) {}
         }
       }
+    } else {
+      // For YouTube/Instagram or standard public URLs, try direct file_url to Facebook
+      fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: accessToken,
+          file_url: videoUrl,
+          description: finalDescription
+        })
+      fbData = await fbRes.json();
     }
-    
-    fbData = await fbRes.json();
-
-    
     if (!fbRes.ok || fbData.error) {
       throw new Error(`Facebook API Error: ${JSON.stringify(fbData.error || fbData)}`);
     }
