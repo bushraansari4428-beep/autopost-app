@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import ToastContainer, { ToastMessage } from '@/components/Toast';
+import ConfirmModal from '@/components/ConfirmModal';
 
 export default function MappingsPage() {
   const [mappings, setMappings] = useState<any[]>([]);
@@ -8,6 +10,17 @@ export default function MappingsPage() {
   
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
   
   // Form state
   const [sourceId, setSourceId] = useState('');
@@ -43,13 +56,13 @@ export default function MappingsPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert('Test started! ' + data.message);
+        addToast('Test started! ' + data.message, 'success');
       } else {
-        alert('Test failed: ' + (data.message || 'Unknown error'));
+        addToast('Test failed: ' + (data.message || 'Unknown error'), 'error');
       }
     } catch (error) {
       console.error('Failed to test mapping:', error);
-      alert('Error triggering test.');
+      addToast('Error triggering test.', 'error');
     } finally {
       setTestingId(null);
     }
@@ -199,7 +212,7 @@ export default function MappingsPage() {
                 >
                   {testingId === mapping.id ? 'Testing...' : 'Test'}
                 </button>
-                <button onClick={() => deleteMapping(mapping.id)} className="text-red-400 hover:text-red-300">Remove</button>
+                <button onClick={() => setDeleteConfirmId(mapping.id)} className="text-red-400 hover:text-red-300">Remove</button>
               </div>
               </div>
             </div>
@@ -266,6 +279,20 @@ export default function MappingsPage() {
           </div>
         </div>
       )}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      <ConfirmModal
+        isOpen={!!deleteConfirmId}
+        title="Remove Mapping"
+        message="Are you sure you want to remove this mapping connection?"
+        onConfirm={() => {
+          if (deleteConfirmId) {
+            deleteMapping(deleteConfirmId);
+            addToast('Mapping removed successfully', 'info');
+            setDeleteConfirmId(null);
+          }
+        }}
+        onClose={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }

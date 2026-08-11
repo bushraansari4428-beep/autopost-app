@@ -1,11 +1,24 @@
 'use client';
 import { useState, useEffect } from 'react';
+import ToastContainer, { ToastMessage } from '@/components/Toast';
+import ConfirmModal from '@/components/ConfirmModal';
 
 export default function SourcesPage() {
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingSource, setEditingSource] = useState<any | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [deleteConfirmSource, setDeleteConfirmSource] = useState<{ id: string; name: string } | null>(null);
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
   
   // Form state
   const [name, setName] = useState('');
@@ -57,9 +70,6 @@ export default function SourcesPage() {
   };
 
   const deleteSource = async (id: string, sourceName: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${sourceName}"? This will also remove associated mappings and upload history.`)) {
-      return;
-    }
     setDeletingId(id);
     try {
       const token = localStorage.getItem('token');
@@ -67,14 +77,16 @@ export default function SourcesPage() {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) {
+      if (res.ok) {
+        addToast(`Source "${sourceName}" deleted successfully`, 'success');
+      } else {
         const text = await res.text();
-        alert(`Failed to delete source: ${text}`);
+        addToast(`Failed to delete source: ${text}`, 'error');
       }
       await fetchSources();
     } catch (error: any) {
       console.error('Error deleting source:', error);
-      alert('Network error while deleting source.');
+      addToast('Network error while deleting source.', 'error');
     } finally {
       setDeletingId(null);
     }
@@ -188,7 +200,7 @@ export default function SourcesPage() {
                     <span className="mx-2 text-gray-700">|</span>
                     <button 
                       disabled={deletingId === source.id}
-                      onClick={() => deleteSource(source.id, source.name)} 
+                      onClick={() => setDeleteConfirmSource({ id: source.id, name: source.name })} 
                       className="text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors focus:outline-none"
                     >
                       {deletingId === source.id ? 'Deleting...' : 'Delete'}
@@ -270,6 +282,19 @@ export default function SourcesPage() {
           </div>
         </div>
       )}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      <ConfirmModal
+        isOpen={!!deleteConfirmSource}
+        title="Delete Source Account"
+        message={`Are you sure you want to delete "${deleteConfirmSource?.name}"? Associated mappings and history will also be removed.`}
+        onConfirm={() => {
+          if (deleteConfirmSource) {
+            deleteSource(deleteConfirmSource.id, deleteConfirmSource.name);
+            setDeleteConfirmSource(null);
+          }
+        }}
+        onClose={() => setDeleteConfirmSource(null)}
+      />
     </div>
   );
 }

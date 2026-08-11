@@ -1,10 +1,23 @@
 'use client';
 import { useState, useEffect } from 'react';
+import ToastContainer, { ToastMessage } from '@/components/Toast';
+import ConfirmModal from '@/components/ConfirmModal';
 
 export default function FacebookPagesPage() {
   const [pages, setPages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
   
   // Real-time statistics modal state
   const [selectedStatsPage, setSelectedStatsPage] = useState<any>(null);
@@ -41,9 +54,6 @@ export default function FacebookPagesPage() {
   }, []);
 
   const deletePage = async (id: string) => {
-    if (!confirm('Are you sure you want to disconnect and delete this Facebook Page?')) {
-      return;
-    }
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/pages/${id}`, {
@@ -51,14 +61,15 @@ export default function FacebookPagesPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
+        addToast('Facebook Page disconnected successfully', 'success');
         fetchPages();
       } else {
         const errData = await res.json().catch(() => ({}));
-        alert(`Failed to delete page: ${errData.message || 'Server error'}`);
+        addToast(`Failed to delete page: ${errData.message || 'Server error'}`, 'error');
       }
     } catch (err: any) {
       console.error('Failed to delete page:', err);
-      alert(`Error deleting page: ${err.message}`);
+      addToast(`Error deleting page: ${err.message}`, 'error');
     }
   };
 
@@ -228,7 +239,7 @@ export default function FacebookPagesPage() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      deletePage(page.id);
+                      setDeleteConfirmId(page.id);
                     }} 
                     className="text-red-400 hover:text-red-300 font-bold hover:underline px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition z-20"
                   >
@@ -573,6 +584,19 @@ export default function FacebookPagesPage() {
           </div>
         </div>
       )}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      <ConfirmModal
+        isOpen={!!deleteConfirmId}
+        title="Disconnect Facebook Page"
+        message="Are you sure you want to disconnect and delete this Facebook Page? Associated mappings and history will also be removed."
+        onConfirm={() => {
+          if (deleteConfirmId) {
+            deletePage(deleteConfirmId);
+            setDeleteConfirmId(null);
+          }
+        }}
+        onClose={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }

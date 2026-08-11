@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import ToastContainer, { ToastMessage } from '@/components/Toast';
+import ConfirmModal from '@/components/ConfirmModal';
 
 interface User {
   id: string;
@@ -21,6 +23,17 @@ export default function UsersPage() {
   const [error, setError] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteValue, setEditNoteValue] = useState('');
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   const fetchUsers = async () => {
     try {
@@ -57,6 +70,7 @@ export default function UsersPage() {
         body: JSON.stringify({ email, password, role: 'USER' })
       });
       if (res.ok) {
+        addToast('User created successfully', 'success');
         setShowModal(false);
         setEmail('');
         setPassword('');
@@ -71,7 +85,6 @@ export default function UsersPage() {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/users/${id}`, {
@@ -79,12 +92,14 @@ export default function UsersPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
+        addToast('User deleted successfully', 'success');
         fetchUsers();
       } else {
-        alert('Failed to delete user');
+        addToast('Failed to delete user', 'error');
       }
     } catch (err) {
       console.error(err);
+      addToast('Error deleting user', 'error');
     }
   };
 
@@ -100,12 +115,14 @@ export default function UsersPage() {
         body: JSON.stringify(updates)
       });
       if (res.ok) {
+        addToast('User updated successfully', 'success');
         fetchUsers();
       } else {
-        alert('Failed to update user');
+        addToast('Failed to update user', 'error');
       }
     } catch (err) {
       console.error(err);
+      addToast('Error updating user', 'error');
     }
   };
 
@@ -248,7 +265,7 @@ export default function UsersPage() {
                 </td>
                 <td className="p-4 text-right">
                   <button
-                    onClick={() => handleDeleteUser(user.id)}
+                    onClick={() => setDeleteConfirmId(user.id)}
                     className="text-red-400 hover:text-red-300 text-sm font-semibold px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition"
                   >
                     Delete
@@ -310,11 +327,20 @@ export default function UsersPage() {
                 >
                   Create User
                 </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      <ConfirmModal
+        isOpen={!!deleteConfirmId}
+        title="Delete User Account"
+        message="Are you sure you want to delete this user account?"
+        onConfirm={() => {
+          if (deleteConfirmId) {
+            handleDeleteUser(deleteConfirmId);
+            setDeleteConfirmId(null);
+          }
+        }}
+        onClose={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }
