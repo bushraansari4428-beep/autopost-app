@@ -766,6 +766,7 @@ export class SyncService {
           file_url: videoUrl,
           description: finalDescription
         })
+      });
       fbData = await fbRes.json();
     }
     if (!fbRes.ok || fbData.error) {
