@@ -55,33 +55,55 @@ export class SyncService {
     return './yt-dlp';
   }
 
-  public formatFacebookCaption(rawCaption?: string): string {
+  public formatFacebookCaption(rawCaption?: string, platform?: string, url?: string): string {
+    const plat = (platform || '').toUpperCase();
+    const cleanUrl = (url || '').toLowerCase();
+
+    // Check if source is Chinese/Asian platform (Kuaishou or Xiaohongshu / RedNote)
+    const isChinesePlatform = 
+      plat === 'KUAISHOU' || 
+      plat === 'XIAOHONGSHU' || 
+      cleanUrl.includes('kuaishou') || 
+      cleanUrl.includes('xiaohongshu') || 
+      cleanUrl.includes('xhslink') || 
+      cleanUrl.includes('rednote');
+
+    // Rule 1: For KUAISHOU or XIAOHONGSHU (RedNote), ALWAYS delete entire original caption and output ONLY #FBReels #Reels
+    if (isChinesePlatform) {
+      return '#FBReels #Reels';
+    }
+
+    // Rule 2 & 3: For TikTok, YouTube Shorts, Instagram
     let caption = (rawCaption || '').trim();
 
-    // If caption is generic fallback like "TikTok Video 123456", treat as empty
-    if (/^(TikTok|Instagram|Kuaishou|Xiaohongshu)?\s*Video\s*\d+$/i.test(caption)) {
+    // If caption is generic fallback (e.g. "TikTok Video 123456" or "Video 12345"), treat as empty
+    if (/^(TikTok|Instagram|Kuaishou|Xiaohongshu|YouTube)?\s*Video\s*\d+$/i.test(caption)) {
       caption = '';
     }
 
     if (caption) {
-      // Clean TikTok/platform specific tags (#fyp, #tiktok, #viral, #foryou, #foryoupage, etc.)
-      const platformTagsRegex = /#(fyp|tiktok|viral|foryou|foryoupage|trending|short|shorts|reels|explore)\b/gi;
-      caption = caption.replace(platformTagsRegex, '').replace(/\s+/g, ' ').trim();
+      // Extract first line if multiple lines
+      let firstLine = caption.split('\n')[0].trim();
+
+      // Extract text before pipe '|' or dash if followed by hashtags
+      if (firstLine.includes('|')) {
+        const parts = firstLine.split('|');
+        if (parts[0].replace(/#\S+/g, '').trim()) {
+          firstLine = parts[0].trim();
+        }
+      }
+
+      // Remove ALL hashtags from the first line text
+      const cleanText = firstLine.replace(/#\S+/g, '').replace(/\s+/g, ' ').trim();
+
+      if (cleanText) {
+        // Output clean first line + #FBReels #Reels
+        return `${cleanText} #FBReels #Reels`;
+      }
     }
 
-    // Combine with fixed hashtags: #FBReels #Reels
-    if (caption) {
-      if (!caption.includes('#FBReels')) {
-        caption = `${caption} #FBReels`;
-      }
-      if (!caption.includes('#Reels')) {
-        caption = `${caption} #Reels`;
-      }
-    } else {
-      caption = '#FBReels #Reels';
-    }
-
-    return caption.trim();
+    // Rule 3: If no text caption (only hashtags or empty)
+    return '#FBReels #Reels';
   }
 
   async testMapping(mappingId: string) {
@@ -246,7 +268,7 @@ export class SyncService {
       
       const publishedAt = latestVideo.timestamp ? new Date(latestVideo.timestamp * 1000) : new Date();
       
-      const formattedCaption = this.formatFacebookCaption(latestVideo.description || latestVideo.title);
+      const formattedCaption = this.formatFacebookCaption(latestVideo.description || latestVideo.title, mapping.source.platform, mapping.source.url);
       const newVideo = await this.prisma.video.create({
         data: {
           title: formattedCaption,
@@ -461,7 +483,7 @@ export class SyncService {
           if (!videoRecord) {
             this.logsService.log('INFO', `Found new video: ${videoData.title}`);
             const publishedAt = videoData.timestamp ? new Date(videoData.timestamp * 1000) : new Date();
-            const formattedCaption = this.formatFacebookCaption(videoData.description || videoData.title);
+            const formattedCaption = this.formatFacebookCaption(videoData.description || videoData.title, source.platform, source.url);
             videoRecord = await this.prisma.video.create({
               data: {
                 title: formattedCaption,
@@ -703,7 +725,8 @@ export class SyncService {
     const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
     const isXhsOrRedNote = targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote') || videoUrl.includes('xhs') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu');
 
-    const finalDescription = this.formatFacebookCaption(video.description || video.title);
+    const sourcePlatform = uploadHistory.video?.source?.platform;
+    const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl);
 
     // Direct CDN links (like TikTok, Xiaohongshu/RedNote, Akamai) return 403 to Facebook servers if sent via file_url without headers.
     // Download locally with anti-403 headers first, then send physical video bytes directly to Facebook.
