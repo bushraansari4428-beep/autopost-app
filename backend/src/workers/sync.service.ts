@@ -42,6 +42,19 @@ export class SyncService {
     private readonly igRelayClient: InstagramRelayClient,
   ) {}
 
+  private getYtDlpCmd(): string {
+    if (process.platform === 'win32') {
+      const winPath = path.join(process.cwd(), 'yt-dlp.exe');
+      if (fs.existsSync(winPath)) return `"${winPath}"`;
+      const winBackendPath = path.join(process.cwd(), 'backend', 'yt-dlp.exe');
+      if (fs.existsSync(winBackendPath)) return `"${winBackendPath}"`;
+      return 'yt-dlp.exe';
+    }
+    const linuxPath = path.join(process.cwd(), 'yt-dlp');
+    if (fs.existsSync(linuxPath)) return `"${linuxPath}"`;
+    return './yt-dlp';
+  }
+
   async testMapping(mappingId: string) {
     const mapping = await this.prisma.mapping.findUnique({
       where: { id: mappingId },
@@ -180,7 +193,8 @@ export class SyncService {
           }
         } else {
           for (const url of urlsToScan) {
-            const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+            const ytDlpCmd = this.getYtDlpCmd();
+            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
             try {
               const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
               if (stdout && stdout.trim()) {
@@ -381,7 +395,8 @@ export class SyncService {
           }
         } else {
           for (const url of urlsToScan) {
-            const cmd = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+            const ytDlpCmd = this.getYtDlpCmd();
+            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
             try {
               this.logger.log(`Scanning URL: ${url}`);
               const { stdout, stderr } = await execPromise(cmd, {
@@ -555,7 +570,8 @@ export class SyncService {
       if (!videoUrl) {
         this.logger.log(`SSR stream not matched directly. Attempting direct local fallback stream extraction...`);
         try {
-          const cmdGet = `./yt-dlp --cookies cookies.txt -g -f "best[ext=mp4]/best" --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanTargetUrl}"`;
+          const ytDlpCmd = this.getYtDlpCmd();
+          const cmdGet = `${ytDlpCmd} --cookies cookies.txt -g -f "best[ext=mp4]/best" --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanTargetUrl}"`;
           const { stdout } = await execPromise(cmdGet, { maxBuffer: 1024 * 1024 * 5 });
           if (stdout && stdout.trim()) {
             videoUrl = stdout.trim().split('\n')[0];
@@ -930,10 +946,9 @@ export class SyncService {
   private async extractTikTokVideo(rawUrl: string): Promise<any> {
     // 1. Sanitize & clean URL (strip trailing ?, &, slashes or tracking parameters)
     const cleanUrl = rawUrl.split('?')[0].replace(/\/$/, '').trim();
-    this.logger.log(`Extracting TikTok video via Kuaishou mobile SSR & indexing method from sanitized URL: ${cleanUrl}`);
+    this.logger.log(`Extracting TikTok video from sanitized URL: ${cleanUrl}`);
     const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
 
-    // Determine if URL is already a single video link or a profile link
     let targetVidUrl = cleanUrl;
     let vidId = '';
 
@@ -946,9 +961,36 @@ export class SyncService {
       const username = usernameMatch ? usernameMatch[1] : cleanUrl.split('/').filter(Boolean).pop()?.replace(/^@/, '');
 
       if (username) {
-        this.logger.log(`Discovering latest video ID for user @${username} using Kuaishou relay index method (No APIs)...`);
+        // LAYER 0: TikWM User API Discovery
         try {
-          // LAYER 1: DuckDuckGo HTML Index discovery (Same reliable technique used in Python residential relay)
+          this.logger.log(`Polling TikWM user API for @${username}...`);
+          const tikwmUserRes = await fetch(`https://www.tikwm.com/api/user/posts?unique_id=${encodeURIComponent(username)}&count=5`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+            }
+          }).catch(() => null);
+
+          if (tikwmUserRes && tikwmUserRes.ok) {
+            const data = await tikwmUserRes.json().catch(() => null);
+            if (data && data.code === 0 && data.data?.videos?.length > 0) {
+              const v = data.data.videos[0];
+              this.logger.log(`Successfully discovered newest TikTok video (${v.video_id}) for @${username} via TikWM API!`);
+              return {
+                id: String(v.video_id),
+                title: v.title || `TikTok Video ${v.video_id}`,
+                description: v.title || '',
+                url: `https://www.tiktok.com/@${username}/video/${v.video_id}`,
+                mp4Url: v.play || v.wmplay,
+                timestamp: v.create_time || Math.floor(Date.now() / 1000)
+              };
+            }
+          }
+        } catch (e: any) {
+          this.logger.warn(`TikWM user posts discovery exception for @${username}: ${e.message}`);
+        }
+
+        // LAYER 1: DuckDuckGo HTML Index discovery
+        try {
           const ddgQuery = `site:tiktok.com/@${username}/video`;
           const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(ddgQuery)}`;
           const ddgRes = await fetch(ddgUrl, {
@@ -973,7 +1015,7 @@ export class SyncService {
             if (discoveredIds.length > 0) {
               vidId = discoveredIds[0];
               targetVidUrl = `https://www.tiktok.com/@${username}/video/${vidId}`;
-              this.logger.log(`Successfully discovered newest TikTok video ID (${vidId}) for @${username} via Kuaishou index method!`);
+              this.logger.log(`Successfully discovered newest TikTok video ID (${vidId}) for @${username} via DDG index method!`);
             }
           }
         } catch (e: any) {
@@ -1009,7 +1051,8 @@ export class SyncService {
         // LAYER 3: Local CLI quick scan as final profile fallback
         if (!vidId) {
           try {
-            const cmdId = `./yt-dlp --cookies cookies.txt --flat-playlist --playlist-end 1 --print id --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanUrl}"`;
+            const ytDlpCmd = this.getYtDlpCmd();
+            const cmdId = `${ytDlpCmd} --cookies cookies.txt --flat-playlist --playlist-end 1 --print id --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanUrl}"`;
             const { stdout: outId } = await execPromise(cmdId, { maxBuffer: 1024 * 1024 * 10 });
             const foundId = outId?.trim().split('\n')[0]?.trim();
             if (foundId && !foundId.includes(' ') && foundId.length >= 15) {
@@ -1032,7 +1075,34 @@ export class SyncService {
 
       this.logger.log(`Extracting metadata and video stream for single video URL: ${targetVidUrl}`);
 
-      // STEP A: Kuaishou Mobile SSR Extraction (Direct HTML State without APIs)
+      // STEP 0: TikWM Single Video API
+      try {
+        const tikwmRes = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(targetVidUrl)}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+          }
+        }).catch(() => null);
+
+        if (tikwmRes && tikwmRes.ok) {
+          const data = await tikwmRes.json().catch(() => null);
+          if (data && data.code === 0 && data.data) {
+            const v = data.data;
+            this.logger.log(`Successfully extracted TikTok video details via TikWM API (ID: ${v.id})`);
+            return {
+              id: String(v.id || vidId),
+              title: v.title || `TikTok Video ${v.id || vidId}`,
+              description: v.title || '',
+              url: targetVidUrl,
+              mp4Url: v.play || v.wmplay,
+              timestamp: v.create_time || Math.floor(Date.now() / 1000)
+            };
+          }
+        }
+      } catch (e: any) {
+        this.logger.warn(`TikWM single video fetch exception: ${e.message}`);
+      }
+
+      // STEP A: Mobile SSR Extraction
       try {
         const finalVidUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(targetVidUrl)}` : targetVidUrl;
         const res = await fetch(finalVidUrl, {
@@ -1052,7 +1122,7 @@ export class SyncService {
           const mp4Url = playMatch ? playMatch[1].replace(/\\\//g, '/').replace(/\\u0026/g, '&') : undefined;
 
           if (fullCaption && mp4Url) {
-            this.logger.log(`Successfully extracted high-res TikTok stream & original caption via Kuaishou SSR method!`);
+            this.logger.log(`Successfully extracted high-res TikTok stream & original caption via mobile SSR method!`);
             return {
               id: String(vidId),
               title: fullCaption,
@@ -1067,7 +1137,7 @@ export class SyncService {
         this.logger.warn(`Single video SSR extraction fallback failed: ${e.message}`);
       }
 
-      // STEP A.2: Playwright Headless Interception (Local browser solution without APIs)
+      // STEP A.2: Playwright Headless Interception
       try {
         this.logger.log(`Attempting Playwright headless interception for: ${targetVidUrl}`);
         const pwMeta = await getLatestTikTokVideo(targetVidUrl);
@@ -1087,9 +1157,10 @@ export class SyncService {
       }
 
       // STEP B: Non-API Local Fallback via yt-dlp on discovered targetVidUrl
-      this.logger.log(`Executing local command fallback for target video without third-party APIs: ${targetVidUrl}`);
+      this.logger.log(`Executing local command fallback for target video: ${targetVidUrl}`);
       try {
-        const cmdJson = `./yt-dlp --cookies cookies.txt --dump-json --playlist-end 1 --extractor-args "tiktok:api_hostname=api22-normal-c-useast1a.tiktokv.com;app_name=musical_ly;app_version=26.1.3" --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${targetVidUrl}"`;
+        const ytDlpCmd = this.getYtDlpCmd();
+        const cmdJson = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 --extractor-args "tiktok:api_hostname=api22-normal-c-useast1a.tiktokv.com;app_name=musical_ly;app_version=26.1.3" --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${targetVidUrl}"`;
         const { stdout: outJson } = await execPromise(cmdJson, { maxBuffer: 1024 * 1024 * 50 });
 
         if (outJson && outJson.trim()) {
@@ -1108,7 +1179,6 @@ export class SyncService {
         this.logger.warn(`Local yt-dlp single video extraction failed: ${e.message.substring(0, 150)}...`);
       }
 
-      // If step B didn't get MP4 immediately, return basic metadata so downloader can retry
       return {
         id: String(vidId),
         title: `TikTok Video ${vidId}`,
@@ -1118,7 +1188,7 @@ export class SyncService {
       };
     }
 
-    this.logger.error(`All local non-API TikTok extraction methods exhausted for: ${cleanUrl}`);
+    this.logger.error(`All local TikTok extraction methods exhausted for: ${cleanUrl}`);
     return null;
   }
 }

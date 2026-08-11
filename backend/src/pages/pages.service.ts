@@ -45,7 +45,18 @@ export class PagesService {
     });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    // 1. Delete mappings tied to this facebook page
+    await this.prisma.mapping.deleteMany({
+      where: { facebookPageId: id },
+    });
+
+    // 2. Delete upload histories tied to this facebook page
+    await this.prisma.uploadHistory.deleteMany({
+      where: { facebookPageId: id },
+    });
+
+    // 3. Delete the page cleanly without FK constraint error
     return this.prisma.facebookPage.delete({
       where: { id },
     });

@@ -41,12 +41,25 @@ export default function FacebookPagesPage() {
   }, []);
 
   const deletePage = async (id: string) => {
-    const token = localStorage.getItem('token');
-    await fetch(`/api/pages/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    fetchPages();
+    if (!confirm('Are you sure you want to disconnect and delete this Facebook Page?')) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pages/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchPages();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Failed to delete page: ${errData.message || 'Server error'}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to delete page:', err);
+      alert(`Error deleting page: ${err.message}`);
+    }
   };
 
   const openPageStats = async (page: any) => {
