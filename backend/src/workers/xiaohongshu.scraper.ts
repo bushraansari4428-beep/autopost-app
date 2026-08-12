@@ -77,13 +77,46 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
         
         // If profile, find latest note ID and redirect extraction to that note
         if (isProfile) {
-          const notes = state?.user?.notes ?? state?.user?.noteList ?? state?.user?.profile?.notes ?? [];
-          if (notes && notes.length > 0) {
-            const latestNoteId = notes[0].noteId ?? notes[0].id;
-            if (latestNoteId) {
-              const newNoteUrl = `https://www.xiaohongshu.com/explore/${latestNoteId}`;
-              console.log(`Discovered latest note (${latestNoteId}) from RedNote profile. Recursively extracting note...`);
-              return await extractXiaohongshuVideo(newNoteUrl);
+          const userNotesRaw = state?.user?.notes ?? state?.user?.noteList ?? state?.user?.profile?.notes ?? [];
+          const notesList: any[] = [];
+          if (Array.isArray(userNotesRaw)) {
+            for (const item of userNotesRaw) {
+              if (Array.isArray(item)) {
+                notesList.push(...item);
+              } else if (item && typeof item === 'object') {
+                notesList.push(item);
+              }
+            }
+          }
+
+          if (notesList.length > 0) {
+            for (const item of notesList) {
+              const card = item.noteCard || item;
+              const title = card.displayTitle || card.title || item.title || `RedNote Video ${noteId}`;
+              const xsecToken = item.xsecToken || card.xsecToken;
+              const coverUrl = card.cover?.urlDefault || card.cover?.urlPre || '';
+              
+              let latestNoteId = card.noteId || item.noteId || item.id;
+              if (!latestNoteId && coverUrl) {
+                const coverMatch = coverUrl.match(/\/([a-zA-Z0-9]{24,32})!/);
+                if (coverMatch) latestNoteId = coverMatch[1];
+              }
+
+              if (latestNoteId) {
+                const newNoteUrl = `https://www.xiaohongshu.com/explore/${latestNoteId}${xsecToken ? `?xsec_token=${xsecToken}&xsec_source=pc_feed` : ''}`;
+                console.log(`Discovered latest note (${title}) from RedNote profile. Extracting note...`);
+                const extractedNote = await extractXiaohongshuVideo(newNoteUrl);
+                if (extractedNote) return extractedNote;
+              } else if (title) {
+                return {
+                  id: noteId,
+                  title,
+                  description: title,
+                  url: targetUrl,
+                  mp4Url: coverUrl || targetUrl,
+                  timestamp: Math.floor(Date.now() / 1000)
+                };
+              }
             }
           }
         }
