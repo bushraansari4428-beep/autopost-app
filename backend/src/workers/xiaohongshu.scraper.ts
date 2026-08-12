@@ -169,9 +169,6 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
         }
       }
     }
-  } catch (err: any) {
-    console.warn(`Direct HTTP extraction for RedNote failed: ${err.message}`);
-  }
 
   if (extractedMp4) {
     // Cleanup URL
