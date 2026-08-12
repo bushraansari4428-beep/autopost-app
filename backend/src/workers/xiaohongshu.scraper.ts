@@ -45,76 +45,29 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
   let extractedMp4: string | undefined = undefined;
   let noteId = 'xhs_' + Date.now();
 
-  // Option 1: Vercel Edge Proxy Bypass (Routes through frontend to bypass Render Datacenter IP block)
-  if (!isProfile) {
-    try {
-      console.log(`[XHS Scraper] Attempting Vercel Edge Proxy WAF Bypass for raw URL: ${shareUrl}`);
-      const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
-      const proxyRes = await axios.get(proxyUrl, { timeout: 25000 });
-      
-      if (proxyRes.headers['x-final-url']) {
-        targetUrl = proxyRes.headers['x-final-url'];
-        const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
-        if (noteMatch) noteId = noteMatch[1];
-      }
-      
-      const proxyHtml = proxyRes.data;
-      if (typeof proxyHtml === 'string' && proxyHtml.includes('window.__INITIAL_STATE__')) {
-        console.log(`[XHS Scraper] Edge Proxy bypass successful! Captured INITIAL_STATE.`);
-        // Temporarily override targetUrl's html parsing below by feeding it the proxy html
-        const stateMatch = proxyHtml.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});?</s);
-        if (stateMatch && stateMatch[1]) {
-          const state = JSON.parse(stateMatch[1].replace(/undefined/g, 'null'));
-          const noteMap = state?.note?.noteDetailMap ?? state?.noteData ?? {};
-          const firstNoteKey = Object.keys(noteMap)[0] || noteId;
-          const noteObj = noteMap[firstNoteKey]?.note ?? noteMap[firstNoteKey] ?? {};
-          
-          const h264Url = noteObj.video?.media?.stream?.h264?.[0]?.masterUrl;
-          const av1Url = noteObj.video?.media?.stream?.av1?.[0]?.masterUrl;
-          
-          if (h264Url) extractedMp4 = h264Url;
-          else if (av1Url) extractedMp4 = av1Url;
-          
-          if (extractedMp4) {
-            return {
-              id: noteId,
-              title: noteObj.title || extractedTitle,
-              description: noteObj.desc || extractedTitle,
-              url: targetUrl,
-              mp4Url: extractedMp4,
-              timestamp: Math.floor(Date.now() / 1000)
-            };
-          }
-        }
-      }
-    } catch (e: any) {
-      console.warn(`[XHS Scraper] Edge Proxy Bypass failed: ${e.message}. Falling back to standard Native HTTP...`);
-    }
-  }
+  let html = '';
+  let statusCode = 500;
 
   try {
-    const response = await axios({
-      method: 'GET',
-      url: targetUrl,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
-        ...(process.env.XHS_COOKIE ? { 'Cookie': process.env.XHS_COOKIE } : {})
-      },
-      timeout: 15000,
-    });
+    console.log(`[XHS Scraper] Fetching via Vercel Edge Proxy for raw URL: ${shareUrl}`);
+    const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
+    const response = await axios.get(proxyUrl, { timeout: 25000 });
+    
+    html = response.data;
+    statusCode = response.status;
+    
+    if (response.headers['x-final-url']) {
+      targetUrl = response.headers['x-final-url'];
+      isProfile = targetUrl.includes('/user/profile/');
+      const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
+      if (noteMatch) noteId = noteMatch[1];
+    }
+  } catch (e: any) {
+    console.warn(`[XHS Scraper] Vercel Proxy Fetch failed: ${e.message}`);
+    // Native fallback is removed because it will always get WAF'd on Render Datacenter IP.
+  }
 
-    const html = response.data;
-    const statusCode = response.status;
-    const htmlSnippet = typeof html === 'string' ? html.substring(0, 500) : JSON.stringify(html).substring(0, 500);
+  const htmlSnippet = typeof html === 'string' ? html.substring(0, 500) : JSON.stringify(html).substring(0, 500);
 
     console.log(`[XHS Scraper] HTTP Status Code: ${statusCode} for ${targetUrl}`);
     console.log(`[XHS Scraper] HTML Snippet (First 500 chars):\n${htmlSnippet}`);
