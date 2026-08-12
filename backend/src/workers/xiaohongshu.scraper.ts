@@ -51,7 +51,16 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
   try {
     console.log(`[XHS Scraper] Fetching via Vercel Edge Proxy for raw URL: ${shareUrl}`);
     const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
-    const response = await axios.get(proxyUrl, { timeout: 25000 });
+    
+    const headers: Record<string, string> = {};
+    if (process.env.XHS_COOKIE) {
+      headers['x-xhs-cookie'] = process.env.XHS_COOKIE;
+    }
+
+    const response = await axios.get(proxyUrl, { 
+      timeout: 25000,
+      headers
+    });
     
     html = response.data;
     statusCode = response.status;
