@@ -48,6 +48,41 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
   let extractedTitle = `RedNote Video ${noteId}`;
   let extractedMp4: string | undefined = undefined;
 
+  // Option B: RapidAPI WAF Bypass (If key is provided in Render)
+  if (process.env.RAPIDAPI_KEY && !isProfile) {
+    try {
+      console.log(`[XHS Scraper] Using RapidAPI WAF Bypass for: ${targetUrl}`);
+      const apiRes = await axios({
+        method: 'GET',
+        url: 'https://social-media-video-downloader.p.rapidapi.com/smvd/get/all',
+        params: { url: targetUrl },
+        headers: {
+          'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+          'X-RapidAPI-Host': 'social-media-video-downloader.p.rapidapi.com'
+        },
+        timeout: 20000
+      });
+
+      const apiData = apiRes.data;
+      // Handle standard Social Media Video Downloader format
+      const videoLink = apiData?.links?.find((l: any) => l.type === 'video' || l.link.includes('.mp4'))?.link || apiData?.video || apiData?.data?.video || apiData?.url;
+      
+      if (videoLink) {
+        console.log(`[XHS Scraper] Successfully extracted MP4 via RapidAPI Bypass!`);
+        return {
+          id: noteId,
+          title: apiData?.title || apiData?.data?.title || extractedTitle,
+          description: apiData?.title || apiData?.data?.desc || extractedTitle,
+          url: targetUrl,
+          mp4Url: videoLink,
+          timestamp: Math.floor(Date.now() / 1000)
+        };
+      }
+    } catch (e: any) {
+      console.warn(`[XHS Scraper] RapidAPI Bypass failed: ${e.message}. Falling back to Native HTTP...`);
+    }
+  }
+
   try {
     const response = await axios({
       method: 'GET',
