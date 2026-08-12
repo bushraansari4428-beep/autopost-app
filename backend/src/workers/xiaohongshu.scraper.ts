@@ -112,16 +112,11 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
 
               if (extractedNote && extractedNote.mp4Url && extractedNote.mp4Url !== targetUrl) {
                 return extractedNote;
-              } else if (title || coverUrl) {
-                console.log(`Using profile card metadata for RedNote video (${title})...`);
-                return {
-                  id: latestNoteId || noteId,
-                  title: title || `RedNote Video ${latestNoteId || noteId}`,
-                  description: title || `RedNote Video ${latestNoteId || noteId}`,
-                  url: targetUrl,
-                  mp4Url: coverUrl || targetUrl,
-                  timestamp: Math.floor(Date.now() / 1000)
-                };
+              } else {
+                console.warn(`Could not extract valid MP4 for RedNote profile latest video. Note ID missing or extraction failed.`);
+                // We return null here instead of falling back to the cover image. 
+                // Falling back to cover image causes Facebook to upload a 0-second video.
+                return null;
               }
             }
           }
