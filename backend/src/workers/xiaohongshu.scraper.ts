@@ -16,19 +16,19 @@ export interface XiaohongshuMetadata {
  * Resolves short share URLs (e.g., xhslink.com) to obtain the full URL containing xsec_token
  */
 export async function resolveXhsUrl(rawUrl: string): Promise<string> {
-  if (!rawUrl.includes('xhslink.com') && !rawUrl.includes('t.cn') && !rawUrl.includes('url.cn')) {
+  if (!rawUrl.includes('xhslink') && !rawUrl.includes('t.cn') && !rawUrl.includes('url.cn')) {
     return rawUrl;
   }
 
   try {
     const response = await fetch(rawUrl, {
-      method: 'HEAD',
+      method: 'GET',
       redirect: 'follow',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       },
     });
-    return response.url;
+    return response.url || rawUrl;
   } catch (e) {
     return rawUrl;
   }
