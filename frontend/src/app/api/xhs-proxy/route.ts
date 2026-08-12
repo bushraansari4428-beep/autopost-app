@@ -20,7 +20,16 @@ export async function GET(request: NextRequest) {
     };
     
     if (xhsCookie) {
-      headers['Cookie'] = xhsCookie;
+      if (xhsCookie.trim().startsWith('[')) {
+        try {
+          const cookieArray = JSON.parse(xhsCookie);
+          headers['Cookie'] = cookieArray.map((c: any) => `${c.name}=${c.value}`).join('; ');
+        } catch (e) {
+          headers['Cookie'] = xhsCookie; // Fallback to raw string if parsing fails
+        }
+      } else {
+        headers['Cookie'] = xhsCookie; // Raw string format
+      }
     }
 
     const response = await fetch(targetUrl, {
