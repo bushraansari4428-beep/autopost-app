@@ -63,6 +63,7 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
         'Upgrade-Insecure-Requests': '1',
+        ...(process.env.XHS_COOKIE ? { 'Cookie': process.env.XHS_COOKIE } : {})
       },
       timeout: 15000,
     });
@@ -221,12 +222,14 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
       {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Referer': 'https://www.xiaohongshu.com/',
-        'Accept': '*/*'
+        'Accept': '*/*',
+        ...(process.env.XHS_COOKIE ? { 'Cookie': process.env.XHS_COOKIE } : {})
       },
       {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
         'Referer': 'https://www.rednote.com/',
-        'Accept': '*/*'
+        'Accept': '*/*',
+        ...(process.env.XHS_COOKIE ? { 'Cookie': process.env.XHS_COOKIE } : {})
       }
     ];
 
