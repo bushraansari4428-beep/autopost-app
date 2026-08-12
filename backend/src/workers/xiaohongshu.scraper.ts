@@ -68,8 +68,11 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
     });
 
     const html = response.data;
+    const statusCode = response.status;
+    const htmlSnippet = typeof html === 'string' ? html.substring(0, 500) : JSON.stringify(html).substring(0, 500);
 
-    // Check for __INITIAL_STATE__
+    console.log(`[XHS Scraper] HTTP Status Code: ${statusCode} for ${targetUrl}`);
+    console.log(`[XHS Scraper] HTML Snippet (First 500 chars):\n${htmlSnippet}`);
     const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});?</s) || html.match(/window\.__INITIAL_SSR_STATE__\s*=\s*(\{.+?\});?</s);
     if (stateMatch && stateMatch[1]) {
       try {
