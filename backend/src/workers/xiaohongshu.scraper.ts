@@ -108,7 +108,7 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
               
               let latestNoteId = card.noteId || item.noteId || item.id;
               if (!latestNoteId && coverUrl) {
-                const coverMatch = coverUrl.match(/\/([a-zA-Z0-9]{24,32})!/);
+                const coverMatch = coverUrl.match(/\/([a-zA-Z0-9]{24,45})!/);
                 if (coverMatch) latestNoteId = coverMatch[1];
               }
 
