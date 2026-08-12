@@ -49,8 +49,32 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
   let statusCode = 500;
 
   try {
+    console.log(`[XHS Scraper] Fetching via Vercel Edge Proxy for raw URL: ${shareUrl}`);
+    const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
+    
+    const headers: Record<string, string> = {};
+    if (process.env.XHS_COOKIE) {
+      headers['x-xhs-cookie'] = process.env.XHS_COOKIE;
+    }
+
+    const response = await axios.get(proxyUrl, { 
+      timeout: 25000,
+      headers
+    });
+    
+    html = response.data;
+    statusCode = response.status;
+    
+    if (response.headers['x-final-url']) {
+      targetUrl = response.headers['x-final-url'];
+      isProfile = targetUrl.includes('/user/profile/');
+      const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
+      if (noteMatch) noteId = noteMatch[1];
+    }
+
+    // Now if it is a profile (either originally or after shortlink resolution), run the xhshow-js logic
     if (isProfile) {
-      console.log(`[XHS Scraper] Profile detected. Extracting latest video via X-s signed API...`);
+      console.log(`[XHS Scraper] Profile detected (${targetUrl}). Extracting latest video via X-s signed API...`);
       const profileIdMatch = targetUrl.match(/\/user\/profile\/([a-zA-Z0-9]+)/);
       if (!profileIdMatch) throw new Error("Could not extract user ID from profile URL");
       const userId = profileIdMatch[1];
@@ -59,7 +83,10 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       const a1Match = cookieStr.match(/(?:^|;\s*)a1=([^;]*)/);
       const a1 = a1Match ? a1Match[1] : "";
       
-      if (!a1) throw new Error("XHS_COOKIE does not contain 'a1'. Cannot generate X-s signature.");
+      if (!a1) {
+        console.warn("[XHS Scraper] XHS_COOKIE does not contain 'a1'. Cannot generate X-s signature.");
+        return null;
+      }
       
       const { Client } = await import('xhshow-js');
       const signer = new Client();
@@ -75,7 +102,7 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       
       const xS = signer.signXS("GET", uri, a1, "xhs-pc-web", params);
       
-      const headers = {
+      const apiHeaders = {
         'Cookie': cookieStr,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
         'Referer': `https://www.xiaohongshu.com/user/profile/${userId}`,
@@ -85,10 +112,10 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       };
       
       const targetApiUrl = `https://www.xiaohongshu.com${uri}?` + new URLSearchParams(params as any).toString();
-      const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(targetApiUrl)}`;
+      const apiProxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(targetApiUrl)}`;
       
-      const response = await axios.get(proxyUrl, { headers, timeout: 25000 });
-      const data = response.data;
+      const apiResponse = await axios.get(apiProxyUrl, { headers: apiHeaders, timeout: 25000 });
+      const data = apiResponse.data;
       
       if (data?.data?.notes) {
         const notes = data.data.notes;
@@ -112,31 +139,12 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
         return null;
       }
     }
-
-    console.log(`[XHS Scraper] Fetching via Vercel Edge Proxy for raw URL: ${shareUrl}`);
-    const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
-    
-    const headers: Record<string, string> = {};
-    if (process.env.XHS_COOKIE) {
-      headers['x-xhs-cookie'] = process.env.XHS_COOKIE;
-    }
-
-    const response = await axios.get(proxyUrl, { 
-      timeout: 25000,
-      headers
-    });
-    
-    html = response.data;
-    statusCode = response.status;
-    
-    if (response.headers['x-final-url']) {
-      targetUrl = response.headers['x-final-url'];
-      const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
-      if (noteMatch) noteId = noteMatch[1];
-    }
   } catch (e: any) {
     console.warn(`[XHS Scraper] Request failed: ${e.message}`);
   }
+
+  // If it was a profile, it should have returned above. If it reaches here, it's a single video note.
+  if (isProfile) return null;
 
   const htmlSnippet = typeof html === 'string' ? html.substring(0, 500) : JSON.stringify(html).substring(0, 500);
 
