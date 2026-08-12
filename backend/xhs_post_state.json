@@ -1,0 +1,754 @@
+{
+  "global": {
+    "appSettings": {
+      "notificationInterval": 30,
+      "prefetchTimeout": 3001,
+      "prefetchRedisExpires": 259200000,
+      "webLabRedisExpires": 864000000,
+      "searchFilterGuideConfig": {
+        "maxDailyShow": 1,
+        "maxTotalShow": 3,
+        "showInterval": 1,
+        "validDays": 15,
+        "autoCloseDelay": 5000
+      },
+      "retryFeeds": true,
+      "worldCupSSRDowngrade": false,
+      "worldCupNightRedirectEnable": "enable",
+      "grayModeConfig": {
+        "global": false,
+        "dateRange": [
+          "2023-08-01 00:00:00",
+          "2023-08-19 23:59:59"
+        ],
+        "greyRule": {
+          "layout": {
+            "enable": false,
+            "pages": [
+              "Explore"
+            ]
+          },
+          "pages": [
+            "Explore"
+          ]
+        },
+        "disableLikeNotes": [
+          "64ce36f7000000000c036ba5"
+        ],
+        "disableSearchHint": false
+      },
+      "NIO": true,
+      "disableBanAlert": "false",
+      "showAdBlockAlert": 0,
+      "aiSearchConfig": {
+        "searchInputImageConfig": {
+          "disableTextWhenAcrossWeb": "联网搜索暂不支持上传图片"
+        },
+        "acrosssWebConfig": {
+          "enable": false,
+          "text": "联网搜索",
+          "icon": "",
+          "disableTextWhenInputImage": "图片搜索暂不支持联网搜索",
+          "offTooltipContent": "",
+          "onTooltipContent": "开启后将搜索全网内容"
+        },
+        "searchHintConfig": {
+          "homePageSearchInputHint": "搜索或输入任何问题"
+        },
+        "sugConfig": {
+          "maxSugCount": 10
+        }
+      },
+      "signConfig": {
+        "url": "https://fe-static.xhscdn.com/as/v2/ds/4c0bab9011f51d35ca6280649340e9b9.js"
+      },
+      "webPlayerConfig": {
+        "videoConfig": {
+          "useR265Video": true
+        },
+        "useHdr": "enabled",
+        "catonRetryDelta": 5000,
+        "timeoutDelay": 5000,
+        "isForceHdrMem": true,
+        "gameConfig": [
+          [
+            4000,
+            -800,
+            [
+              400,
+              400
+            ],
+            [
+              [
+                1600,
+                3200,
+                4800
+              ],
+              [
+                105,
+                110,
+                120
+              ]
+            ]
+          ]
+        ],
+        "normalConfig": [
+          [
+            4000,
+            -3000,
+            [
+              500,
+              500
+            ],
+            [
+              [
+                3000,
+                4000,
+                5000
+              ],
+              [
+                105,
+                110,
+                120
+              ]
+            ]
+          ]
+        ],
+        "abConfig": [
+          [
+            4000,
+            -600,
+            [
+              300,
+              300
+            ],
+            [
+              [
+                1200,
+                2400,
+                3600
+              ],
+              [
+                105,
+                110,
+                120
+              ]
+            ]
+          ]
+        ],
+        "abConfig2": [
+          [
+            4000,
+            -800,
+            [
+              400,
+              400
+            ],
+            [
+              [
+                1600,
+                3200,
+                4800
+              ],
+              [
+                105,
+                110,
+                120
+              ]
+            ]
+          ]
+        ],
+        "bitrateHardCore": [
+          12,
+          8
+        ],
+        "forceMemory": false,
+        "bitrate264HardCore": [
+          8,
+          8
+        ],
+        "closeMultiChannelStream": false
+      },
+      "pcRelatedSearch": {
+        "useWidget": "enable"
+      },
+      "liveFeatureSwitchConfig": {
+        "worldCupGiftCall": {
+          "giftPanel": true,
+          "recharge": true,
+          "giftDock": true,
+          "pkBar": true,
+          "bigGiftEffect": true,
+          "giftResourceScatterConfig": {
+            "minDelaySeconds": 1,
+            "maxDelaySeconds": 10
+          }
+        },
+        "worldCupMultiTab": {
+          "situation": true,
+          "lineup": true,
+          "stats": true,
+          "schedule": true,
+          "highlight": true
+        },
+        "hardwareTierDegrade": {
+          "disableHardwareTierDegrade": false
+        },
+        "liveCommonSwitch": {
+          "heartReportByHttp": true
+        }
+      },
+      "pcEds": "enable",
+      "homefeedInitUseEdithInt": "enable",
+      "worldCupOfflineSetting": {
+        "worldcupMenuSwitchTime": "1785081600000",
+        "oneboxMainVenueSwitchTime": "1784822400000",
+        "oneboxTeamPlayerSwitchTime": "1785859200000",
+        "oneboxOtherSwitchTime": "1784563200000"
+      }
+    },
+    "supportWebp": false,
+    "serverTime": 1785590483879,
+    "grayMode": false,
+    "referer": "",
+    "pwaAddDesktopPrompt": null,
+    "firstVisitUrl": null,
+    "easyAccessModalVisible": {
+      "addDesktopGuide": false,
+      "collectGuide": false,
+      "keyboardList": false,
+      "miniWindowGuide": false
+    },
+    "currentLayout": "default",
+    "fullscreenLocking": false,
+    "feedbackPopupVisible": false,
+    "trackFps": false,
+    "supportAVIF": false,
+    "imgFormatCollect": {
+      "ssr": [
+        "jpg"
+      ],
+      "csr": [
+        "jpg"
+      ]
+    },
+    "isUndertake": false,
+    "aiSearchMode": "small",
+    "sideCollapse": false,
+    "currentNoteColumnWidthInAIFeeds": null,
+    "webLabData": null,
+    "ssrCtxHostName": "www.xiaohongshu.com",
+    "hasWebSession": false,
+    "webGlobalConfig": {
+      "revisitPopMaxBookingThreshold": "5",
+      "revisitIsWorldcup": "true",
+      "revisitOpenMainVenueThreshold": "3",
+      "revisitPopupExposureTimeout": "10",
+      "revisitOpenMainVenueStayDuration": "1",
+      "revisitStayDuration": "5",
+      "revisitOneboxHitThreshold": "2",
+      "revisitFrequencyControlDays": "10",
+      "revisitEdgeWebstoreUrl": "",
+      "revisitChromeWebstoreUrl": "",
+      "revisitExtensionUrl": "https://fe-video-qc.xhscdn.com/fe-platform-file/104101b8321skg1genu06cgm8b89g0000000001evh3apk",
+      "revisitChromeDownloadUrl": "https://fe-video-qc.xhscdn.com/fe-platform-file/104101b8322bt6jra7ke690nvj5qg0000000003teg89ta",
+      "revisitEdgeDownloadUrl": "https://fe-video-qc.xhscdn.com/fe-platform-file/104101b832243klv5ne06cgm8b89g0000000001fdjptus.zip",
+      "revisitEdgeStep3Text": "将下载的 Zip 文件拖入浏览器，安装成功。",
+      "revisitEdgeStep3Url": "https://fe-platform.xhscdn.com/platform/104101l0322br9oipna0690nvj5qg0000000003qmqa3am",
+      "extensionScheduleRefreshTime": "5",
+      "matchNotificationEnabled": "false",
+      "worldcupMenuSwitchTime": "0",
+      "oneboxMainVenueSwitchTime": "0",
+      "oneboxTeamPlayerSwitchTime": "0",
+      "oneboxOtherSwitchTime": "0"
+    }
+  },
+  "user": {
+    "loggedIn": false,
+    "activated": false,
+    "userInfo": {
+      "userId": null,
+      "redId": null
+    },
+    "follow": [],
+    "userPageData": {},
+    "activeTab": {
+      "key": 0,
+      "index": 0,
+      "query": "note",
+      "label": "笔记",
+      "lock": false,
+      "subTabs": null,
+      "feedType": 0
+    },
+    "notes": [
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    "isFetchingNotes": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "tabScrollTop": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "userFetchingStatus": null,
+    "userNoteFetchingStatus": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "bannedInfo": {
+      "userId": "",
+      "serverBanned": false,
+      "code": 0,
+      "showAlert": false,
+      "reason": "",
+      "api": ""
+    },
+    "firstFetchNote": true,
+    "noteQueries": [
+      {
+        "num": 30,
+        "cursor": "",
+        "userId": "",
+        "hasMore": true,
+        "page": 1
+      },
+      {
+        "num": 30,
+        "cursor": "",
+        "userId": "",
+        "hasMore": true,
+        "page": 1
+      },
+      {
+        "num": 30,
+        "cursor": "",
+        "userId": "",
+        "hasMore": true,
+        "page": 1
+      },
+      {
+        "num": 30,
+        "cursor": "",
+        "userId": "",
+        "hasMore": true,
+        "page": 1
+      },
+      {
+        "num": 30,
+        "cursor": "",
+        "userId": "",
+        "hasMore": true,
+        "page": 1
+      }
+    ],
+    "pageScrolled": 0,
+    "activeSubTab": null,
+    "isOwnBoard": true
+  },
+  "board": {
+    "boardListData": {},
+    "isLoadingBoardList": false,
+    "boardDetails": {},
+    "boardFeedsMap": {},
+    "boardPageStatus": "pending",
+    "userBoardList": [],
+    "errorInfo": {
+      "code": 0,
+      "message": ""
+    }
+  },
+  "UserFileStore": {},
+  "login": {
+    "loginMethod": null,
+    "from": "",
+    "showLogin": false,
+    "agreed": false,
+    "showTooltip": false,
+    "loginData": {
+      "phone": "",
+      "authCode": ""
+    },
+    "errors": {
+      "phone": "",
+      "authCode": ""
+    },
+    "qrData": {
+      "backend": {
+        "qrId": "",
+        "code": ""
+      },
+      "image": "",
+      "status": "un_scanned"
+    },
+    "counter": null,
+    "inAntiSpamChecking": false,
+    "recentFrom": "",
+    "isObPagesVisible": false,
+    "obPageFillInProgress": null,
+    "verificationCodeStartTime": 0,
+    "ageSelectValue": "21",
+    "genderSelectValue": null,
+    "inSpamCheckSendAuthCode": false,
+    "isRegFusing": false,
+    "loginStep": 0,
+    "isLogining": false,
+    "loginPadMountedTime": 0,
+    "loginTips": "登录后推荐更懂你的笔记",
+    "isRiskUser": false,
+    "closeLoginModal": false,
+    "traceId": "",
+    "inAntiSpamCheckLogin": false,
+    "inAntiSpamCheckSecurityCode": false,
+    "inAntiSpamCheckQrcodeStatus": false
+  },
+  "feed": {
+    "query": {
+      "cursorScore": "",
+      "num": 30,
+      "refreshType": 1,
+      "noteIndex": 0,
+      "unreadBeginNoteId": "",
+      "unreadEndNoteId": "",
+      "unreadNoteCount": 0,
+      "category": "homefeed_recommend",
+      "searchKey": "",
+      "needNum": 20,
+      "imageFormats": [],
+      "needFilterImage": false
+    },
+    "isFetching": false,
+    "isError": false,
+    "feedsWrapper": null,
+    "undertakeNote": null,
+    "undertakeNoteError": null,
+    "feeds": [],
+    "currentChannel": "homefeed_recommend",
+    "unreadInfo": {
+      "cachedFeeds": [],
+      "unreadBeginNoteId": "",
+      "unreadEndNoteId": "",
+      "unreadNoteCount": 0,
+      "timestamp": 0
+    },
+    "validIds": {
+      "noteIds": []
+    },
+    "mfStatistics": {
+      "timestamp": 0,
+      "visitTimes": 0,
+      "readFeedCount": 0
+    },
+    "channels": null,
+    "isResourceDisplay": false,
+    "isActivityEnd": false,
+    "cancelFeedRequest": false,
+    "prefetchId": null,
+    "mfRequestMetaData": {
+      "start": null,
+      "lasting": null
+    },
+    "placeholderFeeds": [],
+    "feedsCacheLogInfo": {
+      "flag": "unknown",
+      "errorCode": 0,
+      "isHitMfCache": false,
+      "SSRDocumentChecked": false,
+      "SSRDocumentCheckedSuccess": false
+    },
+    "isUsingPlaceholderFeeds": false,
+    "placeholderFeedsConsumed": false,
+    "isReplace": false,
+    "isFirstSuccessFetched": false,
+    "imgNoteFilterStatus": "unchecked",
+    "ssrRequestStatus": 5,
+    "ssrRenderExtra": "",
+    "undertakeNoteOpen": false,
+    "undertakeNoteId": "",
+    "undertakeXsecToken": "",
+    "undertakeNotePresented": false,
+    "isUndertakeScene": false,
+    "lastClosedUndertakeNoteIdForPageEnd": "",
+    "exploreVisibleStartTime": null,
+    "exploreNoteOverlayOpen": false
+  },
+  "layout": {
+    "layoutInfoReady": false,
+    "columns": 6,
+    "columnsWithSidebar": 6,
+    "gap": {
+      "vertical": 12,
+      "horizontal": 24
+    },
+    "columnWidth": 0,
+    "interactionWidth": 0,
+    "widthType": "normal",
+    "bufferRow": 3
+  },
+  "aiAbExp": {},
+  "search": {
+    "state": "auto",
+    "searchContext": {
+      "keyword": "",
+      "page": 1,
+      "pageSize": 20,
+      "searchId": "",
+      "sort": "general",
+      "noteType": 0,
+      "extFlags": [],
+      "filters": [],
+      "geo": ""
+    },
+    "feeds": [],
+    "searchValue": "",
+    "suggestions": [],
+    "userInputSugTrigger": "",
+    "keywordFrom": 2,
+    "tagSearch": [],
+    "activeTagSearch": null,
+    "searchFeedsWrapper": null,
+    "currentSearchType": "all",
+    "hintWord": {
+      "title": "搜索小红书",
+      "searchWord": "小红书网页版",
+      "hintWordRequestId": "default",
+      "type": "default"
+    },
+    "sugType": null,
+    "queryTrendingInfo": null,
+    "queryTrendingParams": {
+      "source": "null",
+      "searchType": "trend",
+      "lastQuery": "",
+      "lastQueryTime": 0,
+      "wordRequestSituation": "FIRST_ENTER",
+      "hintWord": "",
+      "hintWordType": "",
+      "hintWordRequestId": ""
+    },
+    "queryTrendingFetched": false,
+    "oneboxInfo": {},
+    "hasMore": true,
+    "firstEnterSearchPage": true,
+    "userLists": [],
+    "fetchUserListsStatus": "auto",
+    "isFetchingUserLists": false,
+    "hasMoreUser": true,
+    "searchCplId": null,
+    "wordRequestId": null,
+    "historyList": [],
+    "searchPageHasPrevRoute": false,
+    "searchHotSpots": [],
+    "hotspotQueryNoteStep": "display",
+    "hotspotQueryNoteIndex": 0,
+    "canShowHotspotQueryNote": true,
+    "forceHotspotSearch": false,
+    "searchCardHotSpots": [],
+    "isHotspotSearch": false,
+    "filters": null,
+    "activeFilters": [],
+    "filterParams": null,
+    "sessionId": "",
+    "rootSearchId": "",
+    "searchUserContext": {
+      "keyword": "",
+      "searchId": "",
+      "page": 1,
+      "pageSize": 15,
+      "bizType": "web_search_user",
+      "requestId": ""
+    },
+    "aiSearchAcrosssWeb": false,
+    "aiAcrosssWebActivedFromHeaderInput": false,
+    "aiWendianActive": false,
+    "aiSearchImageList": [],
+    "aiSearchSelectedNotes": [],
+    "aiSearchTriggerMode": "normal",
+    "lastWendianSearchId": "",
+    "isSearchFromAiInput": false,
+    "currentUserMessageId": null,
+    "currentSearchRoundId": null,
+    "hasPreFetchedNotes": false,
+    "currentAnchorId": -1,
+    "isRoundSwitching": false,
+    "requestDqaInstant": false,
+    "dqaInstantBaseInfo": null,
+    "dqaInstantElements": null,
+    "isDqaInstantDirectRender": false,
+    "dqaInstantMessageId": null,
+    "dqaOneboxScene": null,
+    "dqaOneboxSearchKeyword": null,
+    "dqaInstantLastSearchId": null
+  },
+  "conversation": {
+    "activeConversation": null,
+    "historyQuerys": [],
+    "currentActiveRoundId": null,
+    "isInitializing": false,
+    "coordinator": null,
+    "historyLoadError": false,
+    "currentScene": "onebox"
+  },
+  "traceSourceStore": {
+    "traceSourceInfo": null,
+    "traceSourceKeywordInfo": null,
+    "drawerPriorityMap": {
+      "traceSource": 10,
+      "traceSourceKeyword": 10,
+      "complexSource": 10
+    }
+  },
+  "AiSugDataForChat": {
+    "guideWordsData": null
+  },
+  "activity": {
+    "isOpen": false,
+    "currentUrl": "",
+    "entryList": []
+  },
+  "sportSearchOnebox": {
+    "oneboxData": null,
+    "trailerReservedMap": {}
+  },
+  "worldCup26": {
+    "accessData": null,
+    "isRedDotVisible": false
+  },
+  "note": {
+    "prevRouteData": {},
+    "prevRoute": "Empty",
+    "commentTarget": {},
+    "isImgFullscreen": false,
+    "gotoPage": "",
+    "firstNoteId": "",
+    "autoOpenNote": false,
+    "topCommentId": "",
+    "noteDetailMap": {},
+    "serverRequestInfo": {
+      "state": "success",
+      "errorCode": 0,
+      "errMsg": ""
+    },
+    "volume": 0,
+    "recommendVideoMap": {},
+    "videoFeedType": "note_source",
+    "rate": 1,
+    "currentNoteId": null,
+    "forceScrollToComment": false,
+    "mediaWidth": 450,
+    "noteHeight": 800,
+    "redFirstNoteId": ""
+  },
+  "nioStore": {
+    "collectionListDataSource": null,
+    "error": null
+  },
+  "liveAbExp": {},
+  "redAbExp": {},
+  "chatData": {
+    "error": null
+  },
+  "groupData": {
+    "error": null
+  },
+  "redBadge": {
+    "chatUnread": 0,
+    "groupUnread": 0,
+    "isUnreadInitialized": false
+  },
+  "red": {
+    "query": {
+      "cursorScore": "",
+      "imageFormats": "",
+      "bizParams": "",
+      "scene": "feature_feed",
+      "num": 30,
+      "refreshType": 1,
+      "noteIndex": 0,
+      "unreadBeginNoteId": "",
+      "unreadEndNoteId": "",
+      "unreadNoteCount": 0,
+      "searchKey": "",
+      "needNum": 20
+    },
+    "isFetching": false,
+    "isError": false,
+    "feedsWrapper": null,
+    "feeds": [],
+    "currentChannel": "homefeed_recommend",
+    "channels": null,
+    "cancelFeedRequest": false,
+    "prefetchId": "",
+    "mfRequestMetaData": {
+      "start": null,
+      "lasting": null
+    },
+    "isReplace": false,
+    "isFirstSuccessFetched": false,
+    "ssrRequestStatus": 5,
+    "ssrRenderExtra": ""
+  },
+  "liveList": {
+    "query": {
+      "cursorScore": "0",
+      "source": 13,
+      "category": "0",
+      "topRoomIds": [],
+      "preSource": "",
+      "extraInfo": "",
+      "size": 27
+    },
+    "isError": false,
+    "categories": null,
+    "liveList": [],
+    "isReplace": false,
+    "isFetching": false,
+    "isActivityEnd": false,
+    "currentChannel": "0",
+    "liveListWrapper": null,
+    "cancelFeedRequest": false,
+    "isFirstSuccessFetched": false,
+    "noMore": false
+  },
+  "notification": {
+    "isFetching": false,
+    "activeTabKey": -1,
+    "notificationCount": {
+      "unreadCount": 0,
+      "mentions": 0,
+      "likes": 0,
+      "connections": 0
+    },
+    "notificationMap": {
+      "mentions": {
+        "messageList": [],
+        "hasMore": true,
+        "cursor": ""
+      },
+      "likes": {
+        "messageList": [],
+        "hasMore": true,
+        "cursor": ""
+      },
+      "connections": {
+        "messageList": [],
+        "hasMore": true,
+        "cursor": ""
+      }
+    }
+  }
+}

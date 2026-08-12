@@ -327,6 +327,10 @@ export default function UsersPage() {
                 >
                   Create User
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
       <ToastContainer toasts={toasts} onClose={removeToast} />
       <ConfirmModal
