@@ -741,7 +741,7 @@ export class SyncService {
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
       try {
         if (isXhsOrRedNote) {
-          await downloadXiaohongshuVideo(videoUrl, tempPath);
+          await downloadXiaohongshuVideo(videoUrl, tempPath, targetUrl || video.url);
         } else {
           await downloadTikTokVideo(videoUrl, tempPath);
         }

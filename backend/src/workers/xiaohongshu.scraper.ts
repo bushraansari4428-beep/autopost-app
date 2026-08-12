@@ -99,9 +99,17 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
         }
 
         // Locate video stream URL in JSON
-        const videoObj = noteObj.video?.media?.stream?.h264?.[0] ?? noteObj.video?.media?.stream?.av1?.[0] ?? noteObj.video;
-        if (videoObj?.masterUrl || videoObj?.url || videoObj?.originVideoKey) {
-          extractedMp4 = videoObj.masterUrl || videoObj.url || videoObj.originVideoKey;
+        const h264Url = noteObj.video?.media?.stream?.h264?.[0]?.masterUrl;
+        const av1Url = noteObj.video?.media?.stream?.av1?.[0]?.masterUrl;
+        const originKey = noteObj.video?.consumer?.originVideoKey || noteObj.video?.originVideoKey || noteObj.video?.media?.stream?.h264?.[0]?.originVideoKey;
+
+        if (h264Url && (h264Url.includes('/stream/') || h264Url.includes('.mp4'))) {
+          extractedMp4 = h264Url;
+        } else if (av1Url && (av1Url.includes('/stream/') || av1Url.includes('.mp4'))) {
+          extractedMp4 = av1Url;
+        } else if (originKey) {
+          const cleanKey = originKey.replace(/^\//, '');
+          extractedMp4 = `https://sns-video-bd.xhscdn.com/${cleanKey}`;
         }
       } catch (e) {
         console.warn(`Error parsing XHS initial state JSON:`, e);
@@ -109,12 +117,17 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
     }
 
     // Regex fallback if state parsing didn't find mp4
-    if (!extractedMp4 && !isProfile) {
-      const urlMatch = html.match(/"(?:masterUrl|originVideoKey|urlDefault|backupUrl|url)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*(?:sns-video-[^"\\]*|\.mp4[^"\\]*))"/i) ||
-                       html.match(/(https?:\/\/[^"'\s\\]*sns-video-[^"'\s\\]*)/i) ||
-                       html.match(/(https?:\/\/[^"'\s\\]*\.mp4[^"'\s\\]*)/i);
+    if ((!extractedMp4 || (!extractedMp4.includes('/stream/') && !extractedMp4.includes('.mp4'))) && !isProfile) {
+      const urlMatch = html.match(/"(?:masterUrl|originVideoKey|urlDefault|backupUrl)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*(?:sns-video-[^"\\]*|\.mp4[^"\\]*))"/i) ||
+                       html.match(/(stream\/[a-zA-Z0-9_\-\/]+\.mp4)/i) ||
+                       html.match(/(spectrum\/[a-zA-Z0-9_\-\/]+\.mp4)/i);
       if (urlMatch && urlMatch[1]) {
-        extractedMp4 = urlMatch[1];
+        const val = urlMatch[1].replace(/\\\//g, '/');
+        if (val.startsWith('http')) {
+          extractedMp4 = val;
+        } else {
+          extractedMp4 = `https://sns-video-bd.xhscdn.com/${val.replace(/^\//, '')}`;
+        }
       }
     }
   } catch (err: any) {
@@ -138,6 +151,11 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       extractedMp4 = `https://sns-video-bd.xhscdn.com/${extractedMp4.replace(/^\//, '')}`;
     }
 
+    // If bare domain without stream path, reset to fallback
+    if (!extractedMp4.includes('/stream/') && !extractedMp4.includes('.mp4') && !extractedMp4.includes('/spectrum/')) {
+      extractedMp4 = targetUrl;
+    }
+
     return {
       id: noteId,
       title: extractedTitle || `RedNote Video ${noteId}`,
@@ -154,79 +172,71 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
 /**
  * Downloads RedNote/Xiaohongshu MP4 locally with anti-403 CDN headers.
  */
-export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: string): Promise<string> {
-  const headerOptions = [
-    {
-      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-      'Accept': '*/*',
-    },
-    {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': '*/*',
-    },
-    {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-      'Referer': 'https://www.rednote.com/',
-      'Accept': '*/*',
-    },
-    {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Referer': 'https://www.xiaohongshu.com/',
-      'Accept': '*/*'
-    }
-  ];
+export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: string, pageUrl?: string): Promise<string> {
+  const targetPage = pageUrl || (videoUrl.startsWith('http') && !videoUrl.includes('xhscdn.com') ? videoUrl : null);
 
-  let lastErr: any = null;
-  for (const headers of headerOptions) {
-    try {
-      const response = await axios({
-        method: 'GET',
-        url: videoUrl,
-        responseType: 'stream',
-        headers,
-        timeout: 20000
-      });
+  // If videoUrl is a valid stream URL, try axios first
+  if (videoUrl && (videoUrl.includes('/stream/') || videoUrl.includes('.mp4') || videoUrl.includes('/spectrum/'))) {
+    const headerOptions = [
+      {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Referer': 'https://www.xiaohongshu.com/',
+        'Accept': '*/*'
+      },
+      {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+        'Referer': 'https://www.rednote.com/',
+        'Accept': '*/*'
+      }
+    ];
 
-      const writer = fs.createWriteStream(outputPath);
-      response.data.pipe(writer);
-
-      return await new Promise((resolve, reject) => {
-        writer.on('finish', () => resolve(outputPath));
-        writer.on('error', (err) => {
-          writer.close();
-          reject(err);
+    for (const headers of headerOptions) {
+      try {
+        const response = await axios({
+          method: 'GET',
+          url: videoUrl,
+          responseType: 'stream',
+          headers,
+          timeout: 20000
         });
-      });
-    } catch (e) {
-      lastErr = e;
+
+        const writer = fs.createWriteStream(outputPath);
+        response.data.pipe(writer);
+
+        await new Promise((resolve, reject) => {
+          writer.on('finish', () => resolve(outputPath));
+          writer.on('error', (err) => {
+            writer.close();
+            reject(err);
+          });
+        });
+
+        if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
+          return outputPath;
+        }
+      } catch (e) {}
     }
   }
 
-  // Fallback to yt-dlp stream download with anti-403 headers if axios headers failed
-  try {
-    const execPromise = promisify(exec);
-    let ytCmd = process.platform === 'win32' ? 'yt-dlp.exe' : './yt-dlp';
-    const linuxPath = fs.existsSync('./yt-dlp') ? './yt-dlp' : (fs.existsSync('/opt/render/project/src/yt-dlp') ? '/opt/render/project/src/yt-dlp' : 'yt-dlp');
-    if (process.platform !== 'win32' && fs.existsSync(linuxPath)) {
-      try { fs.chmodSync(linuxPath, '755'); } catch (_) {}
-      ytCmd = `"${linuxPath}"`;
+  // Fallback to yt-dlp stream download on pageUrl or videoUrl
+  const urlToFetch = targetPage || videoUrl;
+  if (urlToFetch) {
+    try {
+      const execPromise = promisify(exec);
+      let ytCmd = process.platform === 'win32' ? 'yt-dlp.exe' : './yt-dlp';
+      const linuxPath = fs.existsSync('./yt-dlp') ? './yt-dlp' : (fs.existsSync('/opt/render/project/src/yt-dlp') ? '/opt/render/project/src/yt-dlp' : 'yt-dlp');
+      if (process.platform !== 'win32' && fs.existsSync(linuxPath)) {
+        try { fs.chmodSync(linuxPath, '755'); } catch (_) {}
+        ytCmd = `"${linuxPath}"`;
+      }
+      await execPromise(`${ytCmd} --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -o "${outputPath}" "${urlToFetch}"`);
+      if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
+        return outputPath;
+      }
+    } catch (ytErr: any) {
+      console.warn(`yt-dlp stream download fallback warning: ${ytErr.message}`);
     }
-    await execPromise(`${ytCmd} --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" --add-header "Referer: https://www.xiaohongshu.com/" -o "${outputPath}" "${videoUrl}"`);
-    if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
-      return outputPath;
-    }
-  } catch (ytErr: any) {
-    console.warn(`yt-dlp stream download fallback warning: ${ytErr.message}`);
   }
 
-  // Fallback to curl with anti-403 headers
-  try {
-    const execPromise = promisify(exec);
-    await execPromise(`curl -L -s -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" -H "Referer: https://www.xiaohongshu.com/" -o "${outputPath}" "${videoUrl}"`);
-    if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
-      return outputPath;
-    }
-  } catch (curlErr) {}
-
-  throw lastErr || new Error('Failed to download Xiaohongshu video after multiple header attempts');
+  throw new Error('Failed to download Xiaohongshu video after multiple header attempts');
 }
