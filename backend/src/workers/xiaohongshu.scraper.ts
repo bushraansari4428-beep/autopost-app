@@ -48,6 +48,47 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
   let extractedTitle = `RedNote Video ${noteId}`;
   let extractedMp4: string | undefined = undefined;
 
+  // Option 1: Vercel Edge Proxy Bypass (Routes through frontend to bypass Render Datacenter IP block)
+  if (!isProfile) {
+    try {
+      console.log(`[XHS Scraper] Attempting Vercel Edge Proxy WAF Bypass for: ${targetUrl}`);
+      const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(targetUrl)}`;
+      const proxyRes = await axios.get(proxyUrl, { timeout: 20000 });
+      
+      const proxyHtml = proxyRes.data;
+      if (typeof proxyHtml === 'string' && proxyHtml.includes('window.__INITIAL_STATE__')) {
+        console.log(`[XHS Scraper] Edge Proxy bypass successful! Captured INITIAL_STATE.`);
+        // Temporarily override targetUrl's html parsing below by feeding it the proxy html
+        const stateMatch = proxyHtml.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});?</s);
+        if (stateMatch && stateMatch[1]) {
+          const state = JSON.parse(stateMatch[1].replace(/undefined/g, 'null'));
+          const noteMap = state?.note?.noteDetailMap ?? state?.noteData ?? {};
+          const firstNoteKey = Object.keys(noteMap)[0] || noteId;
+          const noteObj = noteMap[firstNoteKey]?.note ?? noteMap[firstNoteKey] ?? {};
+          
+          const h264Url = noteObj.video?.media?.stream?.h264?.[0]?.masterUrl;
+          const av1Url = noteObj.video?.media?.stream?.av1?.[0]?.masterUrl;
+          
+          if (h264Url) extractedMp4 = h264Url;
+          else if (av1Url) extractedMp4 = av1Url;
+          
+          if (extractedMp4) {
+            return {
+              id: noteId,
+              title: noteObj.title || extractedTitle,
+              description: noteObj.desc || extractedTitle,
+              url: targetUrl,
+              mp4Url: extractedMp4,
+              timestamp: Math.floor(Date.now() / 1000)
+            };
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[XHS Scraper] Edge Proxy Bypass failed: ${e.message}. Falling back to standard Native HTTP...`);
+    }
+  }
+
   try {
     const response = await axios({
       method: 'GET',
