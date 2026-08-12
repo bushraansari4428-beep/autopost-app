@@ -444,7 +444,7 @@ export class SyncService {
         }
       }
       
-      if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM') {
+      if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM' && source.platform !== 'XIAOHONGSHU' && source.platform !== 'KUAISHOU') {
         if (source.platform === 'TIKTOK') {
           this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
           const tkVideo = await this.extractTikTokVideo(source.url);
@@ -679,7 +679,7 @@ export class SyncService {
       } else {
         throw new Error(`Failed to extract MP4 URL from Kuaishou HTML.`);
       }
-    } else if (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote') || targetUrl.includes('xhs')) {
+    } else if (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink') || targetUrl.includes('rednote') || targetUrl.includes('xhs')) {
        this.logger.log(`Xiaohongshu / RedNote video stream extraction for URL: ${targetUrl}`);
        const xhsRes = await extractXiaohongshuVideo(targetUrl);
        if (xhsRes && xhsRes.mp4Url) {
@@ -731,7 +731,7 @@ export class SyncService {
     let fbData: any;
 
     const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
-    const isXhsOrRedNote = targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote') || videoUrl.includes('xhs') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu');
+    const isXhsOrRedNote = targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink') || targetUrl.includes('rednote') || videoUrl.includes('xhs') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu');
 
     const sourcePlatform = uploadHistory.video?.source?.platform;
     const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl);
