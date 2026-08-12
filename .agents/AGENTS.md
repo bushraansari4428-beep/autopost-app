@@ -17,3 +17,8 @@
   - **NO yt-dlp**: Do not use `yt-dlp` for Xiaohongshu. XHS blocks `yt-dlp` due to `xsec_token` and captcha requirements.
   - **Native HTTP Only**: You must rely exclusively on Native HTTP requests (`axios`/`fetch`) combined with RegEx parsing of the `__INITIAL_STATE__` JSON object to extract video streams.
 - **URL Normalization**: Ensure all extracted video URLs are normalized (e.g., adding missing `https://` protocols) before saving to the database.
+
+## 4. Scraper Debugging & WAF Loop Prevention
+- **Anti-Loop Policy**: If an HTTP scraping request returns "No videos found" or `null`, DO NOT immediately assume your RegEx parsing is broken and DO NOT rewrite the code in a loop.
+- **Mandatory WAF Check**: You MUST first log the HTTP status code and the first 500 characters of the raw HTML response to analyze it.
+- **Security Bypass Strategy**: If the raw HTML indicates a WAF block (e.g., `<title>Verify</title>`, Captcha, 403 Forbidden, or missing `__INITIAL_STATE__`), acknowledge that it is a security block. You must then implement a bypass strategy such as reading the `XHS_COOKIE` environment variable and injecting it into the `Cookie:` header, rather than pointlessly tweaking Axios parameters or Regex logic.
