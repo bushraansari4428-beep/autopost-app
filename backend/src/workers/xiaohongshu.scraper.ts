@@ -102,16 +102,21 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
                 if (coverMatch) latestNoteId = coverMatch[1];
               }
 
+              let extractedNote: any = null;
               if (latestNoteId) {
                 const newNoteUrl = `https://www.xiaohongshu.com/explore/${latestNoteId}${xsecToken ? `?xsec_token=${xsecToken}&xsec_source=pc_feed` : ''}`;
                 console.log(`Discovered latest note (${title}) from RedNote profile. Extracting note...`);
-                const extractedNote = await extractXiaohongshuVideo(newNoteUrl);
-                if (extractedNote) return extractedNote;
-              } else if (title) {
+                extractedNote = await extractXiaohongshuVideo(newNoteUrl);
+              }
+
+              if (extractedNote && extractedNote.mp4Url && extractedNote.mp4Url !== targetUrl) {
+                return extractedNote;
+              } else if (title || coverUrl) {
+                console.log(`Using profile card metadata for RedNote video (${title})...`);
                 return {
-                  id: noteId,
-                  title,
-                  description: title,
+                  id: latestNoteId || noteId,
+                  title: title || `RedNote Video ${latestNoteId || noteId}`,
+                  description: title || `RedNote Video ${latestNoteId || noteId}`,
                   url: targetUrl,
                   mp4Url: coverUrl || targetUrl,
                   timestamp: Math.floor(Date.now() / 1000)
@@ -203,13 +208,12 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
 }
 
 /**
- * Downloads RedNote/Xiaohongshu MP4 locally with anti-403 CDN headers.
+ * Downloads RedNote/Xiaohongshu MP4 or media asset locally with anti-403 CDN headers via Native HTTP.
  */
 export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: string, pageUrl?: string): Promise<string> {
-  const targetPage = pageUrl || (videoUrl.startsWith('http') && !videoUrl.includes('xhscdn.com') ? videoUrl : null);
+  const targetUrlToDownload = videoUrl && videoUrl.startsWith('http') ? videoUrl : (pageUrl || videoUrl);
 
-  // If videoUrl is a valid stream URL, try axios first
-  if (videoUrl && (videoUrl.includes('/stream/') || videoUrl.includes('.mp4') || videoUrl.includes('/spectrum/'))) {
+  if (targetUrlToDownload && targetUrlToDownload.startsWith('http')) {
     const headerOptions = [
       {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -227,10 +231,10 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
       try {
         const response = await axios({
           method: 'GET',
-          url: videoUrl,
+          url: targetUrlToDownload,
           responseType: 'stream',
           headers,
-          timeout: 20000
+          timeout: 25000
         });
 
         const writer = fs.createWriteStream(outputPath);
@@ -247,29 +251,11 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
         if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
           return outputPath;
         }
-      } catch (e) {}
+      } catch (e: any) {
+        console.warn(`Native HTTP download attempt failed for ${targetUrlToDownload}: ${e.message}`);
+      }
     }
   }
 
-  // Fallback to yt-dlp stream download on pageUrl or videoUrl
-  const urlToFetch = targetPage || videoUrl;
-  if (urlToFetch) {
-    try {
-      const execPromise = promisify(exec);
-      let ytCmd = process.platform === 'win32' ? 'yt-dlp.exe' : './yt-dlp';
-      const linuxPath = fs.existsSync('./yt-dlp') ? './yt-dlp' : (fs.existsSync('/opt/render/project/src/yt-dlp') ? '/opt/render/project/src/yt-dlp' : 'yt-dlp');
-      if (process.platform !== 'win32' && fs.existsSync(linuxPath)) {
-        try { fs.chmodSync(linuxPath, '755'); } catch (_) {}
-        ytCmd = `"${linuxPath}"`;
-      }
-      await execPromise(`${ytCmd} --add-header "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -o "${outputPath}" "${urlToFetch}"`);
-      if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
-        return outputPath;
-      }
-    } catch (ytErr: any) {
-      console.warn(`yt-dlp stream download fallback warning: ${ytErr.message}`);
-    }
-  }
-
-  throw new Error('Failed to download Xiaohongshu video after multiple header attempts');
+  throw new Error('Failed to download Xiaohongshu video asset via Native HTTP');
 }
