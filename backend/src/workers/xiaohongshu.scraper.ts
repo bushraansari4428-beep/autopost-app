@@ -49,6 +49,70 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
   let statusCode = 500;
 
   try {
+    if (isProfile) {
+      console.log(`[XHS Scraper] Profile detected. Extracting latest video via X-s signed API...`);
+      const profileIdMatch = targetUrl.match(/\/user\/profile\/([a-zA-Z0-9]+)/);
+      if (!profileIdMatch) throw new Error("Could not extract user ID from profile URL");
+      const userId = profileIdMatch[1];
+      
+      const cookieStr = process.env.XHS_COOKIE || "";
+      const a1Match = cookieStr.match(/(?:^|;\s*)a1=([^;]*)/);
+      const a1 = a1Match ? a1Match[1] : "";
+      
+      if (!a1) throw new Error("XHS_COOKIE does not contain 'a1'. Cannot generate X-s signature.");
+      
+      const { Client } = await import('xhshow-js');
+      const signer = new Client();
+      const uri = "/api/sns/web/v1/user_posted";
+      const params = {
+        num: 30,
+        cursor: "",
+        user_id: userId,
+        image_formats: "jpg,webp,avif",
+        xsec_token: "",
+        xsec_source: "pc_user"
+      };
+      
+      const xS = signer.signXS("GET", uri, a1, "xhs-pc-web", params);
+      
+      const headers = {
+        'Cookie': cookieStr,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Referer': `https://www.xiaohongshu.com/user/profile/${userId}`,
+        'x-s': xS,
+        'x-t': String(Date.now()),
+        'x-s-common': xS
+      };
+      
+      const targetApiUrl = `https://www.xiaohongshu.com${uri}?` + new URLSearchParams(params as any).toString();
+      const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(targetApiUrl)}`;
+      
+      const response = await axios.get(proxyUrl, { headers, timeout: 25000 });
+      const data = response.data;
+      
+      if (data?.data?.notes) {
+        const notes = data.data.notes;
+        const latestVideo = notes.find((n: any) => n.type === 'video' || n.note_type === 2); // 2 might be video in some schemas
+        if (latestVideo) {
+          const newNoteId = latestVideo.note_id || latestVideo.id;
+          const newXsecToken = latestVideo.xsec_token || "";
+          
+          const newNoteUrl = `https://www.xiaohongshu.com/explore/${newNoteId}${newXsecToken ? `?xsec_token=${newXsecToken}&xsec_source=pc_feed` : ''}`;
+          console.log(`[XHS Scraper] Successfully found latest video Note ID: ${newNoteId}`);
+          
+          const extractedNote = await extractXiaohongshuVideo(newNoteUrl);
+          if (extractedNote && extractedNote.mp4Url && extractedNote.mp4Url !== targetUrl) {
+            return extractedNote;
+          }
+        }
+        console.warn("[XHS Scraper] No valid video notes found in user's profile feed.");
+        return null;
+      } else {
+        console.warn("[XHS Scraper] Unexpected API response:", JSON.stringify(data).substring(0, 200));
+        return null;
+      }
+    }
+
     console.log(`[XHS Scraper] Fetching via Vercel Edge Proxy for raw URL: ${shareUrl}`);
     const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
     
@@ -67,13 +131,11 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
     
     if (response.headers['x-final-url']) {
       targetUrl = response.headers['x-final-url'];
-      isProfile = targetUrl.includes('/user/profile/');
       const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
       if (noteMatch) noteId = noteMatch[1];
     }
   } catch (e: any) {
-    console.warn(`[XHS Scraper] Vercel Proxy Fetch failed: ${e.message}`);
-    // Native fallback is removed because it will always get WAF'd on Render Datacenter IP.
+    console.warn(`[XHS Scraper] Request failed: ${e.message}`);
   }
 
   const htmlSnippet = typeof html === 'string' ? html.substring(0, 500) : JSON.stringify(html).substring(0, 500);
@@ -84,52 +146,6 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
     if (stateMatch && stateMatch[1]) {
       try {
         const state = JSON.parse(stateMatch[1].replace(/undefined/g, 'null'));
-        
-        // If profile, find latest note ID and redirect extraction to that note
-        if (isProfile) {
-          const userNotesRaw = state?.user?.notes ?? state?.user?.noteList ?? state?.user?.profile?.notes ?? [];
-          const notesList: any[] = [];
-          if (Array.isArray(userNotesRaw)) {
-            for (const item of userNotesRaw) {
-              if (Array.isArray(item)) {
-                notesList.push(...item);
-              } else if (item && typeof item === 'object') {
-                notesList.push(item);
-              }
-            }
-          }
-
-          if (notesList.length > 0) {
-            for (const item of notesList) {
-              const card = item.noteCard || item;
-              const title = card.displayTitle || card.title || item.title || `RedNote Video ${noteId}`;
-              const xsecToken = item.xsecToken || card.xsecToken;
-              const coverUrl = card.cover?.urlDefault || card.cover?.urlPre || '';
-              
-              let latestNoteId = card.noteId || item.noteId || item.id;
-              if (!latestNoteId && coverUrl) {
-                const coverMatch = coverUrl.match(/\/([a-zA-Z0-9]{24,45})!/);
-                if (coverMatch) latestNoteId = coverMatch[1];
-              }
-
-              let extractedNote: any = null;
-              if (latestNoteId) {
-                const newNoteUrl = `https://www.xiaohongshu.com/explore/${latestNoteId}${xsecToken ? `?xsec_token=${xsecToken}&xsec_source=pc_feed` : ''}`;
-                console.log(`Discovered latest note (${title}) from RedNote profile. Extracting note...`);
-                extractedNote = await extractXiaohongshuVideo(newNoteUrl);
-              }
-
-              if (extractedNote && extractedNote.mp4Url && extractedNote.mp4Url !== targetUrl) {
-                return extractedNote;
-              } else {
-                console.warn(`Could not extract valid MP4 for RedNote profile latest video. Note ID missing or extraction failed.`);
-                // We return null here instead of falling back to the cover image. 
-                // Falling back to cover image causes Facebook to upload a 0-second video.
-                return null;
-              }
-            }
-          }
-        }
 
         // Search inside note detail map for video stream
         const noteMap = state?.note?.noteDetailMap ?? state?.noteData ?? {};
