@@ -14,10 +14,23 @@ export async function GET(request: NextRequest) {
 
   try {
     const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'User-Agent': request.headers.get('user-agent') || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': request.headers.get('accept') || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,application/json,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     };
+    
+    // Forward signature headers required by XHS API
+    const xs = request.headers.get('x-s');
+    if (xs) headers['x-s'] = xs;
+    
+    const xt = request.headers.get('x-t');
+    if (xt) headers['x-t'] = xt;
+    
+    const xSCommon = request.headers.get('x-s-common');
+    if (xSCommon) headers['x-s-common'] = xSCommon;
+    
+    const referer = request.headers.get('referer');
+    if (referer) headers['Referer'] = referer;
     
     if (xhsCookie) {
       if (xhsCookie.trim().startsWith('[')) {
