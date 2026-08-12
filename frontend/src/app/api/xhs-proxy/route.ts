@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
     return new NextResponse(html, {
       headers: {
         'Content-Type': 'text/html',
-        'Cache-Control': 'no-store'
+        'Cache-Control': 'no-store',
+        'X-Final-Url': response.url
       },
     });
   } catch (error: any) {

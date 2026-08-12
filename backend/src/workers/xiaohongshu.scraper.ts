@@ -38,22 +38,25 @@ export async function resolveXhsUrl(rawUrl: string): Promise<string> {
  * Extracts raw unwatermarked MP4 URL from a Xiaohongshu post using Native HTTP requests
  */
 export async function extractXiaohongshuVideo(shareUrl: string): Promise<XiaohongshuMetadata | null> {
-  const targetUrl = await resolveXhsUrl(shareUrl);
-  console.log(`Extracting Xiaohongshu (RedNote) video natively for resolved URL: ${targetUrl}`);
+  let targetUrl = shareUrl;
+  let isProfile = targetUrl.includes('/user/profile/');
 
-  const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
-  const noteId = noteMatch ? noteMatch[1] : 'xhs_' + Date.now();
-  const isProfile = targetUrl.includes('/user/profile/');
-
-  let extractedTitle = `RedNote Video ${noteId}`;
+  let extractedTitle = `RedNote Video`;
   let extractedMp4: string | undefined = undefined;
+  let noteId = 'xhs_' + Date.now();
 
   // Option 1: Vercel Edge Proxy Bypass (Routes through frontend to bypass Render Datacenter IP block)
   if (!isProfile) {
     try {
-      console.log(`[XHS Scraper] Attempting Vercel Edge Proxy WAF Bypass for: ${targetUrl}`);
-      const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(targetUrl)}`;
-      const proxyRes = await axios.get(proxyUrl, { timeout: 20000 });
+      console.log(`[XHS Scraper] Attempting Vercel Edge Proxy WAF Bypass for raw URL: ${shareUrl}`);
+      const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
+      const proxyRes = await axios.get(proxyUrl, { timeout: 25000 });
+      
+      if (proxyRes.headers['x-final-url']) {
+        targetUrl = proxyRes.headers['x-final-url'];
+        const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
+        if (noteMatch) noteId = noteMatch[1];
+      }
       
       const proxyHtml = proxyRes.data;
       if (typeof proxyHtml === 'string' && proxyHtml.includes('window.__INITIAL_STATE__')) {
