@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
     const xSCommon = request.headers.get('x-s-common');
     if (xSCommon) headers['x-s-common'] = xSCommon;
     
+    const traceId = request.headers.get('x-b3-traceid');
+    if (traceId) headers['x-b3-traceid'] = traceId;
+    
     const referer = request.headers.get('referer');
     if (referer) headers['Referer'] = referer;
     

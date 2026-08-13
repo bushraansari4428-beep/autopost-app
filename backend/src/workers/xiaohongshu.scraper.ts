@@ -101,6 +101,7 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       };
       
       const xS = signer.signXS("GET", uri, a1, "xhs-pc-web", params);
+      const traceId = signer.getB3TraceId();
       
       const apiHeaders = {
         'x-xhs-cookie': cookieStr,
@@ -108,10 +109,22 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
         'Referer': `https://www.xiaohongshu.com/user/profile/${userId}`,
         'x-s': xS,
         'x-t': String(Date.now()),
-        'x-s-common': xS
+        'x-s-common': xS,
+        'x-b3-traceid': traceId
       };
       
-      const targetApiUrl = `https://www.xiaohongshu.com${uri}?` + new URLSearchParams(params as any).toString();
+      // xhshow-js signs the parameters sorted alphabetically, with commas NOT encoded.
+      // We must match this exactly when making the request.
+      const keys = Object.keys(params).sort();
+      const queryParts = [];
+      for (const k of keys) {
+        const valStr = String((params as any)[k]);
+        const encodedVal = encodeURIComponent(valStr).replace(/%2C/g, ",");
+        queryParts.push(`${k}=${encodedVal}`);
+      }
+      const queryString = queryParts.join("&");
+      
+      const targetApiUrl = `https://www.xiaohongshu.com${uri}?${queryString}`;
       const apiProxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(targetApiUrl)}`;
       
       const apiResponse = await axios.get(apiProxyUrl, { headers: apiHeaders, timeout: 25000 });
