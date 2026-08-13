@@ -79,9 +79,17 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       if (!profileIdMatch) throw new Error("Could not extract user ID from profile URL");
       const userId = profileIdMatch[1];
       
+      const parsedUrl = new URL(targetUrl);
+      const xsecToken = parsedUrl.searchParams.get('xsec_token') || "";
+      const xsecSource = parsedUrl.searchParams.get('xsec_source') || "pc_share";
+      
       const cookieStr = process.env.XHS_COOKIE || "";
-      const a1Match = cookieStr.match(/(?:^|;\s*)a1=([^;]*)/);
-      const a1 = a1Match ? a1Match[1] : "";
+      const cookieObj: Record<string, string> = {};
+      cookieStr.split(';').forEach(c => {
+        const parts = c.split('=');
+        if (parts.length >= 2) cookieObj[parts[0].trim()] = parts.slice(1).join('=').trim();
+      });
+      const a1 = cookieObj['a1'] || "";
       
       if (!a1) {
         console.warn("[XHS Scraper] XHS_COOKIE does not contain 'a1'. Cannot generate X-s signature.");
@@ -96,20 +104,21 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
         cursor: "",
         user_id: userId,
         image_formats: "jpg,webp,avif",
-        xsec_token: "",
-        xsec_source: "pc_user"
+        xsec_token: xsecToken,
+        xsec_source: xsecSource
       };
       
       const xS = signer.signXS("GET", uri, a1, "xhs-pc-web", params);
+      const xsCommon = signer.signXSCommon(cookieObj);
       const traceId = signer.getB3TraceId();
       
       const apiHeaders = {
         'x-xhs-cookie': cookieStr,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        'Referer': `https://www.xiaohongshu.com/user/profile/${userId}`,
+        'Referer': targetUrl,
         'x-s': xS,
         'x-t': String(Date.now()),
-        'x-s-common': xS,
+        'x-s-common': xsCommon,
         'x-b3-traceid': traceId
       };
       
