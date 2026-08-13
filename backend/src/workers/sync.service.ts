@@ -601,45 +601,26 @@ export class SyncService {
     let videoUrl = null;
 
     if (targetUrl.includes('tiktok.com')) {
-      this.logger.log(`Extracting high-quality TikTok MP4 via Kuaishou mobile SSR method for: ${targetUrl}`);
-      const cleanTargetUrl = targetUrl.split('?')[0].trim();
-      const proxyUrl = process.env.CLOUDFLARE_PROXY_URL;
+      this.logger.log(`Extracting fresh TikTok MP4 stream for upload: ${targetUrl}`);
       
       try {
-        const finalUrl = proxyUrl ? `${proxyUrl.replace(/\/$/, '')}/?url=${encodeURIComponent(cleanTargetUrl)}` : cleanTargetUrl;
-        const res = await fetch(finalUrl, { 
-          headers: { 
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          } 
-        }).catch(() => null);
-        
-        if (res && res.ok) {
-          const html = await res.text();
-          // Extract MP4 stream from HTML or Rehydration JSON state (Kuaishou method)
-          const playMatch = html.match(/"(?:playAddr|downloadAddr|video_url|url)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*\.mp4[^"\\]*)"/i) || html.match(/(https?:\/\/[^"'\s\\]+\.mp4[^"'\s\\]*)/i);
-          if (playMatch && playMatch[1]) {
-            videoUrl = playMatch[1].replace(/\\\//g, '/').replace(/\\u0026/g, '&');
-            this.logsService.log('INFO', `Successfully extracted high-res TikTok MP4 stream via Kuaishou mobile SSR method.`);
-          }
+        const tkVideo = await this.extractTikTokVideo(targetUrl);
+        if (tkVideo && tkVideo.mp4Url) {
+          videoUrl = tkVideo.mp4Url;
+          this.logsService.log('INFO', `Successfully acquired fresh TikTok video stream via TikWM/extractTikTokVideo.`);
         }
-      } catch (ssrErr: any) {
-        this.logger.warn(`Kuaishou SSR stream extraction failed for TikTok: ${ssrErr.message}`);
+      } catch (err: any) {
+        this.logger.warn(`Fresh stream extraction failed for TikTok: ${err.message}`);
+      }
+      
+      // Fallback to the one saved in the database during sync
+      if (!videoUrl && video.mp4Url) {
+        this.logger.log(`Using database fallback MP4 stream for TikTok.`);
+        videoUrl = video.mp4Url;
       }
       
       if (!videoUrl) {
-        this.logger.log(`SSR stream not matched directly. Attempting direct local fallback stream extraction...`);
-        try {
-          const ytDlpCmd = this.getYtDlpCmd();
-          const cmdGet = `${ytDlpCmd} --cookies cookies.txt -g -f "best[ext=mp4]/best" --add-header "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Chrome/121.0.0.0 Safari/604.1" "${cleanTargetUrl}"`;
-          const { stdout } = await execPromise(cmdGet, { maxBuffer: 1024 * 1024 * 5 });
-          if (stdout && stdout.trim()) {
-            videoUrl = stdout.trim().split('\n')[0];
-            this.logsService.log('INFO', `Successfully acquired direct TikTok video stream via local extractor.`);
-          }
-        } catch (fallbackErr: any) {
-          throw new Error(`Failed to extract TikTok video stream. Last error: ${fallbackErr.message}`);
-        }
+        throw new Error(`Failed to extract TikTok video stream. Playwright/TikWM both failed and no fallback available.`);
       }
     } else if (targetUrl.includes('instagram.com')) {
       const match = targetUrl.match(/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
