@@ -84,7 +84,7 @@ export async function extractXiaohongshuVideo(shareUrl: string): Promise<Xiaohon
       const xsecSource = parsedUrl.searchParams.get('xsec_source') || "pc_share";
       
       const cookieStr = process.env.XHS_COOKIE || "";
-      const cookieObj: Record<string, string> = {};
+      const cookieObj: { a1: string; [key: string]: string } = { a1: "" };
       cookieStr.split(';').forEach(c => {
         const parts = c.split('=');
         if (parts.length >= 2) cookieObj[parts[0].trim()] = parts.slice(1).join('=').trim();
