@@ -3,6 +3,8 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 
+process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
+
 export interface TikTokVideoMetadata {
   id: string;
   caption: string;
