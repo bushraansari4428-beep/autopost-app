@@ -1,0 +1,44 @@
+name: Auto Scraper Worker
+
+on:
+  schedule:
+    # Run every 2 hours
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  sync-videos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: ./backend
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Prisma Generate
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Run Sync Script
+        working-directory: ./backend
+        run: npx ts-node scripts/run-sync.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CLOUDFLARE_PROXY_URL: ${{ secrets.CLOUDFLARE_PROXY_URL }}
+          NODE_ENV: production

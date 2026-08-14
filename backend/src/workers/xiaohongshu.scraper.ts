@@ -1,7 +1,8 @@
-import axios from 'axios';
+import { chromium } from 'playwright-extra';
+import stealth from 'puppeteer-extra-plugin-stealth';
 import * as fs from 'fs';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+
+chromium.use(stealth());
 
 export interface XiaohongshuMetadata {
   id: string;
@@ -12,300 +13,161 @@ export interface XiaohongshuMetadata {
   timestamp: number;
 }
 
-/**
- * Resolves short share URLs (e.g., xhslink.com) to obtain the full URL containing xsec_token
- */
-export async function resolveXhsUrl(rawUrl: string): Promise<string> {
-  if (!rawUrl.includes('xhslink') && !rawUrl.includes('t.cn') && !rawUrl.includes('url.cn')) {
-    return rawUrl;
-  }
-
-  try {
-    const response = await fetch(rawUrl, {
-      method: 'GET',
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      },
-    });
-    return response.url || rawUrl;
-  } catch (e) {
-    return rawUrl;
-  }
-}
-
-/**
- * Extracts raw unwatermarked MP4 URL from a Xiaohongshu post using Native HTTP requests
- */
 export async function extractXiaohongshuVideo(shareUrl: string): Promise<XiaohongshuMetadata | null> {
-  let targetUrl = shareUrl;
-  let isProfile = targetUrl.includes('/user/profile/');
-
-  let extractedTitle = `RedNote Video`;
-  let extractedMp4: string | undefined = undefined;
-  let noteId = 'xhs_' + Date.now();
-
-  let html = '';
-  let statusCode = 500;
-
+  console.log(`[XHS Playwright Scraper] Launching browser for: ${shareUrl}`);
+  
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  
   try {
-    console.log(`[XHS Scraper] Fetching via Vercel Edge Proxy for raw URL: ${shareUrl}`);
-    const proxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(shareUrl)}`;
-    
-    const headers: Record<string, string> = {};
-    if (process.env.XHS_COOKIE) {
-      headers['x-xhs-cookie'] = process.env.XHS_COOKIE;
-    }
-
-    const response = await axios.get(proxyUrl, { 
-      timeout: 25000,
-      headers
+    const page = await browser.newPage({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
     });
     
-    html = response.data;
-    statusCode = response.status;
-    
-    if (response.headers['x-final-url']) {
-      targetUrl = response.headers['x-final-url'];
-      isProfile = targetUrl.includes('/user/profile/');
-      const noteMatch = targetUrl.match(/(?:explore|discovery\/item|item|note|profile)\/([a-zA-Z0-9_-]+)/i) || targetUrl.match(/([a-zA-Z0-9]{24,32})/);
-      if (noteMatch) noteId = noteMatch[1];
-    }
-
-    // Now if it is a profile (either originally or after shortlink resolution), run the xhshow-js logic
-    if (isProfile) {
-      console.log(`[XHS Scraper] Profile detected (${targetUrl}). Extracting latest video via X-s signed API...`);
-      const profileIdMatch = targetUrl.match(/\/user\/profile\/([a-zA-Z0-9]+)/);
-      if (!profileIdMatch) throw new Error("Could not extract user ID from profile URL");
-      const userId = profileIdMatch[1];
-      
-      const parsedUrl = new URL(targetUrl);
-      const xsecToken = parsedUrl.searchParams.get('xsec_token') || "";
-      const xsecSource = parsedUrl.searchParams.get('xsec_source') || "pc_share";
-      
-      const cookieStr = process.env.XHS_COOKIE || "";
-      const cookieObj: { a1: string; [key: string]: string } = { a1: "" };
-      cookieStr.split(';').forEach(c => {
-        const parts = c.split('=');
-        if (parts.length >= 2) cookieObj[parts[0].trim()] = parts.slice(1).join('=').trim();
+    // Set cookie if provided to bypass login screens
+    if (process.env.XHS_COOKIE) {
+      const cookies = process.env.XHS_COOKIE.split(';').map(c => {
+        const [name, ...rest] = c.split('=');
+        return {
+          name: name.trim(),
+          value: rest.join('=').trim(),
+          domain: '.xiaohongshu.com',
+          path: '/'
+        };
       });
-      const a1 = cookieObj['a1'] || "";
-      
-      if (!a1) {
-        console.warn("[XHS Scraper] XHS_COOKIE does not contain 'a1'. Cannot generate X-s signature.");
-        return null;
-      }
-      
-      const { Client } = await import('xhshow-js');
-      const signer = new Client();
-      const uri = "/api/sns/web/v1/user_posted";
-      const params = {
-        num: 30,
-        cursor: "",
-        user_id: userId,
-        image_formats: "jpg,webp,avif",
-        xsec_token: xsecToken,
-        xsec_source: xsecSource
-      };
-      
-      const xS = signer.signXS("GET", uri, a1, "xhs-pc-web", params);
-      const xsCommon = signer.signXSCommon(cookieObj);
-      const traceId = signer.getB3TraceId();
-      
-      const apiHeaders = {
-        'x-xhs-cookie': cookieStr,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        'Referer': targetUrl,
-        'x-s': xS,
-        'x-t': String(Date.now()),
-        'x-s-common': xsCommon,
-        'x-b3-traceid': traceId
-      };
-      
-      // xhshow-js signs the parameters sorted alphabetically, with commas NOT encoded.
-      // We must match this exactly when making the request.
-      const keys = Object.keys(params).sort();
-      const queryParts = [];
-      for (const k of keys) {
-        const valStr = String((params as any)[k]);
-        const encodedVal = encodeURIComponent(valStr).replace(/%2C/g, ",");
-        queryParts.push(`${k}=${encodedVal}`);
-      }
-      const queryString = queryParts.join("&");
-      
-      const targetApiUrl = `https://www.xiaohongshu.com${uri}?${queryString}`;
-      const apiProxyUrl = `https://autopost-app-one.vercel.app/api/xhs-proxy?url=${encodeURIComponent(targetApiUrl)}`;
-      
-      const apiResponse = await axios.get(apiProxyUrl, { headers: apiHeaders, timeout: 25000 });
-      const data = apiResponse.data;
-      
-      if (data?.data?.notes) {
-        const notes = data.data.notes;
-        const latestVideo = notes.find((n: any) => n.type === 'video' || n.note_type === 2); // 2 might be video in some schemas
-        if (latestVideo) {
-          const newNoteId = latestVideo.note_id || latestVideo.id;
-          const newXsecToken = latestVideo.xsec_token || "";
-          
-          const newNoteUrl = `https://www.xiaohongshu.com/explore/${newNoteId}${newXsecToken ? `?xsec_token=${newXsecToken}&xsec_source=pc_feed` : ''}`;
-          console.log(`[XHS Scraper] Successfully found latest video Note ID: ${newNoteId}`);
-          
-          const extractedNote = await extractXiaohongshuVideo(newNoteUrl);
-          if (extractedNote && extractedNote.mp4Url && extractedNote.mp4Url !== targetUrl) {
-            return extractedNote;
-          }
-        }
-        console.warn("[XHS Scraper] No valid video notes found in user's profile feed.");
-        return null;
-      } else {
-        console.warn("[XHS Scraper] Unexpected API response:", JSON.stringify(data).substring(0, 200));
-        return null;
-      }
-    }
-  } catch (e: any) {
-    console.warn(`[XHS Scraper] Request failed: ${e.message}`);
-  }
-
-  // If it was a profile, it should have returned above. If it reaches here, it's a single video note.
-  if (isProfile) return null;
-
-  const htmlSnippet = typeof html === 'string' ? html.substring(0, 500) : JSON.stringify(html).substring(0, 500);
-
-    console.log(`[XHS Scraper] HTTP Status Code: ${statusCode} for ${targetUrl}`);
-    console.log(`[XHS Scraper] HTML Snippet (First 500 chars):\n${htmlSnippet}`);
-    const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});?</s) || html.match(/window\.__INITIAL_SSR_STATE__\s*=\s*(\{.+?\});?</s);
-    if (stateMatch && stateMatch[1]) {
-      try {
-        const state = JSON.parse(stateMatch[1].replace(/undefined/g, 'null'));
-
-        // Search inside note detail map for video stream
-        const noteMap = state?.note?.noteDetailMap ?? state?.noteData ?? {};
-        const firstNoteKey = Object.keys(noteMap)[0] || noteId;
-        const noteObj = noteMap[firstNoteKey]?.note ?? noteMap[firstNoteKey] ?? {};
-
-        if (noteObj.title) extractedTitle = noteObj.title;
-        if (noteObj.desc && noteObj.desc.trim()) {
-          extractedTitle = `${noteObj.title || ''} ${noteObj.desc}`.trim();
-        }
-
-        // Locate video stream URL in JSON
-        const h264Url = noteObj.video?.media?.stream?.h264?.[0]?.masterUrl;
-        const av1Url = noteObj.video?.media?.stream?.av1?.[0]?.masterUrl;
-        const originKey = noteObj.video?.consumer?.originVideoKey || noteObj.video?.originVideoKey || noteObj.video?.media?.stream?.h264?.[0]?.originVideoKey;
-
-        if (h264Url && (h264Url.includes('/stream/') || h264Url.includes('.mp4'))) {
-          extractedMp4 = h264Url;
-        } else if (av1Url && (av1Url.includes('/stream/') || av1Url.includes('.mp4'))) {
-          extractedMp4 = av1Url;
-        } else if (originKey) {
-          const cleanKey = originKey.replace(/^\//, '');
-          extractedMp4 = `https://sns-video-bd.xhscdn.com/${cleanKey}`;
-        }
-      } catch (e) {
-        console.warn(`Error parsing XHS initial state JSON:`, e);
-      }
+      await page.context().addCookies(cookies);
     }
 
-    // Regex fallback if state parsing didn't find mp4
-    if ((!extractedMp4 || (!extractedMp4.includes('/stream/') && !extractedMp4.includes('.mp4'))) && !isProfile) {
-      const urlMatch = html.match(/"(?:masterUrl|originVideoKey|urlDefault|backupUrl)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*(?:sns-video-[^"\\]*|\.mp4[^"\\]*))"/i) ||
-                       html.match(/(stream\/[a-zA-Z0-9_\-\/]+\.mp4)/i) ||
-                       html.match(/(spectrum\/[a-zA-Z0-9_\-\/]+\.mp4)/i);
-      if (urlMatch && urlMatch[1]) {
-        const val = urlMatch[1].replace(/\\\//g, '/');
-        if (val.startsWith('http')) {
-          extractedMp4 = val;
-        } else {
-          extractedMp4 = `https://sns-video-bd.xhscdn.com/${val.replace(/^\//, '')}`;
-        }
-      }
-    }
-
-  if (extractedMp4) {
-    // Cleanup URL
-    extractedMp4 = extractedMp4.replace(/\\\//g, '/').replace(/\\u0026/g, '&');
+    let mp4Url = '';
     
-    // Fix malformed protocols missing slashes (e.g., https:sns-video...)
-    if (extractedMp4.startsWith('http:') && !extractedMp4.startsWith('http://')) {
-      extractedMp4 = extractedMp4.replace('http:', 'http://');
-    }
-    if (extractedMp4.startsWith('https:') && !extractedMp4.startsWith('https://')) {
-      extractedMp4 = extractedMp4.replace('https:', 'https://');
-    }
-    if (extractedMp4.startsWith('//')) {
-      extractedMp4 = `https:${extractedMp4}`;
-    } else if (!extractedMp4.startsWith('http')) {
-      extractedMp4 = `https://sns-video-bd.xhscdn.com/${extractedMp4.replace(/^\//, '')}`;
+    // Listen for network requests to intercept the raw video stream
+    page.on('response', async (response) => {
+      const url = response.url();
+      if ((url.includes('sns-video') || url.includes('.mp4') || url.includes('/stream/')) && url.startsWith('http')) {
+        const contentType = response.headers()['content-type'] || '';
+        if (contentType.includes('video/') || url.includes('.mp4')) {
+          mp4Url = url;
+          console.log(`[XHS Playwright Scraper] Intercepted video stream: ${mp4Url}`);
+        }
+      }
+    });
+
+    await page.goto(shareUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    
+    // Give it a couple seconds to trigger the video request
+    await page.waitForTimeout(3000);
+    
+    const finalUrl = page.url();
+    const isProfile = finalUrl.includes('/user/profile/');
+    
+    if (isProfile) {
+      console.log(`[XHS Playwright Scraper] Profile detected. Finding latest video...`);
+      // Find the first video note
+      const videoNotes = await page.$$('a.cover[href*="/explore/"]');
+      if (videoNotes.length > 0) {
+        // Click the first video note
+        await videoNotes[0].click();
+        await page.waitForTimeout(3000);
+        // Wait for video request to be intercepted
+        if (!mp4Url) {
+            await page.waitForTimeout(3000);
+        }
+      } else {
+        console.warn(`[XHS Playwright Scraper] No videos found on profile.`);
+        return null;
+      }
     }
 
-    // If bare domain without stream path, reset to fallback
-    if (!extractedMp4.includes('/stream/') && !extractedMp4.includes('.mp4') && !extractedMp4.includes('/spectrum/')) {
-      extractedMp4 = targetUrl;
+    // Try to extract title
+    let title = await page.title();
+    
+    // If network interception failed, try DOM extraction
+    if (!mp4Url) {
+       console.log(`[XHS Playwright Scraper] Network interception missed. Checking DOM...`);
+       const videoElement = await page.$('video');
+       if (videoElement) {
+         mp4Url = await videoElement.getAttribute('src') || '';
+         if (mp4Url && mp4Url.startsWith('blob:')) {
+            console.log(`[XHS Playwright Scraper] Blob URL found. Needs state extraction.`);
+            mp4Url = ''; // Blob URL is useless, reset.
+         }
+       }
+       
+       if (!mp4Url) {
+         // Extract from __INITIAL_STATE__
+         const content = await page.content();
+         const stateMatch = content.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});?</s);
+         if (stateMatch && stateMatch[1]) {
+            try {
+              const state = JSON.parse(stateMatch[1].replace(/undefined/g, 'null'));
+              const noteMap = state?.note?.noteDetailMap ?? {};
+              const firstNoteKey = Object.keys(noteMap)[0];
+              const noteObj = noteMap[firstNoteKey]?.note ?? {};
+              
+              if (noteObj.title) title = noteObj.title;
+              
+              const h264Url = noteObj.video?.media?.stream?.h264?.[0]?.masterUrl;
+              const originKey = noteObj.video?.consumer?.originVideoKey;
+              
+              if (h264Url) mp4Url = h264Url;
+              else if (originKey) mp4Url = `https://sns-video-bd.xhscdn.com/${originKey.replace(/^\//, '')}`;
+            } catch (e) {}
+         }
+       }
     }
-
+    
+    if (!mp4Url) return null;
+    
+    // Normalize URL
+    if (mp4Url.startsWith('http:') && !mp4Url.startsWith('http://')) {
+        mp4Url = mp4Url.replace('http:', 'http://');
+    }
+    if (mp4Url.startsWith('https:') && !mp4Url.startsWith('https://')) {
+        mp4Url = mp4Url.replace('https:', 'https://');
+    }
+    
     return {
-      id: noteId,
-      title: extractedTitle || `RedNote Video ${noteId}`,
-      description: extractedTitle || `RedNote Video ${noteId}`,
-      url: targetUrl,
-      mp4Url: extractedMp4,
+      id: 'xhs_' + Date.now(),
+      title: title || 'RedNote Video',
+      description: title || 'RedNote Video',
+      url: finalUrl,
+      mp4Url: mp4Url,
       timestamp: Math.floor(Date.now() / 1000)
     };
+    
+  } catch (error) {
+    console.error(`[XHS Playwright Scraper] Error: ${error.message}`);
+    return null;
+  } finally {
+    await browser.close();
   }
-
-  return null;
 }
 
-/**
- * Downloads RedNote/Xiaohongshu MP4 or media asset locally with anti-403 CDN headers via Native HTTP.
- */
 export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: string, pageUrl?: string): Promise<string> {
-  const targetUrlToDownload = videoUrl && videoUrl.startsWith('http') ? videoUrl : (pageUrl || videoUrl);
-
-  if (targetUrlToDownload && targetUrlToDownload.startsWith('http')) {
-    const headerOptions = [
-      {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Referer': 'https://www.xiaohongshu.com/',
-        'Accept': '*/*',
-        ...(process.env.XHS_COOKIE ? { 'Cookie': process.env.XHS_COOKIE } : {})
-      },
-      {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-        'Referer': 'https://www.rednote.com/',
-        'Accept': '*/*',
-        ...(process.env.XHS_COOKIE ? { 'Cookie': process.env.XHS_COOKIE } : {})
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      extraHTTPHeaders: {
+          'Referer': 'https://www.xiaohongshu.com/',
+          'Accept': '*/*'
       }
-    ];
-
-    for (const headers of headerOptions) {
-      try {
-        const response = await axios({
-          method: 'GET',
-          url: targetUrlToDownload,
-          responseType: 'stream',
-          headers,
-          timeout: 25000
-        });
-
-        const writer = fs.createWriteStream(outputPath);
-        response.data.pipe(writer);
-
-        await new Promise((resolve, reject) => {
-          writer.on('finish', () => resolve(outputPath));
-          writer.on('error', (err) => {
-            writer.close();
-            reject(err);
-          });
-        });
-
-        if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
-          return outputPath;
-        }
-      } catch (e: any) {
-        console.warn(`Native HTTP download attempt failed for ${targetUrlToDownload}: ${e.message}`);
-      }
+    });
+    
+    // We navigate to the actual video stream URL and download it as buffer
+    const response = await page.goto(videoUrl, { waitUntil: 'load' });
+    if (response) {
+      const buffer = await response.body();
+      fs.writeFileSync(outputPath, buffer);
+      return outputPath;
     }
+    throw new Error("Failed to download response body");
+  } catch (e) {
+    console.error(`[XHS Download] Error: ${e.message}`);
+    throw e;
+  } finally {
+    await browser.close();
   }
-
-  throw new Error('Failed to download Xiaohongshu video asset via Native HTTP');
 }

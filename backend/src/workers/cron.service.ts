@@ -15,21 +15,13 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    console.log('==== CRON SERVICE onModuleInit EXECUTION STARTED ====');
-    // Run every 5 minutes (300000 ms)
-    this.timer = setInterval(() => {
-      console.log('==== CRON setInterval FIRED ====');
-      this.handleCron();
-    }, 300000);
-    this.logger.log('Started native setInterval for source monitoring every 5 minutes.');
-    // Run immediately once on startup
-    this.handleCron();
+    console.log('==== CRON SERVICE INIT (Auto-timer disabled, awaiting GitHub Actions trigger) ====');
+    // We no longer run setInterval here to prevent Render from running out of memory.
+    // The handleCron method will be invoked externally by scripts/run-sync.ts
   }
 
   onModuleDestroy() {
-    if (this.timer) {
-      clearInterval(this.timer);
-    }
+    // No timer to clear
   }
 
   async handleCron() {
