@@ -121,191 +121,45 @@ export class SyncService {
     });
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
-    this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.id}`);
+    this.logsService.log('INFO', `Triggering GitHub Action for TEST on mapping: ${mapping.id}`);
     
-    let urlsToScan = [mapping.source.url];
-    if (mapping.source.platform === 'YOUTUBE' && !mapping.source.url.includes('/shorts') && !mapping.source.url.includes('/videos') && mapping.source.url.includes('@')) {
-      urlsToScan = [
-        mapping.source.url.replace(/\/$/, '') + '/videos',
-        mapping.source.url.replace(/\/$/, '') + '/shorts'
-      ];
+    const githubToken = process.env.GITHUB_TOKEN;
+    if (!githubToken) {
+       this.logsService.log('ERROR', 'GITHUB_TOKEN is missing in environment variables.');
+       return { success: false, message: 'Server configuration error: GITHUB_TOKEN missing. Cannot trigger test.' };
     }
 
     try {
-      let latestVideo = null;
-      
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
-      
-      // Try RSS feed first if it's a channel URL
-      if (mapping.source.url.includes('/channel/UC')) {
-        const channelId = mapping.source.url.split('/channel/')[1].split('/')[0].split('?')[0];
-        const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-        this.logger.log(`Trying RSS feed for channel: ${channelId}`);
-        await this.logsService.log('INFO', `Trying RSS feed for channel: ${channelId}`);
-        try {
-          const rssRes = await fetch(rssUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-          });
-          if (rssRes.ok) {
-            const xml = await rssRes.text();
-            await this.logsService.log('INFO', `RSS feed fetched successfully. Length: ${xml.length}`);
-            const videoIdMatch = xml.match(/<yt:videoId>(.*?)<\/yt:videoId>/);
-            const titleMatch = xml.match(/<title>(.*?)<\/title>/g); // Second match is usually the first video
-            if (videoIdMatch && videoIdMatch[1]) {
-              latestVideo = {
-                id: videoIdMatch[1],
-                title: titleMatch && titleMatch.length > 1 ? titleMatch[1].replace(/<[^>]+>/g, '') : 'New Video',
-                url: `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,
-                timestamp: Math.floor(Date.now() / 1000)
-              };
-              await this.logsService.log('INFO', `Extracted video ID: ${videoIdMatch[1]}`);
-            } else {
-              await this.logsService.log('ERROR', `RSS feed XML did not contain <yt:videoId>. Sample: ${xml.substring(0, 100)}`);
-            }
-          } else {
-            await this.logsService.log('ERROR', `RSS feed HTTP error: ${rssRes.status} ${rssRes.statusText}`);
-          }
-        } catch(e) {
-          this.logger.warn(`RSS feed failed: ${e.message}`);
-          await this.logsService.log('ERROR', `RSS feed fetch failed: ${e.message}`);
-        }
-      }
-
-      if (!latestVideo) {
-        if (mapping.source.platform === 'INSTAGRAM') {
-          try {
-            const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
-            const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
-
-            if (braveApiKey) {
-              this.logsService.log('INFO', `Searching Brave API for latest Reel by ${username}...`);
-              const query = `site:instagram.com "${username}"`;
-              const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-              
-              const res = await fetch(searchUrl, {
-                headers: {
-                  'Accept': 'application/json',
-                  'X-Subscription-Token': braveApiKey
-                }
-              });
-              
-              if (res.ok) {
-                const data = await res.json();
-                const results = data.web?.results || [];
-                for (const result of results) {
-                  if (result.url && result.url.includes('instagram.com/')) {
-                    const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
-                    if (shortcodeMatch) {
-                      latestVideo = {
-                        id: shortcodeMatch[2],
-                        url: result.url,
-                        title: `Instagram Post`,
-                        timestamp: Math.floor(Date.now() / 1000)
-                      };
-                      this.logsService.log('INFO', `Found post from Brave Search: ${result.url}`);
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-            
-            if (!latestVideo) {
-              latestVideo = await this.pollInstagramProfile(username);
-            }
-          } catch (e) {
-            this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
-          }
-
-        } else if (mapping.source.platform === 'XIAOHONGSHU') {
-          this.logsService.log('INFO', `Executing RedNote/Xiaohongshu multi-layer extraction for ${mapping.source.url}...`);
-          const xhsVideo = await extractXiaohongshuVideo(mapping.source.url);
-          if (xhsVideo) {
-            latestVideo = xhsVideo;
-            this.logsService.log('INFO', `Successfully found Xiaohongshu Video: ${latestVideo.title?.substring(0, 80)}...`);
-          }
-        } else if (mapping.source.platform === 'KUAISHOU') {
-          // Extract user ID from URL
-          const urlParts = mapping.source.url.split('/').filter(Boolean);
-          const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
-          
-          this.logsService.log('INFO', `Scraping SSR HTML for latest ${mapping.source.platform} video for user ${userId}...`);
-          const ssrUrl = await this.scrapeLatestFromSSR(mapping.source.platform, mapping.source.url, userId);
-          
-          if (!ssrUrl) {
-             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via SSR`);
-          } else {
-             this.logsService.log('INFO', `Found latest video via SSR: ${ssrUrl}`);
-             latestVideo = {
-               id: 'ssr_' + Date.now(),
-               url: ssrUrl,
-               title: `${mapping.source.platform} Video`,
-               timestamp: Math.floor(Date.now() / 1000)
-             };
-          }
-        } else if (mapping.source.platform === 'TIKTOK') {
-          this.logsService.log('INFO', `Executing high-res TikTok extraction with original caption preservation for ${mapping.source.url}...`);
-          const tkVideo = await this.extractTikTokVideo(mapping.source.url);
-          if (tkVideo) {
-            latestVideo = tkVideo;
-            this.logsService.log('INFO', `Successfully found TikTok Video: ${latestVideo.title?.substring(0, 80)}...`);
-          }
-        } else {
-          for (const url of urlsToScan) {
-            const ytDlpCmd = this.getYtDlpCmd();
-            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
-            try {
-              const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
-              if (stdout && stdout.trim()) {
-                latestVideo = JSON.parse(stdout);
-                break;
-              }
-            } catch (e: any) {
-              this.logsService.log('ERROR', `yt-dlp error: ${e.message.substring(0, 200)}...`);
-            }
-          }
-        }
-      }
-
-      if (!latestVideo) {
-        this.logsService.log('ERROR', `Test failed: No videos found at source ${mapping.source.url}`);
-        return { success: false, message: 'No videos found' };
-      }
-
-      this.logsService.log('INFO', `Test: Found video ${latestVideo.title}. Queuing for upload.`);
-      
-      const publishedAt = latestVideo.timestamp ? new Date(latestVideo.timestamp * 1000) : new Date();
-      
-      const formattedCaption = this.formatFacebookCaption(latestVideo.description || latestVideo.title, mapping.source.platform, mapping.source.url);
-      const newVideo = await this.prisma.video.create({
-        data: {
-          title: formattedCaption,
-          description: formattedCaption,
-          originalId: 'test_' + latestVideo.id + '_' + Date.now(),
-          publishedAt: publishedAt,
-          url: latestVideo.webpage_url || latestVideo.url || '',
-          sourceId: mapping.source.id,
-        }
+      const response = await fetch('https://api.github.com/repos/bushraansari4428-beep/autopost-app/actions/workflows/auto-scraper.yml/dispatches', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'Authorization': `token ${githubToken}`,
+          'User-Agent': 'AutoPost-App'
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: {}
+        })
       });
 
-      await this.prisma.uploadHistory.create({
-        data: {
-          videoId: newVideo.id,
-          facebookPageId: mapping.facebookPageId,
-          status: 'PENDING'
-        }
-      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logsService.log('ERROR', `GitHub API error: ${response.status} - ${errorText}`);
+        return { success: false, message: `Failed to trigger test in background: ${response.statusText}` };
+      }
 
-      // Run uploads async
-      this.processPendingUploads().catch(e => console.error(e));
+      this.logsService.log('INFO', 'GitHub Action triggered successfully.');
+      return { 
+        success: true, 
+        message: 'Test successfully started in the background! Please check your Facebook page in 2-3 minutes.' 
+      };
 
-      return { success: true, message: 'Test video found and queued for processing. Check Logs for progress.' };
-
-    } catch (e) {
-      return { success: false, message: e.message };
+    } catch (e: any) {
+      this.logsService.log('ERROR', `Failed to trigger GitHub Action: ${e.message}`);
+      return { success: false, message: 'Failed to contact background worker.' };
     }
   }
-
   async monitorSource(sourceId: string, dueMappingIds?: string[]) {
     this.logger.log(`Processing monitoring job for source: ${sourceId}`);
     
