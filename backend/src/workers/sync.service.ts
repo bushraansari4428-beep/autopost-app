@@ -628,14 +628,14 @@ export class SyncService {
     }
   }
 
-  async processLocalVideo(pageId: string, filePath: string, videoTitle: string) {
+  async processLocalVideo(facebookPageId: string, filePath: string, videoTitle: string) {
     try {
       const page = await this.prisma.facebookPage.findUnique({
-        where: { id: pageId, status: 'ACTIVE' }
+        where: { pageId: facebookPageId }
       });
 
-      if (!page) {
-        throw new Error('Active Facebook Page not found');
+      if (!page || page.status !== 'ACTIVE') {
+        throw new Error('Active Facebook Page not found with that Facebook Page ID');
       }
 
       this.logsService.log('INFO', `Starting Local Upload for page ${page.name}`);
