@@ -79,9 +79,6 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
 
       // After checking sources, process any pending uploads
       await this.syncService.processPendingUploads();
-      
-      // Process Google Drive scheduled uploads
-      await this.syncService.processDriveUploads();
 
       // Auto-delete expired users
       try {

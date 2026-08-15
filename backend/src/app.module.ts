@@ -14,7 +14,6 @@ import { WebhooksController } from './webhooks.controller';
 import { FacebookModule } from './facebook/facebook.module';
 import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
-import { DriveModule } from './drive/drive.module';
 
 @Module({
   imports: [
@@ -29,7 +28,6 @@ import { DriveModule } from './drive/drive.module';
     UsersModule,
     LogsModule,
     WorkersModule,
-    DriveModule,
   ],
   controllers: [AppController, WebhooksController],
   providers: [AppService],

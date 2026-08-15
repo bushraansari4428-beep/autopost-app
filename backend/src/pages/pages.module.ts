@@ -1,9 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PagesService } from './pages.service';
 import { PagesController } from './pages.controller';
+import { LocalUploadController } from './local-upload.controller';
+import { WorkersModule } from '../workers/workers.module';
 
 @Module({
-  controllers: [PagesController],
+  imports: [forwardRef(() => WorkersModule)],
+  controllers: [PagesController, LocalUploadController],
   providers: [PagesService],
   exports: [PagesService],
 })
