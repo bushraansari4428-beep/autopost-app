@@ -875,8 +875,8 @@ export class SyncService {
       });
       fbData = await fbRes.json();
     }
-    if (!fbRes.ok || fbData.error) {
-      throw new Error(`Facebook API Error: ${JSON.stringify(fbData.error || fbData)}`);
+    if ((fbRes && !fbRes.ok) || (fbData && fbData.error)) {
+      throw new Error(`Facebook API Error: ${JSON.stringify(fbData?.error || fbData)}`);
     }
     
     this.logsService.log('INFO', `Success! Facebook Post ID: ${fbData.id}`);
