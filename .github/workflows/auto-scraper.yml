@@ -4,7 +4,12 @@ on:
   schedule:
     # Run every 2 hours
     - cron: '0 */2 * * *'
-  workflow_dispatch: # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      mappingId:
+        description: 'Mapping ID for manual test'
+        required: false
+        type: string # Allow manual trigger from GitHub UI
 
 jobs:
   sync-videos:
@@ -42,3 +47,4 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           CLOUDFLARE_PROXY_URL: ${{ secrets.CLOUDFLARE_PROXY_URL }}
           NODE_ENV: production
+          TEST_MAPPING_ID: ${{ github.event.inputs.mappingId }}
