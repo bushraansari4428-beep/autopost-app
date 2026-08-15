@@ -823,20 +823,40 @@ export class SyncService {
             }
           }
         }
-        this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath}. Uploading physical video directly to Facebook...`);
+        this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath}. Uploading physical video directly to Facebook using highly reliable cURL stream...`);
 
-        const fileBuffer = fs.readFileSync(tempPath);
-        const blob = new Blob([fileBuffer], { type: 'video/mp4' });
-        const formData = new FormData();
-        formData.append('access_token', accessToken);
-        formData.append('description', finalDescription);
-        formData.append('source', blob, 'video.mp4');
-
-        fbRes = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
-          method: 'POST',
-          body: formData as any
+        fbData = await new Promise((resolve, reject) => {
+           const { spawn } = require('child_process');
+           const curl = spawn('curl', [
+              '-s',
+              '-X', 'POST',
+              `https://graph-video.facebook.com/v19.0/${pageId}/videos`,
+              '-F', `access_token=${accessToken}`,
+              '-F', `description=${finalDescription}`,
+              '-F', `source=@${tempPath}`
+           ]);
+           
+           let out = '';
+           let errOut = '';
+           curl.stdout.on('data', (d: any) => out += d);
+           curl.stderr.on('data', (d: any) => errOut += d);
+           curl.on('close', (code: number) => {
+              if (code === 0) {
+                 try { 
+                    const parsed = JSON.parse(out);
+                    if (parsed.error) {
+                       reject(new Error(parsed.error.message || 'Facebook API Error'));
+                    } else {
+                       resolve(parsed); 
+                    }
+                 } catch(e) { 
+                    reject(new Error('Failed to parse Facebook JSON response: ' + out)); 
+                 }
+              } else {
+                 reject(new Error(`cURL upload failed with code ${code}. Stderr: ${errOut}`));
+              }
+           });
         });
-        fbData = await fbRes.json();
       } finally {
         if (fs.existsSync(tempPath)) {
           try { fs.unlinkSync(tempPath); } catch (_) {}
