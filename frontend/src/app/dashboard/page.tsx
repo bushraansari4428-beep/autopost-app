@@ -12,6 +12,8 @@ export default function Dashboard() {
   const [pendingQueue, setPendingQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [isClearing, setIsClearing] = useState(false);
+
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -20,9 +22,9 @@ export default function Dashboard() {
       const headers = { 'Authorization': `Bearer ${token}` };
       
       const [resSources, resPages, resHistory] = await Promise.all([
-        fetch('/api/sources', { headers }).catch(() => null),
-        fetch('/api/pages', { headers }).catch(() => null),
-        fetch('/api/history', { headers }).catch(() => null)
+        fetch('/api/sources', { headers, cache: 'no-store' }).catch(() => null),
+        fetch('/api/pages', { headers, cache: 'no-store' }).catch(() => null),
+        fetch('/api/history', { headers, cache: 'no-store' }).catch(() => null)
       ]);
 
       let sourcesCount = 0;
@@ -48,7 +50,6 @@ export default function Dashboard() {
           successCount = history.filter(h => h.status === 'COMPLETED' || h.status === 'SUCCESS').length;
           failCount = history.filter(h => h.status === 'FAILED' || h.status === 'ERROR').length;
           pending = history.filter(h => h.status === 'PENDING' || h.status === 'PROCESSING' || h.status === 'IN_PROGRESS');
-          // Get up to 5 most recent completed/failed items
           recent = history.slice(0, 5);
         }
       }
@@ -70,23 +71,25 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    // Optional polling every 30s to keep dashboard live
     const interval = setInterval(fetchDashboardData, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const handleClearFailed = async () => {
-    if (!confirm('Are you sure you want to clear all failed uploads history?')) return;
+    setIsClearing(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
       await fetch('/api/history/failed', {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store'
       });
-      fetchDashboardData();
+      await fetchDashboardData();
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -100,9 +103,10 @@ export default function Dashboard() {
         <div className="flex gap-3">
           <button 
             onClick={handleClearFailed}
+            disabled={isClearing}
             className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-800/50 rounded-xl text-sm font-medium text-red-300 hover:text-red-200 transition-all flex items-center gap-2"
           >
-            Clear Failed Logs
+            {isClearing ? 'Clearing...' : 'Clear Failed Logs'}
           </button>
           <button 
             onClick={() => { setLoading(true); fetchDashboardData(); }}
