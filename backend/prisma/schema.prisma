@@ -74,6 +74,7 @@ enum Platform {
   XIAOHONGSHU
   KUAISHOU
   DRIVE
+  LOCAL_FOLDER
 }
 
 enum Status {

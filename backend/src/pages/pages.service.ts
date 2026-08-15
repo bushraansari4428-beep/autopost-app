@@ -11,6 +11,20 @@ export class PagesService {
     });
   }
 
+  getLocalFolderMappings(user: any) {
+    const whereClause = user && user.role === 'ADMIN' ? {} : { facebookPage: { userId: user.id } };
+    return this.prisma.mapping.findMany({
+      where: {
+        source: { platform: 'LOCAL_FOLDER' },
+        ...whereClause
+      },
+      include: {
+        source: true,
+        facebookPage: true
+      }
+    });
+  }
+
   findAll(user?: any) {
     if (!user) {
       return this.prisma.facebookPage.findMany();

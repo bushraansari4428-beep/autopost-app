@@ -20,6 +20,11 @@ export class PagesController {
     return this.pagesService.findAll(req.user);
   }
 
+  @Get('local-folder-mappings')
+  getLocalFolderMappings(@Request() req: any) {
+    return this.pagesService.getLocalFolderMappings(req.user);
+  }
+
   @Get(':id/statistics')
   getStatistics(@Param('id') id: string) {
     return this.pagesService.getStatistics(id);

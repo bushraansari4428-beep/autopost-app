@@ -382,6 +382,11 @@ export class SyncService {
       return;
     }
 
+    if (source.platform === 'LOCAL_FOLDER') {
+      this.logger.log(`Skipping backend monitor for LOCAL_FOLDER source ${sourceId}. Managed by desktop script.`);
+      return;
+    }
+
     try {
       let urlsToScan = [source.url];
       if (source.platform === 'YOUTUBE' && !source.url.includes('/shorts') && !source.url.includes('/videos') && source.url.includes('@')) {
@@ -667,20 +672,30 @@ export class SyncService {
          });
       });
 
-      // We just need a dummy video record so history works
-      let localSource = await this.prisma.source.findFirst({
-        where: { platform: 'YOUTUBE', url: 'local://uploader' } // Use existing enum to avoid DB errors
-      });
-      
+      // Link to the user's dynamic LOCAL_FOLDER source if mapped
+      let localSource = await this.prisma.mapping.findFirst({
+        where: { 
+          facebookPageId: page.id, 
+          source: { platform: 'LOCAL_FOLDER' } 
+        },
+        include: { source: true }
+      }).then(res => res?.source);
+
       if (!localSource) {
-        localSource = await this.prisma.source.create({
-          data: {
-            platform: 'YOUTUBE',
-            name: 'Local Desktop Uploader',
-            url: 'local://uploader',
-            userId: page.userId,
-          }
+        localSource = await this.prisma.source.findFirst({
+          where: { platform: 'LOCAL_FOLDER', url: 'local://uploader' }
         });
+        
+        if (!localSource) {
+          localSource = await this.prisma.source.create({
+            data: {
+              platform: 'LOCAL_FOLDER',
+              name: 'Local Desktop Uploader',
+              url: 'local://uploader',
+              userId: page.userId,
+            }
+          });
+        }
       }
 
       const video = await this.prisma.video.create({

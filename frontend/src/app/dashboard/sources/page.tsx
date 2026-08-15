@@ -178,6 +178,7 @@ export default function SourcesPage() {
                       source.platform === 'INSTAGRAM' ? 'bg-pink-500/10 text-pink-500 border border-pink-500/20' : 
                       source.platform === 'XIAOHONGSHU' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 
                       source.platform === 'KUAISHOU' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' : 
+                      source.platform === 'LOCAL_FOLDER' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
                       'bg-black text-white border border-gray-700'
                     }`}>
                       {source.platform}
@@ -240,7 +241,11 @@ export default function SourcesPage() {
                 <label className="block text-sm font-medium text-gray-300 mb-1">Platform</label>
                 <select 
                   value={platform} 
-                  onChange={(e) => setPlatform(e.target.value)} 
+                  onChange={(e) => { 
+                    setPlatform(e.target.value); 
+                    if (e.target.value === 'LOCAL_FOLDER') setUrl('local://folder'); 
+                    else setUrl(''); 
+                  }} 
                   className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 >
                   <option value="YOUTUBE">YouTube</option>
@@ -248,19 +253,22 @@ export default function SourcesPage() {
                   <option value="TIKTOK">TikTok</option>
                   <option value="XIAOHONGSHU">Xiaohongshu (RedNote)</option>
                   <option value="KUAISHOU">Kuaishou</option>
+                  <option value="LOCAL_FOLDER">Local PC Folder</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Profile URL / Handle</label>
-                <input 
-                  type="text" 
-                  value={url} 
-                  onChange={(e) => setUrl(e.target.value)} 
-                  required 
-                  className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                  placeholder="https://youtube.com/@channel"
-                />
-              </div>
+              {platform !== 'LOCAL_FOLDER' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Profile URL / Handle</label>
+                  <input 
+                    type="text" 
+                    value={url} 
+                    onChange={(e) => setUrl(e.target.value)} 
+                    required 
+                    className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                    placeholder="https://youtube.com/@channel"
+                  />
+                </div>
+              )}
               
               <div className="flex gap-3 pt-4">
                 <button 
