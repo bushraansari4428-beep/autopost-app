@@ -95,7 +95,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
     // Attempt oEmbed to get aweme_id reliably (officially supported endpoint)
     try {
       const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(cleanUrl)}`;
-      const oembedRes = await axios.get(oembedUrl, { headers: { 'Accept': 'application/json' }});
+      const oembedRes = await axios.get(oembedUrl, { headers: { 'Accept': 'application/json' }, timeout: 10000 });
       if (oembedRes.data && oembedRes.data.embed_product_id) {
         awemeId = oembedRes.data.embed_product_id;
         username = oembedRes.data.author_unique_id || username;
@@ -105,19 +105,45 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
       awemeId = vidMatch ? vidMatch[1] : '';
     }
   } else {
-    // Resolving profile HTML to find latest video ID in __UNIVERSAL_DATA_FOR_REHYDRATION__
-    const profileRes = await axios.get(cleanUrl, { headers: sessionManager.getHeaders() });
-    const match = profileRes.data.match(/<script[^>]*id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
-    if (match) {
+    const usernameMatch = cleanUrl.match(/@([a-zA-Z0-9_.-]+)/);
+    const uname = usernameMatch ? usernameMatch[1] : '';
+    if (uname) {
       try {
-        const data = JSON.parse(match[1]);
-        const defaultScope = data['__DEFAULT_SCOPE__'] || data || {};
-        const userDetail = defaultScope['webapp.user-detail'] || {};
-        const itemIds = userDetail?.itemList || [];
-        if (itemIds.length > 0) {
-          awemeId = itemIds[0];
+        const tikwmRes = await axios.get(`https://www.tikwm.com/api/user/posts?unique_id=${uname}&count=1`, { timeout: 10000 });
+        if (tikwmRes.data && tikwmRes.data.data && tikwmRes.data.data.videos && tikwmRes.data.data.videos.length > 0) {
+           const v = tikwmRes.data.data.videos[0];
+           return {
+             id: v.video_id,
+             caption: v.title,
+             hashtags: [],
+             playUrl: v.play,
+             downloadUrl: v.play,
+             author: v.author?.unique_id || uname,
+             createTime: v.create_time,
+             url: `https://www.tiktok.com/@${v.author?.unique_id || uname}/video/${v.video_id}`
+           };
         }
-      } catch (err) {}
+      } catch (err: any) {
+        console.log(`TikWM user posts API failed for ${uname}:`, err.message);
+      }
+    }
+
+    try {
+      const profileRes = await axios.get(cleanUrl, { headers: sessionManager.getHeaders(), timeout: 10000 });
+      const match = profileRes.data.match(/<script[^>]*id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
+      if (match) {
+        try {
+          const data = JSON.parse(match[1]);
+          const defaultScope = data['__DEFAULT_SCOPE__'] || data || {};
+          const userDetail = defaultScope['webapp.user-detail'] || {};
+          const itemIds = userDetail?.itemList || [];
+          if (itemIds.length > 0) {
+            awemeId = itemIds[0];
+          }
+        } catch (err) {}
+      }
+    } catch (err: any) {
+      console.log(`Failed to fetch TikTok profile HTML:`, err.message);
     }
   }
 
@@ -154,7 +180,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
 
   let detailRes;
   try {
-    detailRes = await axios.get(urlWithParams, { headers: sessionManager.getHeaders() });
+    detailRes = await axios.get(urlWithParams, { headers: sessionManager.getHeaders(), timeout: 10000 });
   } catch (err: any) {
     if (err.response && err.response.status !== 200) {
       throw new Error(`TikTok Web API returned ${err.response.status}. Missing or invalid X-Bogus signature for pure HTTP.`);
