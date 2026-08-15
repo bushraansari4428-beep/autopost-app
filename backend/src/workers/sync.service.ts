@@ -309,11 +309,12 @@ export class SyncService {
               const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
               if (stdout && stdout.trim()) {
                 const parsed = JSON.parse(stdout);
+                const extractedUrl = parsed.url || (parsed.requested_downloads && parsed.requested_downloads[0] ? parsed.requested_downloads[0].url : null);
                 latestVideo = {
                    id: parsed.id,
                    title: parsed.title || parsed.description || 'New Video',
                    url: parsed.webpage_url || url,
-                   mp4Url: parsed.url,
+                   mp4Url: extractedUrl,
                    timestamp: parsed.timestamp || Math.floor(Date.now() / 1000)
                 };
                 await this.logsService.log('INFO', `Successfully extracted via yt-dlp: ${latestVideo.title?.substring(0, 80)}...`);
@@ -678,6 +679,28 @@ export class SyncService {
         videoUrl = video.mp4Url;
       }
       
+      // Fallback to yt-dlp for extraction
+      if (!videoUrl && targetUrl) {
+         this.logsService.log('INFO', 'Attempting to extract TikTok MP4 stream using universal yt-dlp fallback...');
+         try {
+            const ytDlpCmd = this.getYtDlpCmd();
+            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json "${targetUrl}"`;
+            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+            if (stdout && stdout.trim()) {
+               const parsed = JSON.parse(stdout);
+               const extractedUrl = parsed.url || (parsed.requested_downloads && parsed.requested_downloads[0] ? parsed.requested_downloads[0].url : null);
+               if (extractedUrl) {
+                  videoUrl = extractedUrl;
+                  this.logsService.log('INFO', 'Successfully obtained TikTok video stream via yt-dlp fallback.');
+               } else {
+                  this.logsService.log('ERROR', 'yt-dlp succeeded but no video stream URL was found in the output.');
+               }
+            }
+         } catch (e: any) {
+            this.logsService.log('ERROR', `yt-dlp stream extraction failed: ${e.message.substring(0, 200)}...`);
+         }
+      }
+
       if (!videoUrl) {
         throw new Error(`Failed to extract TikTok video stream. Playwright/TikWM both failed and no fallback available.`);
       }
