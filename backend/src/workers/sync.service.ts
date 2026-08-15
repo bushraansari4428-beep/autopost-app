@@ -607,6 +607,27 @@ export class SyncService {
     }
   }
 
+  async fixStuckUploads() {
+    try {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const updated = await this.prisma.uploadHistory.updateMany({
+        where: { 
+          status: 'PROCESSING',
+          createdAt: { lt: oneHourAgo }
+        },
+        data: { 
+          status: 'FAILED', 
+          errorMessage: 'System self-healing: Reset stuck processing record' 
+        }
+      });
+      if (updated.count > 0) {
+        this.logger.warn(`Self-healing: Reset ${updated.count} stuck records to FAILED.`);
+      }
+    } catch (e) {
+      this.logger.error(`Error in self-healing routine: ${e.message}`);
+    }
+  }
+
   async processPendingUploads() {
     if (this.isProcessing) {
       this.logger.log('Already processing uploads, skipping this cycle.');

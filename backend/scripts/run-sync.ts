@@ -15,6 +15,9 @@ async function bootstrap() {
     const cronService = app.get(CronService);
     const syncService = app.get(SyncService);
     
+    // Run self-healing routine to clear stuck processes from previous crashes
+    await syncService.fixStuckUploads();
+    
     const testMappingId = process.env.TEST_MAPPING_ID;
     
     if (testMappingId) {
