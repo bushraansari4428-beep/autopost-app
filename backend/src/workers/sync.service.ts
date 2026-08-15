@@ -810,7 +810,18 @@ export class SyncService {
         if (isXhsOrRedNote) {
           await downloadXiaohongshuVideo(videoUrl, tempPath, targetUrl || video.url);
         } else {
-          await downloadTikTokVideo(videoUrl, tempPath);
+          try {
+            await downloadTikTokVideo(videoUrl, tempPath);
+          } catch (err: any) {
+            if (err.response?.status === 403 || err.message.includes('403') || err.message.includes('status code 403')) {
+               this.logsService.log('WARN', 'TikTok CDN returned 403 Forbidden. Falling back to yt-dlp direct download...');
+               const ytDlpCmd = this.getYtDlpCmd();
+               const cmd = `${ytDlpCmd} --cookies cookies.txt -o "${tempPath}" "${targetUrl}"`;
+               await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+            } else {
+               throw err;
+            }
+          }
         }
         this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath}. Uploading physical video directly to Facebook...`);
 
