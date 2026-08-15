@@ -122,10 +122,18 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
         const page = await context.newPage();
         
         await page.goto(`https://www.tikwm.com/api/user/posts?unique_id=${uname}&count=1`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        const content = await page.evaluate(() => document.body.innerText);
-        await browser.close();
         
-        const tikwmRes = JSON.parse(content);
+        let tikwmRes = null;
+        for (let i = 0; i < 10; i++) {
+          const content = await page.evaluate(() => document.body.innerText);
+          try {
+            tikwmRes = JSON.parse(content);
+            if (tikwmRes && tikwmRes.data) break; // Valid JSON received
+          } catch (e) {
+            await page.waitForTimeout(1000);
+          }
+        }
+        await browser.close();
         if (tikwmRes && tikwmRes.data && tikwmRes.data.videos && tikwmRes.data.videos.length > 0) {
            const v = tikwmRes.data.videos[0];
            return {
@@ -153,10 +161,15 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
         const page = await browser.newPage();
         await page.goto(`https://www.tiktok.com/@${uname}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
         
-        const scriptContent = await page.evaluate(() => {
-          const script = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
-          return script ? script.textContent : null;
-        });
+        let scriptContent = null;
+        for (let i = 0; i < 10; i++) {
+          scriptContent = await page.evaluate(() => {
+            const script = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+            return script ? script.textContent : null;
+          });
+          if (scriptContent) break;
+          await page.waitForTimeout(1000);
+        }
         await browser.close();
         
         if (scriptContent) {
