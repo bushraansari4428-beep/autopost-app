@@ -75,7 +75,7 @@ export class HistoryService {
     if (!user || user.role === 'ADMIN') {
       return this.prisma.uploadHistory.deleteMany({
         where: {
-          OR: [{ status: 'FAILED' }, { status: 'ERROR' }]
+          status: 'FAILED'
         }
       });
     }
@@ -83,7 +83,7 @@ export class HistoryService {
     // For normal users, only delete their own failed histories
     return this.prisma.uploadHistory.deleteMany({
       where: {
-        OR: [{ status: 'FAILED' }, { status: 'ERROR' }],
+        status: 'FAILED',
         video: {
           source: { userId: user.id }
         }
