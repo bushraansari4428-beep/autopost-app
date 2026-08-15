@@ -332,7 +332,7 @@ export class SyncService {
         return { success: false, message: 'No videos found' };
       }
 
-      this.logsService.log('INFO', `Test: Found video ${latestVideo.title}. Queuing for upload.`);
+      await this.logsService.log('INFO', `Test: Found video ${latestVideo.title}. Queuing for upload.`);
       
       const publishedAt = latestVideo.timestamp ? new Date(latestVideo.timestamp * 1000) : new Date();
       
@@ -356,8 +356,12 @@ export class SyncService {
         }
       });
 
-      // Run uploads async
-      this.processPendingUploads().catch(e => console.error(e));
+      // Run uploads async and wait for them to finish before returning so the CLI doesn't exit!
+      try {
+        await this.processPendingUploads();
+      } catch (e) {
+        console.error("Upload error during test:", e);
+      }
 
       return { success: true, message: 'Test video found and queued for processing. Check Logs for progress.' };
 
