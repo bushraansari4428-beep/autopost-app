@@ -75,6 +75,21 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleClearFailed = async () => {
+    if (!confirm('Are you sure you want to clear all failed uploads history?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      await fetch('/api/history/failed', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchDashboardData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex justify-between items-center mb-8">
@@ -82,15 +97,23 @@ export default function Dashboard() {
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Dashboard Overview</h1>
           <p className="text-gray-400 mt-1">Live metrics and real-time activity across all connected channels.</p>
         </div>
-        <button 
-          onClick={() => { setLoading(true); fetchDashboardData(); }}
-          className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700 rounded-xl text-sm font-medium text-gray-300 hover:text-white transition-all flex items-center gap-2"
-        >
-          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh Stats
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleClearFailed}
+            className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-800/50 rounded-xl text-sm font-medium text-red-300 hover:text-red-200 transition-all flex items-center gap-2"
+          >
+            Clear Failed Logs
+          </button>
+          <button 
+            onClick={() => { setLoading(true); fetchDashboardData(); }}
+            className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700 rounded-xl text-sm font-medium text-gray-300 hover:text-white transition-all flex items-center gap-2"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh Stats
+          </button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
@@ -141,7 +164,7 @@ export default function Dashboard() {
                       {item.video?.title || 'Instagram / Reel Post'}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      Destination: <span className="text-gray-300">{item.facebookPageId || 'Facebook Page'}</span> • {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      Destination: <span className="text-gray-300 font-medium">{item.facebookPage?.name || 'Facebook Page'}</span> • {new Date(item.createdAt).toLocaleString()}
                     </p>
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${

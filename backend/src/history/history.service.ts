@@ -13,7 +13,8 @@ export class HistoryService {
             include: {
               source: true
             }
-          }
+          },
+          facebookPage: true
         },
         orderBy: { createdAt: 'desc' }
       });
@@ -35,7 +36,8 @@ export class HistoryService {
             include: {
               source: true
             }
-          }
+          },
+          facebookPage: true
         },
         orderBy: { createdAt: 'desc' }
       });
@@ -53,7 +55,8 @@ export class HistoryService {
           include: {
             source: true
           }
-        }
+        },
+        facebookPage: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -65,6 +68,25 @@ export class HistoryService {
       data: {
         status: 'PENDING',
         errorMessage: null,
+      }
+    });
+  }
+  async clearFailed(user?: any) {
+    if (!user || user.role === 'ADMIN') {
+      return this.prisma.uploadHistory.deleteMany({
+        where: {
+          OR: [{ status: 'FAILED' }, { status: 'ERROR' }]
+        }
+      });
+    }
+    
+    // For normal users, only delete their own failed histories
+    return this.prisma.uploadHistory.deleteMany({
+      where: {
+        OR: [{ status: 'FAILED' }, { status: 'ERROR' }],
+        video: {
+          source: { userId: user.id }
+        }
       }
     });
   }

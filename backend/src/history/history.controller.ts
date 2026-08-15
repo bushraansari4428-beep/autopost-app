@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, UseGuards, Request } from '@nestjs/common';
 import { HistoryService } from './history.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -10,6 +10,11 @@ export class HistoryController {
   @Get()
   findAll(@Request() req: any) {
     return this.historyService.findAll(req.user);
+  }
+
+  @Delete('failed')
+  clearFailed(@Request() req: any) {
+    return this.historyService.clearFailed(req.user);
   }
 
   @Post(':id/retry')
