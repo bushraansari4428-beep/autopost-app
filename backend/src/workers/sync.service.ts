@@ -673,7 +673,7 @@ export class SyncService {
       });
 
       // Link to the user's dynamic LOCAL_FOLDER source if mapped
-      let localSource = await this.prisma.mapping.findFirst({
+      let localSource: any = await this.prisma.mapping.findFirst({
         where: { 
           facebookPageId: page.id, 
           source: { platform: 'LOCAL_FOLDER' } 
