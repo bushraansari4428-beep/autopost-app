@@ -37,7 +37,8 @@ class TikTokSessionManager {
   async initSession() {
     try {
       const res = await axios.head('https://www.tiktok.com/', {
-        headers: { 'User-Agent': DEFAULT_USER_AGENT }
+        headers: { 'User-Agent': DEFAULT_USER_AGENT },
+        timeout: 10000
       });
       const setCookie = res.headers['set-cookie'];
       if (setCookie) {
@@ -86,7 +87,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
   const cleanUrl = inputUrl.split('?')[0].replace(/\/$/, '').trim();
   const isVideoUrl = cleanUrl.includes('/video/') || cleanUrl.includes('/v/');
   
-  await sessionManager.initSession();
+  
 
   let awemeId = '';
   let username = 'user';
@@ -129,6 +130,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
     }
 
     try {
+      await sessionManager.initSession();
       const profileRes = await axios.get(cleanUrl, { headers: sessionManager.getHeaders(), timeout: 10000 });
       const match = profileRes.data.match(/<script[^>]*id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
       if (match) {
@@ -180,6 +182,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
 
   let detailRes;
   try {
+    await sessionManager.initSession();
     detailRes = await axios.get(urlWithParams, { headers: sessionManager.getHeaders(), timeout: 10000 });
   } catch (err: any) {
     if (err.response && err.response.status !== 200) {
