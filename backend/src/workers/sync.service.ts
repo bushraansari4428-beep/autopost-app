@@ -168,7 +168,7 @@ export class SyncService {
     });
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
-    this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.id}`);
+    await this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.id}`);
     
     let urlsToScan = [mapping.source.url];
     if (mapping.source.platform === 'YOUTUBE' && !mapping.source.url.includes('/shorts') && !mapping.source.url.includes('/videos') && mapping.source.url.includes('@')) {
@@ -265,11 +265,11 @@ export class SyncService {
           }
 
         } else if (mapping.source.platform === 'XIAOHONGSHU') {
-          this.logsService.log('INFO', `Executing RedNote/Xiaohongshu multi-layer extraction for ${mapping.source.url}...`);
+          await this.logsService.log('INFO', `Executing RedNote/Xiaohongshu multi-layer extraction for ${mapping.source.url}...`);
           const xhsVideo = await extractXiaohongshuVideo(mapping.source.url);
           if (xhsVideo) {
             latestVideo = xhsVideo;
-            this.logsService.log('INFO', `Successfully found Xiaohongshu Video: ${latestVideo.title?.substring(0, 80)}...`);
+            await this.logsService.log('INFO', `Successfully found Xiaohongshu Video: ${latestVideo.title?.substring(0, 80)}...`);
           }
         } else if (mapping.source.platform === 'KUAISHOU') {
           // Extract user ID from URL
@@ -291,11 +291,11 @@ export class SyncService {
              };
           }
         } else if (mapping.source.platform === 'TIKTOK') {
-          this.logsService.log('INFO', `Executing high-res TikTok extraction with original caption preservation for ${mapping.source.url}...`);
+          await this.logsService.log('INFO', `Executing high-res TikTok extraction with original caption preservation for ${mapping.source.url}...`);
           const tkVideo = await this.extractTikTokVideo(mapping.source.url);
           if (tkVideo) {
             latestVideo = tkVideo;
-            this.logsService.log('INFO', `Successfully found TikTok Video: ${latestVideo.title?.substring(0, 80)}...`);
+            await this.logsService.log('INFO', `Successfully found TikTok Video: ${latestVideo.title?.substring(0, 80)}...`);
           }
         } else {
           for (const url of urlsToScan) {
@@ -315,7 +315,7 @@ export class SyncService {
       }
 
       if (!latestVideo) {
-        this.logsService.log('ERROR', `Test failed: No videos found at source ${mapping.source.url}`);
+        await this.logsService.log('ERROR', `Test failed: No videos found at source ${mapping.source.url}`);
         return { success: false, message: 'No videos found' };
       }
 

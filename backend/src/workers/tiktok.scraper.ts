@@ -110,9 +110,24 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
     const uname = usernameMatch ? usernameMatch[1] : '';
     if (uname) {
       try {
-        const tikwmRes = await axios.get(`https://www.tikwm.com/api/user/posts?unique_id=${uname}&count=1`, { timeout: 10000 });
-        if (tikwmRes.data && tikwmRes.data.data && tikwmRes.data.data.videos && tikwmRes.data.data.videos.length > 0) {
-           const v = tikwmRes.data.data.videos[0];
+        const { chromium } = require('playwright-extra');
+        const stealth = require('puppeteer-extra-plugin-stealth')();
+        chromium.use(stealth);
+        
+        console.log("Attempting Playwright fallback for TikWM...");
+        const browser = await chromium.launch({ headless: true });
+        const context = await browser.newContext({
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+        });
+        const page = await context.newPage();
+        
+        await page.goto(`https://www.tikwm.com/api/user/posts?unique_id=${uname}&count=1`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        const content = await page.evaluate(() => document.body.innerText);
+        await browser.close();
+        
+        const tikwmRes = JSON.parse(content);
+        if (tikwmRes && tikwmRes.data && tikwmRes.data.videos && tikwmRes.data.videos.length > 0) {
+           const v = tikwmRes.data.videos[0];
            return {
              id: v.video_id,
              caption: v.title,
@@ -125,32 +140,42 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
            };
         }
       } catch (err: any) {
-        console.log(`TikWM user posts API failed for ${uname}:`, err.message);
+        console.log(`Playwright TikWM API failed for ${uname}:`, err.message);
       }
-    }
-
-    try {
-      await sessionManager.initSession();
-      const profileRes = await axios.get(cleanUrl, { headers: sessionManager.getHeaders(), timeout: 10000 });
-      const match = profileRes.data.match(/<script[^>]*id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
-      if (match) {
-        try {
-          const data = JSON.parse(match[1]);
+      
+      try {
+        console.log("Attempting Playwright fallback for TikTok HTML...");
+        const { chromium } = require('playwright-extra');
+        const stealth = require('puppeteer-extra-plugin-stealth')();
+        chromium.use(stealth);
+        
+        const browser = await chromium.launch({ headless: true });
+        const page = await browser.newPage();
+        await page.goto(`https://www.tiktok.com/@${uname}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        
+        const scriptContent = await page.evaluate(() => {
+          const script = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+          return script ? script.textContent : null;
+        });
+        await browser.close();
+        
+        if (scriptContent) {
+          const data = JSON.parse(scriptContent);
           const defaultScope = data['__DEFAULT_SCOPE__'] || data || {};
           const userDetail = defaultScope['webapp.user-detail'] || {};
           const itemIds = userDetail?.itemList || [];
           if (itemIds.length > 0) {
             awemeId = itemIds[0];
           }
-        } catch (err) {}
+        }
+      } catch (err: any) {
+        console.log(`Playwright TikTok HTML failed:`, err.message);
       }
-    } catch (err: any) {
-      console.log(`Failed to fetch TikTok profile HTML:`, err.message);
     }
   }
 
   if (!awemeId) {
-    throw new Error('Failed to resolve TikTok video ID from URL via pure HTTP');
+    throw new Error('Failed to resolve TikTok video ID from URL via any method');
   }
 
   // Query /api/item/detail/ with Native HTTP params
