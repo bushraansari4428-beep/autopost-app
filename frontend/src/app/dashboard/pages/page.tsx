@@ -28,6 +28,10 @@ export default function FacebookPagesPage() {
   const [name, setName] = useState('');
   const [pageId, setPageId] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [driveFolderId, setDriveFolderId] = useState('');
+  const [uploadedFolderId, setUploadedFolderId] = useState('');
+  const [videosPerDay, setVideosPerDay] = useState(2);
+  const [scheduledTime, setScheduledTime] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchPages = async () => {
@@ -88,7 +92,7 @@ export default function FacebookPagesPage() {
       } else {
         console.error('Failed to retrieve statistics');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching page statistics:', err);
     } finally {
       setLoadingStats(false);
@@ -101,6 +105,13 @@ export default function FacebookPagesPage() {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMsg('');
+    
+    const payload: any = { name, pageId, accessToken };
+    if (driveFolderId) payload.driveFolderId = driveFolderId;
+    if (uploadedFolderId) payload.uploadedFolderId = uploadedFolderId;
+    if (videosPerDay) payload.videosPerDay = Number(videosPerDay);
+    if (scheduledTime) payload.scheduledTime = scheduledTime;
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch('/api/pages', {
@@ -109,13 +120,17 @@ export default function FacebookPagesPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ name, pageId, accessToken })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         setShowModal(false);
         setName('');
         setPageId('');
         setAccessToken('');
+        setDriveFolderId('');
+        setUploadedFolderId('');
+        setVideosPerDay(2);
+        setScheduledTime('');
         fetchPages();
       } else {
         const errText = await res.text();
@@ -202,6 +217,14 @@ export default function FacebookPagesPage() {
                   <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{page.name}</h3>
                   <p className="text-gray-500 text-xs font-mono mb-4">ID: {page.pageId}</p>
                   
+                  {/* Google Drive Status Indicator */}
+                  {page.driveFolderId && (
+                    <div className="mb-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0F9D58]/10 border border-[#0F9D58]/20 text-[#0F9D58] text-xs font-bold">
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M7.716 3h8.568l7.716 13.5H15.432z" fill="#FFC107"/><path d="M16.284 21H7.716L0 7.5h8.568z" fill="#0F9D58"/><path d="M12 10.5 7.716 3 0 16.5h8.568z" fill="#4285F4"/></svg>
+                      Drive Sync Active ({page.videosPerDay} videos/day)
+                    </div>
+                  )}
+
                   {/* Token Validity & Attached Date Box */}
                   <div className="bg-gray-950/60 rounded-2xl p-4 mb-4 border border-gray-800/80 space-y-2.5 text-sm shadow-inner">
                     <div className="flex justify-between items-center">
@@ -398,15 +421,17 @@ export default function FacebookPagesPage() {
                                   <span className="font-bold text-white bg-blue-500/20 text-blue-300 px-2.5 py-1 rounded-lg border border-blue-500/30">
                                     ▶ {vid.views?.toLocaleString() || 0} Views
                                   </span>
-                                  <span className="text-rose-400 font-bold">❤️ {vid.likes || 0}</span>
-                                  <span className="text-amber-400 font-bold">💬 {vid.comments || 0}</span>
+                                  <span className="text-gray-400 w-16 text-right">❤️ {vid.likes?.toLocaleString() || 0}</span>
+                                  <span className="text-gray-400 w-16 text-right">💬 {vid.comments?.toLocaleString() || 0}</span>
                                 </div>
                               </div>
                             ))}
                           </div>
                         </div>
                       ) : (
-                        <p className="text-xs text-gray-500 italic text-center pt-4">No individual video metrics returned by basic token permissions. Switch token to verified Business Manager to inspect individual video rows.</p>
+                        <div className="mt-6 text-center text-gray-500 text-sm">
+                          No recent videos available. Graph API might not have returned data yet.
+                        </div>
                       )}
                     </div>
                   </div>
@@ -522,7 +547,7 @@ export default function FacebookPagesPage() {
       {/* Link Facebook Page Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-[500px] max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-6">Link Facebook Page</h2>
             {errorMsg && (
               <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm">
@@ -562,6 +587,59 @@ export default function FacebookPagesPage() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#1877F2]" 
                   placeholder="EAAI... (Long lived page token)"
                 />
+              </div>
+              
+              <div className="pt-4 pb-2 border-b border-gray-800">
+                <h3 className="text-md font-bold text-emerald-400 mb-2 flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M7.716 3h8.568l7.716 13.5H15.432z" fill="#FFC107"/><path d="M16.284 21H7.716L0 7.5h8.568z" fill="#0F9D58"/><path d="M12 10.5 7.716 3 0 16.5h8.568z" fill="#4285F4"/></svg>
+                  Local Folder (Google Drive) Integration (Optional)
+                </h3>
+                <p className="text-xs text-gray-500 mb-4">Optionally sync videos automatically from a Google Drive folder straight to this page.</p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">Drive Folder ID (Source)</label>
+                    <input 
+                      type="text" 
+                      value={driveFolderId} 
+                      onChange={(e) => setDriveFolderId(e.target.value)} 
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500" 
+                      placeholder="e.g. 1A2b3C4d5E6f..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">Drive Folder ID (Uploaded Destination)</label>
+                    <input 
+                      type="text" 
+                      value={uploadedFolderId} 
+                      onChange={(e) => setUploadedFolderId(e.target.value)} 
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500" 
+                      placeholder="e.g. 9Z8y7X6w..."
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Videos Per Day</label>
+                      <input 
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={videosPerDay} 
+                        onChange={(e) => setVideosPerDay(Number(e.target.value))} 
+                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Scheduled Time</label>
+                      <input 
+                        type="time" 
+                        value={scheduledTime} 
+                        onChange={(e) => setScheduledTime(e.target.value)} 
+                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500" 
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
               
               <div className="flex gap-4 pt-4">

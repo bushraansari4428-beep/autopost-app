@@ -32,17 +32,22 @@ enum Role {
 }
 
 model FacebookPage {
-  id           String          @id @default(uuid())
-  pageId       String          @unique
-  name         String
-  accessToken  String
-  tokenExpiry  DateTime?
-  status       Status          @default(ACTIVE)
-  userId       String?
-  user         User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mappings     Mapping[]
-  uploads      UploadHistory[]
-  createdAt    DateTime        @default(now())
+  id               String          @id @default(uuid())
+  pageId           String          @unique
+  name             String
+  accessToken      String
+  tokenExpiry      DateTime?
+  status           Status          @default(ACTIVE)
+  userId           String?
+  user             User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mappings         Mapping[]
+  uploads          UploadHistory[]
+  driveFolderId    String?
+  uploadedFolderId String?
+  videosPerDay     Int             @default(2)
+  scheduledTime    String?
+  lastDriveSyncRun DateTime?
+  createdAt        DateTime        @default(now())
 }
 
 model Source {
@@ -65,6 +70,7 @@ enum Platform {
   TIKTOK
   XIAOHONGSHU
   KUAISHOU
+  DRIVE
 }
 
 enum Status {

@@ -10,6 +10,7 @@ import Parser from 'rss-parser';
 import { InstagramRelayClient } from './instagram-relay.client';
 import { getLatestTikTokVideo, downloadTikTokVideo } from './tiktok.scraper';
 import { extractXiaohongshuVideo, downloadXiaohongshuVideo } from './xiaohongshu.scraper';
+import { DriveService } from '../drive/drive.service';
 
 @Injectable()
 export class SyncService {
@@ -40,6 +41,7 @@ export class SyncService {
     private readonly facebookService: FacebookService,
     private readonly logsService: LogsService,
     private readonly igRelayClient: InstagramRelayClient,
+    private readonly driveService: DriveService,
   ) {}
 
   private getYtDlpCmd(): string {
@@ -625,6 +627,151 @@ export class SyncService {
       }
     } catch (e) {
       this.logger.error(`Error in self-healing routine: ${e.message}`);
+    }
+  }
+
+  async processDriveUploads() {
+    if (!this.driveService || !this.driveService.isConfigured()) {
+      return;
+    }
+
+    try {
+      const pages = await this.prisma.facebookPage.findMany({
+        where: {
+          driveFolderId: { not: null },
+          status: 'ACTIVE'
+        }
+      });
+
+      if (pages.length === 0) return;
+
+      const nowUTC = new Date();
+      const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
+      const currentPktTimeStr = `${pktTime.getUTCHours().toString().padStart(2, '0')}:${pktTime.getUTCMinutes().toString().padStart(2, '0')}`;
+      const todayPktDateString = pktTime.toISOString().split('T')[0];
+
+      for (const page of pages) {
+        if (!page.driveFolderId || !page.uploadedFolderId || !page.scheduledTime) continue;
+        
+        if (currentPktTimeStr < page.scheduledTime) continue;
+        
+        if (page.lastDriveSyncRun) {
+          const lastRunUTC = new Date(page.lastDriveSyncRun);
+          const lastRunPkt = new Date(lastRunUTC.getTime() + (5 * 60 * 60 * 1000));
+          if (lastRunPkt.toISOString().split('T')[0] === todayPktDateString) {
+            continue;
+          }
+        }
+
+        this.logger.log(`Starting Drive sync for page ${page.name}`);
+        this.logsService.log('INFO', `Starting Google Drive sync for page: ${page.name}`);
+
+        try {
+          const videos = await this.driveService.listVideosInFolder(page.driveFolderId, page.videosPerDay);
+          
+          if (videos.length === 0) {
+            this.logsService.log('INFO', `No pending videos found in Drive folder for page: ${page.name}`);
+          } else {
+            for (const driveFile of videos) {
+              if (!driveFile.id || !driveFile.name) continue;
+              
+              let driveSource = await this.prisma.source.findFirst({
+                where: { platform: 'DRIVE', url: page.driveFolderId }
+              });
+              
+              if (!driveSource) {
+                driveSource = await this.prisma.source.create({
+                  data: {
+                    platform: 'DRIVE',
+                    name: `Drive Folder: ${page.name}`,
+                    url: page.driveFolderId,
+                    userId: page.userId,
+                  }
+                });
+              }
+
+              const videoTitle = driveFile.name.replace(/\.mp4$/i, '');
+              const video = await this.prisma.video.upsert({
+                where: {
+                  sourceId_originalId: {
+                    sourceId: driveSource.id,
+                    originalId: driveFile.id,
+                  }
+                },
+                create: {
+                  sourceId: driveSource.id,
+                  originalId: driveFile.id,
+                  title: videoTitle,
+                  description: videoTitle,
+                  url: `drive://${driveFile.id}`,
+                  publishedAt: new Date(driveFile.createdTime || new Date()),
+                },
+                update: {}
+              });
+
+              this.logsService.log('INFO', `Downloading ${driveFile.name} from Google Drive...`);
+              const tempPath = path.join(os.tmpdir(), `drive_${Date.now()}_${driveFile.id}.mp4`);
+              await this.driveService.downloadVideo(driveFile.id, tempPath);
+              
+              this.logsService.log('INFO', `Uploading ${driveFile.name} to Facebook Page ${page.name}...`);
+              
+              const finalDescription = this.formatFacebookCaption(videoTitle, 'DRIVE', '');
+              
+              const fbData: any = await new Promise((resolve, reject) => {
+                 const { spawn } = require('child_process');
+                 const curl = spawn('curl', [
+                    '-s', '-X', 'POST',
+                    `https://graph-video.facebook.com/v19.0/${page.pageId}/videos`,
+                    '-F', `access_token=${page.accessToken}`,
+                    '-F', `description=${finalDescription}`,
+                    '-F', `source=@${tempPath}`
+                 ]);
+                 
+                 let out = '';
+                 let errOut = '';
+                 curl.stdout.on('data', (d: any) => out += d);
+                 curl.stderr.on('data', (d: any) => errOut += d);
+                 curl.on('close', (code: number) => {
+                    if (code === 0) {
+                       try { 
+                          const parsed = JSON.parse(out);
+                          if (parsed.error) reject(new Error(parsed.error.message));
+                          else resolve(parsed); 
+                       } catch(e) { reject(new Error('Failed to parse response')); }
+                    } else reject(new Error(`cURL failed. ${errOut}`));
+                 });
+              });
+
+              if (fs.existsSync(tempPath)) {
+                fs.unlinkSync(tempPath);
+              }
+
+              await this.prisma.uploadHistory.create({
+                data: {
+                  videoId: video.id,
+                  facebookPageId: page.id,
+                  status: 'COMPLETED',
+                  facebookPostId: fbData.id
+                }
+              });
+
+              this.logsService.log('INFO', `Successfully uploaded. Moving file in Drive to Uploaded folder...`);
+              await this.driveService.moveFile(driveFile.id, page.uploadedFolderId);
+            }
+          }
+          
+          await this.prisma.facebookPage.update({
+            where: { id: page.id },
+            data: { lastDriveSyncRun: new Date() }
+          });
+          
+        } catch (pageError: any) {
+          this.logger.error(`Error processing Drive sync for page ${page.name}`, pageError);
+          this.logsService.log('ERROR', `Drive sync error for ${page.name}: ${pageError.message}`);
+        }
+      }
+    } catch (e) {
+      this.logger.error('Error in processDriveUploads', e);
     }
   }
 
