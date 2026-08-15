@@ -28,6 +28,9 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
     this.logsService.log('INFO', 'Starting scheduled source monitoring...');
     try {
       const sources = await this.prisma.source.findMany({
+        where: {
+          mappings: { some: {} }
+        },
         include: { mappings: true }
       });
       if (sources.length === 0) {
