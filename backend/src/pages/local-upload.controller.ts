@@ -16,7 +16,7 @@ export class LocalUploadController {
     FileInterceptor('video', {
       storage: multer.diskStorage({
         destination: os.tmpdir(),
-        filename: (req, file, cb) => {
+        filename: (req: any, file: any, cb: any) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = path.extname(file.originalname);
           cb(null, `local_upload_${uniqueSuffix}${ext}`);
