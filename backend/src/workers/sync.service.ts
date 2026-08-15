@@ -297,18 +297,30 @@ export class SyncService {
             latestVideo = tkVideo;
             await this.logsService.log('INFO', `Successfully found TikTok Video: ${latestVideo.title?.substring(0, 80)}...`);
           }
-        } else {
+        }
+        
+        // Universal fallback for anything that failed (except Xiaohongshu which strictly uses Playwright)
+        if (!latestVideo && mapping.source.platform !== 'XIAOHONGSHU') {
+          await this.logsService.log('INFO', `Attempting universal yt-dlp fallback extraction for ${mapping.source.url}...`);
           for (const url of urlsToScan) {
             const ytDlpCmd = this.getYtDlpCmd();
             const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
             try {
               const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
               if (stdout && stdout.trim()) {
-                latestVideo = JSON.parse(stdout);
+                const parsed = JSON.parse(stdout);
+                latestVideo = {
+                   id: parsed.id,
+                   title: parsed.title || parsed.description || 'New Video',
+                   url: parsed.webpage_url || url,
+                   mp4Url: parsed.url,
+                   timestamp: parsed.timestamp || Math.floor(Date.now() / 1000)
+                };
+                await this.logsService.log('INFO', `Successfully extracted via yt-dlp: ${latestVideo.title?.substring(0, 80)}...`);
                 break;
               }
             } catch (e: any) {
-              this.logsService.log('ERROR', `yt-dlp error: ${e.message.substring(0, 200)}...`);
+              await this.logsService.log('ERROR', `yt-dlp error: ${e.message.substring(0, 200)}...`);
             }
           }
         }
