@@ -364,10 +364,13 @@ export default function FacebookPagesPage() {
                   <div>
                     <h3 className="text-sm font-extrabold text-emerald-400 uppercase tracking-wider mb-3 flex items-center justify-between">
                       <span>🎬 Video Performance & Auto-Post Insights</span>
-                      <span className="text-xs font-mono text-gray-400">{statsData.autoPostUploads} Videos Synced via AutoPost</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] sm:text-xs font-mono text-gray-400 bg-gray-900 px-2 py-1 rounded-md border border-gray-800">Total FB Videos: {statsData.videoPerformance.totalVideos}</span>
+                        <span className="text-[10px] sm:text-xs font-mono text-blue-400/80 bg-blue-900/20 px-2 py-1 rounded-md border border-blue-900/50">AutoPost Synced: {statsData.autoPostUploads}</span>
+                      </div>
                     </h3>
                     <div className="bg-[#0f1422] p-6 rounded-3xl border border-gray-800/80 shadow-inner">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pb-6 border-b border-gray-800/60 text-center">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pb-6 border-b border-gray-800/60 text-center">
                         <div>
                           <p className="text-gray-400 text-xs font-bold mb-1">Total Video Views</p>
                           <p className="text-2xl font-extrabold text-white">{statsData.videoPerformance.totalViews.toLocaleString()}</p>
@@ -379,10 +382,6 @@ export default function FacebookPagesPage() {
                         <div>
                           <p className="text-gray-400 text-xs font-bold mb-1">Total Comments</p>
                           <p className="text-2xl font-extrabold text-amber-400">{statsData.videoPerformance.totalComments.toLocaleString()} 💬</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs font-bold mb-1">Avg. Video Retention</p>
-                          <p className="text-2xl font-extrabold text-cyan-400">{statsData.videoPerformance.avgRetention} ⏳</p>
                         </div>
                       </div>
                       

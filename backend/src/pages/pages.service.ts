@@ -110,7 +110,7 @@ export class PagesService {
       reachAndEngagement: {
         totalReach: 0,
         engagedUsers: 0,
-        engagementRate: '4.8%',
+        engagementRate: '0%',
         interactions: 0
       },
       videoPerformance: {
@@ -118,7 +118,6 @@ export class PagesService {
         totalViews: 0,
         totalReactions: 0,
         totalComments: 0,
-        avgRetention: '64%',
         recentVideos: [] as any[]
       },
       demographics: {
@@ -131,7 +130,7 @@ export class PagesService {
 
     try {
       // 1. Fetch real-time Page details and follower counts from Facebook Graph API
-      const basicInfoUrl = `https://graph.facebook.com/v19.0/${pageId}?fields=followers_count,fan_count,talking_about_count,name,category,engagement&access_token=${accessToken}`;
+      const basicInfoUrl = `https://graph.facebook.com/v19.0/${pageId}?fields=followers_count,fan_count,talking_about_count,name,category,engagement,videos.limit(0).summary(true)&access_token=${accessToken}`;
       const resBasic = await fetch(basicInfoUrl).catch(() => null);
       
       let totalFollowers = 0;
@@ -143,6 +142,10 @@ export class PagesService {
         totalFollowers = dataBasic.followers_count || dataBasic.fan_count || 0;
         fanCount = dataBasic.fan_count || totalFollowers;
         talkingAbout = dataBasic.talking_about_count || dataBasic.engagement?.count || 0;
+        
+        if (dataBasic.videos && dataBasic.videos.summary && dataBasic.videos.summary.total_count !== undefined) {
+          stats.videoPerformance.totalVideos = dataBasic.videos.summary.total_count;
+        }
 
         stats.followers.total = totalFollowers;
         stats.followers.likes = fanCount;
@@ -214,12 +217,13 @@ export class PagesService {
         }
 
         if (fbVideos.length > 0) {
-          stats.videoPerformance.totalVideos = Math.max(fbVideos.length, uploads.length);
+          stats.videoPerformance.totalVideos = Math.max(stats.videoPerformance.totalVideos, fbVideos.length, uploads.length);
           stats.videoPerformance.totalViews = viewsSum;
           stats.videoPerformance.totalReactions = likesSum;
           stats.videoPerformance.totalComments = commentsSum;
           stats.videoPerformance.recentVideos = recent;
         } else {
+          stats.videoPerformance.totalVideos = Math.max(stats.videoPerformance.totalVideos, uploads.length);
           stats.videoPerformance.totalViews = 0;
           stats.videoPerformance.totalReactions = 0;
           stats.videoPerformance.totalComments = 0;
