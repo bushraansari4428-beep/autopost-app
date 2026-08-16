@@ -39,9 +39,9 @@ export class MegaService {
     this.logger.log(`Uploading ${filename} to Mega.nz...`);
     const file = await targetFolder.upload(filename, buffer).complete;
     
-    const link = await file.link();
+    const link = await file.link(false);
     this.logger.log(`Uploaded to Mega: ${link}`);
-    return link;
+    return link as string;
   }
 
   async downloadFile(megaUrl: string): Promise<string> {
@@ -50,7 +50,7 @@ export class MegaService {
     await file.loadAttributes();
 
     const tempPath = path.join(os.tmpdir(), `mega_${Date.now()}_${file.name}`);
-    const stream = file.download();
+    const stream = file.download({});
     const writeStream = fs.createWriteStream(tempPath);
 
     return new Promise((resolve, reject) => {
@@ -84,7 +84,7 @@ export class MegaService {
         
         // Let's just find the file whose link matches
         for (const child of targetFolder.children) {
-           const link = await child.link();
+           const link = await child.link(false);
            if (link === megaUrl) {
              this.logger.log(`Deleting file from Mega.nz: ${child.name}`);
              await child.delete();

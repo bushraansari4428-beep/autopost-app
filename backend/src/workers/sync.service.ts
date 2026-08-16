@@ -41,6 +41,7 @@ export class SyncService {
     private readonly facebookService: FacebookService,
     private readonly logsService: LogsService,
     private readonly igRelayClient: InstagramRelayClient,
+    private readonly megaService: MegaService,
   ) {}
 
   private getYtDlpCmd(): string {
@@ -812,7 +813,6 @@ export class SyncService {
           title: videoTitle,
           description: finalDescription,
           url: megaLink,
-          mp4Url: megaLink,
           publishedAt: new Date(),
         }
       });
