@@ -910,7 +910,8 @@ export class SyncService {
       this.logger.log(`Extracting fresh TikTok MP4 stream for upload: ${targetUrl}`);
       
       try {
-        const tkVideo = await this.extractTikTokVideo(targetUrl);
+        const tkVideos = await this.extractTikTokVideos(targetUrl, 1);
+        const tkVideo = tkVideos.length > 0 ? tkVideos[0] : null;
         if (tkVideo && tkVideo.mp4Url) {
           videoUrl = tkVideo.mp4Url;
           this.logsService.log('INFO', `Successfully acquired fresh TikTok video stream via TikWM/extractTikTokVideo.`);
@@ -990,7 +991,8 @@ export class SyncService {
       }
     } else if (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink') || targetUrl.includes('rednote') || targetUrl.includes('xhs')) {
        this.logger.log(`Xiaohongshu / RedNote video stream extraction for URL: ${targetUrl}`);
-       const xhsRes = await extractXiaohongshuVideo(targetUrl);
+       const xhsVideos = await extractXiaohongshuVideos(targetUrl, 1);
+       const xhsRes = xhsVideos.length > 0 ? xhsVideos[0] : null;
        if (xhsRes && xhsRes.mp4Url) {
            videoUrl = xhsRes.mp4Url;
            if (!video.title || video.title === 'Xiaohongshu Video') {
@@ -1092,7 +1094,7 @@ export class SyncService {
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
       try {
         if (isXhsOrRedNote) {
-          await downloadXiaohongshuVideo(videoUrl, tempPath, targetUrl || video.url);
+          await downloadXiaohongshuVideo(videoUrl, tempPath);
         } else {
           try {
             await downloadTikTokVideo(videoUrl, tempPath);
@@ -1340,7 +1342,8 @@ export class SyncService {
       };
 
       if (platform === 'XIAOHONGSHU') {
-        const xhsRes = await extractXiaohongshuVideo(profileUrl || `https://www.xiaohongshu.com/user/profile/${userId}`);
+        const xhsVideos = await extractXiaohongshuVideos(profileUrl || `https://www.xiaohongshu.com/user/profile/${userId}`, 1);
+        const xhsRes = xhsVideos.length > 0 ? xhsVideos[0] : null;
         return xhsRes ? (xhsRes.mp4Url || xhsRes.url) : null;
       } else if (platform === 'KUAISHOU') {
         const targetUrl = `https://c.kuaishou.com/fw/user/3x${userId.replace(/^3x/, '')}`;

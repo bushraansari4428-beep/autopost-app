@@ -1,8 +1,5 @@
-import { chromium } from 'playwright-extra';
-import stealth from 'puppeteer-extra-plugin-stealth';
+import axios from 'axios';
 import * as fs from 'fs';
-
-chromium.use(stealth());
 
 export interface XiaohongshuMetadata {
   id: string;
@@ -13,100 +10,112 @@ export interface XiaohongshuMetadata {
   timestamp: number;
 }
 
-export async function extractXiaohongshuVideo(shareUrl: string): Promise<XiaohongshuMetadata | null> {
-  console.log(`[XHS Playwright Scraper] Launching browser for: ${shareUrl}`);
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+export async function extractXiaohongshuVideos(shareUrl: string, limit = 5): Promise<XiaohongshuMetadata[]> {
+  console.log(`[XHS Scraper] Fetching via Native HTTP for: ${shareUrl}`);
   
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  
+  const headers: Record<string, string> = {
+    'User-Agent': DEFAULT_USER_AGENT,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+  };
+
+  if (process.env.XHS_COOKIE) headers['Cookie'] = process.env.XHS_COOKIE;
+
   try {
-    const page = await browser.newPage({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-    });
-    
-    // Set cookie if provided to bypass login screens
-    if (process.env.XHS_COOKIE) {
-      const cookies = process.env.XHS_COOKIE.split(';').map(c => {
-        const [name, ...rest] = c.split('=');
-        return {
-          name: name.trim(),
-          value: rest.join('=').trim(),
-          domain: '.xiaohongshu.com',
-          path: '/'
-        };
-      });
-      await page.context().addCookies(cookies);
+    const response = await axios.get(shareUrl, { headers, timeout: 15000 });
+    const html = response.data;
+
+    // Check for WAF block
+    if (html.includes('<title>Verify</title>') || response.status === 403 || html.includes('captcha')) {
+      console.log(`[XHS Scraper] WAF blocked. Status: ${response.status}. First 500 chars: ${html.substring(0, 500)}`);
+      return [];
     }
 
-    let mp4Url = '';
-    
-    // Listen for network requests to intercept the raw video stream
-    page.on('response', async (response) => {
-      const url = response.url();
-      if ((url.includes('sns-video') || url.includes('.mp4') || url.includes('/stream/')) && url.startsWith('http')) {
-        const contentType = response.headers()['content-type'] || '';
-        if (contentType.includes('video/') || url.includes('.mp4')) {
-          mp4Url = url;
-          console.log(`[XHS Playwright Scraper] Intercepted video stream: ${mp4Url}`);
-        }
-      }
-    });
+    const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});?</s);
+    if (!stateMatch || !stateMatch[1]) {
+      console.log(`[XHS Scraper] No __INITIAL_STATE__ found. WAF block possible.`);
+      return [];
+    }
 
-    await page.goto(shareUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    const stateStr = stateMatch[1].replace(/undefined/g, 'null');
+    const state = JSON.parse(stateStr);
     
-    // Give it a couple seconds to trigger the video request
-    await page.waitForTimeout(3000);
-    
-    const finalUrl = page.url();
-    const isProfile = finalUrl.includes('/user/profile/');
-    
+    const results: XiaohongshuMetadata[] = [];
+    const isProfile = shareUrl.includes('/user/profile/');
+
     if (isProfile) {
-      console.log(`[XHS Playwright Scraper] Profile detected. Finding latest video...`);
-      // Find the first video note
-      const videoNotes = await page.$$('a.cover[href*="/explore/"]');
-      if (videoNotes.length > 0) {
-        // Click the first video note
-        await videoNotes[0].click();
-        await page.waitForTimeout(3000);
-        // Wait for video request to be intercepted
-        if (!mp4Url) {
-            await page.waitForTimeout(3000);
-        }
-      } else {
-        console.warn(`[XHS Playwright Scraper] No videos found on profile.`);
-        return null;
+      const notesList = state?.user?.notes?.[0] || state?.notes?.notesList || [];
+      const notesToProcess = notesList.slice(0, limit);
+      
+      for (const note of notesToProcess) {
+        const noteId = note.id || note.noteId;
+        if (!noteId) continue;
+        const noteUrl = `https://www.xiaohongshu.com/explore/${noteId}`;
+        const noteVideos = await extractXiaohongshuVideos(noteUrl, 1);
+        if (noteVideos.length > 0) results.push(noteVideos[0]);
       }
-    }
+    } else {
+      const noteMap = state?.note?.noteDetailMap ?? {};
+      const firstNoteKey = Object.keys(noteMap)[0];
+      const noteObj = noteMap[firstNoteKey]?.note ?? {};
+      
+      let title = noteObj.title || 'RedNote Video';
+      let mp4Url = '';
+      
+      const h264Url = noteObj.video?.media?.stream?.h264?.[0]?.masterUrl;
+      const originKey = noteObj.video?.consumer?.originVideoKey;
+      
+      if (h264Url) mp4Url = h264Url;
+      else if (originKey) mp4Url = `https://sns-video-bd.xhscdn.com/${originKey.replace(/^\//, '')}`;
 
-    // Try to extract title
-    let title = await page.title();
-    
-    // If network interception failed, try DOM extraction
-    if (!mp4Url) {
-       console.log(`[XHS Playwright Scraper] Network interception missed. Checking DOM...`);
-       const videoElement = await page.$('video');
-       if (videoElement) {
-         mp4Url = await videoElement.getAttribute('src') || '';
-         if (mp4Url && mp4Url.startsWith('blob:')) {
-            console.log(`[XHS Playwright Scraper] Blob URL found. Needs state extraction.`);
-            mp4Url = ''; // Blob URL is useless, reset.
+      if (mp4Url) {
+        if (mp4Url.startsWith('http:') && !mp4Url.startsWith('http://')) mp4Url = mp4Url.replace('http:', 'http://');
+        if (mp4Url.startsWith('https:') && !mp4Url.startsWith('https://')) mp4Url = mp4Url.replace('https:', 'https://');
+
+        results.push({
+          id: firstNoteKey || 'xhs_' + Date.now(),
+          title: title,
+          description: title,
+          url: shareUrl,
+          mp4Url: mp4Url,
+          timestamp: Math.floor(Date.now() / 1000)
+        });
       }
-    });
-    
-    // We navigate to the actual video stream URL and download it as buffer
-    const response = await page.goto(videoUrl, { waitUntil: 'load' });
-    if (response) {
-      const buffer = await response.body();
-      fs.writeFileSync(outputPath, buffer);
-      return outputPath;
     }
-    throw new Error("Failed to download response body");
-  } catch (e) {
-    console.error(`[XHS Download] Error: ${e.message}`);
-    throw e;
-  } finally {
-    await browser.close();
+    return results;
+  } catch (error: any) {
+    console.error(`[XHS Scraper] Error: ${error.message}`);
+    if (error.response) {
+      console.log(`[XHS Scraper] Error Response Status: ${error.response.status}`);
+      console.log(`[XHS Scraper] Error HTML (first 500 chars): ${String(error.response.data).substring(0, 500)}`);
+    }
+    return [];
   }
+}
+
+export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: string): Promise<string> {
+  const headers: Record<string, string> = {
+    'User-Agent': DEFAULT_USER_AGENT,
+    'Referer': 'https://www.xiaohongshu.com/',
+  };
+  if (process.env.XHS_COOKIE) headers['Cookie'] = process.env.XHS_COOKIE;
+
+  const response = await axios({
+    method: 'GET',
+    url: videoUrl,
+    responseType: 'stream',
+    headers
+  });
+
+  const writer = fs.createWriteStream(outputPath);
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', () => resolve(outputPath));
+    writer.on('error', (err: any) => {
+      writer.close();
+      reject(err);
+    });
+  });
 }

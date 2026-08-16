@@ -1,4 +1,4 @@
-import { extractXiaohongshuVideo, downloadXiaohongshuVideo } from './src/workers/xiaohongshu.scraper';
+import { extractXiaohongshuVideos, downloadXiaohongshuVideo } from './src/workers/xiaohongshu.scraper';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -6,7 +6,8 @@ async function test() {
   try {
     const targetUrl = 'http://xhslink.com/o/1tBzBcfhZ25';
     console.log('Extracting URL...');
-    const xhsMeta = await extractXiaohongshuVideo(targetUrl);
+    const xhsMetas = await extractXiaohongshuVideos(targetUrl, 1);
+    const xhsMeta = xhsMetas.length > 0 ? xhsMetas[0] : null;
     
     if (!xhsMeta) {
       console.log('Failed to extract metadata.');
