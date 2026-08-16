@@ -37,7 +37,7 @@ export class MegaService {
     }
 
     this.logger.log(`Uploading ${filename} to Mega.nz...`);
-    const file = await targetFolder.upload(filename, buffer).complete;
+    const file = await (targetFolder.upload(filename, buffer) as any).complete;
     
     const link = await file.link(false);
     this.logger.log(`Uploaded to Mega: ${link}`);
