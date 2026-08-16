@@ -10,6 +10,7 @@ export default function Dashboard() {
   });
   const [recentUploads, setRecentUploads] = useState<any[]>([]);
   const [pendingQueue, setPendingQueue] = useState<any[]>([]);
+  const [upcomingSchedules, setUpcomingSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [isClearing, setIsClearing] = useState(false);
@@ -21,10 +22,11 @@ export default function Dashboard() {
 
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [resSources, resPages, resHistory] = await Promise.all([
+      const [resSources, resPages, resHistory, resMappings] = await Promise.all([
         fetch('/api/sources', { headers, cache: 'no-store' }).catch(() => null),
         fetch('/api/pages', { headers, cache: 'no-store' }).catch(() => null),
-        fetch('/api/history', { headers, cache: 'no-store' }).catch(() => null)
+        fetch('/api/history', { headers, cache: 'no-store' }).catch(() => null),
+        fetch('/api/mappings', { headers, cache: 'no-store' }).catch(() => null)
       ]);
 
       let sourcesCount = 0;
@@ -54,6 +56,32 @@ export default function Dashboard() {
         }
       }
 
+      let upcoming: any[] = [];
+      if (resMappings && resMappings.ok) {
+        const mappings = await resMappings.json();
+        if (Array.isArray(mappings)) {
+          // Filter mappings that have a scheduledTime
+          const scheduled = mappings.filter(m => m.scheduledTime && m.source?.platform === 'MEGA_CLOUD');
+          // Parse "HH:mm" strings, convert to actual upcoming Dates, and sort them
+          const now = new Date();
+          upcoming = scheduled.map(m => {
+            const [hours, minutes] = m.scheduledTime.split(':').map(Number);
+            let nextRun = new Date();
+            nextRun.setHours(hours, minutes, 0, 0);
+            if (nextRun <= now && m.lastScheduledRun) {
+              // If it already ran today, next run is tomorrow
+              const lastRun = new Date(m.lastScheduledRun);
+              if (lastRun.getDate() === now.getDate() && lastRun.getMonth() === now.getMonth()) {
+                nextRun.setDate(nextRun.getDate() + 1);
+              }
+            } else if (nextRun <= now && !m.lastScheduledRun) {
+              // Should run immediately
+            }
+            return { ...m, nextRunTime: nextRun };
+          }).sort((a, b) => a.nextRunTime.getTime() - b.nextRunTime.getTime()).slice(0, 5);
+        }
+      }
+
       setStats({
         totalSources: sourcesCount,
         connectedPages: pagesCount,
@@ -62,6 +90,7 @@ export default function Dashboard() {
       });
       setRecentUploads(recent);
       setPendingQueue(pending);
+      setUpcomingSchedules(upcoming);
     } catch (error) {
       console.error('Error fetching dashboard statistics:', error);
     } finally {
@@ -121,72 +150,103 @@ export default function Dashboard() {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <div className="p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl shadow-xl hover:border-gray-700 transition-all">
-          <p className="text-gray-400 text-sm font-medium">Total Sources</p>
-          <p className="text-4xl font-extrabold text-white mt-2">
+        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
+          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-blue-500/10 blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
+          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
+            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            Total Sources
+          </p>
+          <p className="text-4xl font-black text-white mt-3 tracking-tight">
             {loading ? <span className="animate-pulse opacity-50">...</span> : stats.totalSources}
           </p>
         </div>
-        <div className="p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl shadow-xl hover:border-gray-700 transition-all">
-          <p className="text-gray-400 text-sm font-medium">Connected FB Pages</p>
-          <p className="text-4xl font-extrabold text-blue-400 mt-2">
-            {loading ? <span className="animate-pulse opacity-50">...</span> : stats.connectedPages}
+
+        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
+          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-blue-500/10 blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
+          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
+            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+            Connected FB Pages
+          </p>
+          <p className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-300 mt-3 tracking-tight">
+            {loading ? <span className="animate-pulse opacity-50 text-blue-400">...</span> : stats.connectedPages}
           </p>
         </div>
-        <div className="p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl shadow-xl hover:border-gray-700 transition-all">
-          <p className="text-gray-400 text-sm font-medium">Successful Uploads</p>
-          <p className="text-4xl font-extrabold text-green-400 mt-2">
-            {loading ? <span className="animate-pulse opacity-50">...</span> : stats.successfulUploads}
+
+        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
+          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-green-500/10 blur-3xl group-hover:bg-green-500/20 transition-all"></div>
+          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
+            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Successful Uploads
+          </p>
+          <p className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-300 mt-3 tracking-tight">
+            {loading ? <span className="animate-pulse opacity-50 text-green-400">...</span> : stats.successfulUploads}
           </p>
         </div>
-        <div className="p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl shadow-xl hover:border-gray-700 transition-all">
-          <p className="text-gray-400 text-sm font-medium">Failed Uploads</p>
-          <p className="text-4xl font-extrabold text-red-400 mt-2">
-            {loading ? <span className="animate-pulse opacity-50">...</span> : stats.failedUploads}
+
+        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
+          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-red-500/10 blur-3xl group-hover:bg-red-500/20 transition-all"></div>
+          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
+            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Failed Uploads
+          </p>
+          <p className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-rose-400 mt-3 tracking-tight">
+            {loading ? <span className="animate-pulse opacity-50 text-red-400">...</span> : stats.failedUploads}
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-xl">
+        <div className="bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col h-full">
           <h2 className="text-xl font-bold text-white mb-4 flex items-center justify-between">
             <span>Recent Uploads</span>
             <span className="text-xs font-normal px-2.5 py-1 bg-gray-800 rounded-full text-gray-400">Latest 5</span>
           </h2>
           {loading ? (
-            <div className="text-center py-12 text-gray-500 animate-pulse">Loading recent activity...</div>
+            <div className="text-center py-12 text-gray-500 animate-pulse flex-1 flex items-center justify-center">Loading recent activity...</div>
           ) : recentUploads.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 border border-dashed border-gray-800 rounded-xl">
+            <div className="text-center py-12 text-gray-500 border border-dashed border-gray-800 rounded-xl flex-1 flex items-center justify-center">
               No uploads yet.
             </div>
           ) : (
-            <div className="space-y-3.5 mt-4">
+            <div className="space-y-3.5 mt-2 flex-1">
               {recentUploads.map(item => (
-                <div key={item.id} className="flex items-center justify-between p-3.5 bg-gray-800/50 hover:bg-gray-800/80 rounded-xl border border-gray-700/50 transition-all">
-                  <div className="min-w-0 flex-1 mr-4">
-                    <p className="font-semibold text-white text-sm truncate">
-                      {item.video?.title || 'Instagram / Reel Post'}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Destination: <span className="text-gray-300 font-medium">{item.facebookPage?.name || 'Facebook Page'}</span> • {new Date(item.createdAt).toLocaleString()}
-                    </p>
+                <div key={item.id} className="flex flex-col p-3.5 bg-gray-800/40 hover:bg-gray-800/70 rounded-xl border border-gray-700/50 transition-all">
+                  <div className="flex items-start justify-between w-full">
+                    <div className="min-w-0 flex-1 mr-4">
+                      <p className="font-semibold text-white text-sm truncate">
+                        {item.video?.title || 'Unknown Video'}
+                      </p>
+                      <div className="flex items-center text-xs text-gray-400 mt-1.5 space-x-1.5 truncate">
+                        <span className="font-medium text-gray-300 truncate max-w-[120px]">{item.video?.source?.name || item.video?.source?.platform || 'Unknown Source'}</span>
+                        <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        <span className="font-medium text-blue-300 truncate max-w-[120px]">{item.facebookPage?.name || 'Unknown Page'}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {new Date(item.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap uppercase tracking-wider ${
+                      item.status === 'COMPLETED' || item.status === 'SUCCESS'
+                        ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                        : item.status === 'FAILED' || item.status === 'ERROR'
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                    }`}>
+                      {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
+                    </span>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-                    item.status === 'COMPLETED' || item.status === 'SUCCESS'
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                      : item.status === 'FAILED'
-                      ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                      : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                  }`}>
-                    {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
-                  </span>
+                  {(item.status === 'FAILED' || item.status === 'ERROR') && item.errorMessage && (
+                    <div className="mt-2 text-xs text-red-400/90 bg-red-500/10 p-2 rounded-lg border border-red-500/10 line-clamp-2">
+                      Error: {item.errorMessage}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-xl">
+        <div className="bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col h-full">
           <h2 className="text-xl font-bold text-white mb-4 flex items-center justify-between">
             <span>Queue Status</span>
             <span className="text-xs font-normal px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full">
@@ -194,27 +254,68 @@ export default function Dashboard() {
             </span>
           </h2>
           {loading ? (
-            <div className="text-center py-12 text-gray-500 animate-pulse">Checking active queue...</div>
+            <div className="text-center py-12 text-gray-500 animate-pulse flex-1 flex items-center justify-center">Checking active queue...</div>
           ) : pendingQueue.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 border border-dashed border-gray-800 rounded-xl flex flex-col items-center justify-center">
+            <div className="text-center py-12 text-gray-500 border border-dashed border-gray-800 rounded-xl flex-1 flex flex-col items-center justify-center">
               <svg className="w-8 h-8 text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Queue is empty and up to date.</span>
             </div>
           ) : (
-            <div className="space-y-3 mt-4">
+            <div className="space-y-3 mt-2 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
               {pendingQueue.map(item => (
-                <div key={item.id} className="flex items-center justify-between p-3.5 bg-blue-900/20 border border-blue-500/30 rounded-xl animate-pulse">
+                <div key={item.id} className="flex items-center justify-between p-3 bg-blue-900/10 border border-blue-500/20 rounded-xl animate-pulse">
                   <div className="min-w-0 flex-1 mr-4">
                     <p className="font-semibold text-blue-200 text-sm truncate">
-                      Processing: {item.video?.title || 'Queue Item'}
+                      {item.video?.title || 'Unknown Video'}
                     </p>
-                    <p className="text-xs text-blue-400 mt-0.5">Target Page ID: {item.facebookPageId}</p>
+                    <div className="flex items-center text-[11px] text-gray-400 mt-1 space-x-1 truncate">
+                      <span className="text-gray-400 truncate max-w-[100px]">{item.video?.source?.name || 'Unknown Source'}</span>
+                      <svg className="w-2.5 h-2.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                      <span className="text-blue-300 font-medium truncate max-w-[100px]">{item.facebookPage?.name || item.facebookPageId}</span>
+                    </div>
                   </div>
-                  <span className="px-2.5 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-bold whitespace-nowrap">
-                    PROCESSING
+                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-[10px] font-bold whitespace-nowrap tracking-wider">
+                    {item.status}
                   </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 mt-8">
+        <div className="bg-gradient-to-r from-purple-900/20 to-pink-900/20 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6 shadow-xl">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Next Scheduled Uploads (Mega Cloud)
+          </h2>
+          {loading ? (
+             <div className="text-center py-8 text-gray-500 animate-pulse">Calculating schedules...</div>
+          ) : upcomingSchedules.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 border border-dashed border-gray-700/50 rounded-xl">
+              No scheduled cloud uploads found. Set a schedule in the Mappings tab.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {upcomingSchedules.map((schedule, i) => (
+                <div key={i} className="bg-gray-900/50 border border-purple-500/20 rounded-xl p-4 flex flex-col justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white truncate mb-1">{schedule.facebookPage?.name}</p>
+                    <p className="text-xs text-gray-400">Scheduled: <span className="text-purple-300 font-medium">{schedule.scheduledTime}</span></p>
+                    <p className="text-[10px] text-gray-500 mt-1">{schedule.videosPerDay || 1} video(s) / day</p>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-800">
+                    <p className="text-xs font-medium text-pink-300">
+                      {schedule.nextRunTime.toLocaleDateString() === new Date().toLocaleDateString() 
+                        ? 'Today at ' + schedule.nextRunTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+                        : 'Tomorrow at ' + schedule.nextRunTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
