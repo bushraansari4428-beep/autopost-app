@@ -399,23 +399,27 @@ export class SyncService {
       const targetMappings = dueMappingIds ? source.mappings.filter((m: any) => dueMappingIds.includes(m.id)) : source.mappings;
       
       for (const mapping of targetMappings) {
-        // Find the oldest video from this source that hasn't been uploaded to this page yet
-        const unuploadedVideo = await this.prisma.video.findFirst({
+        // Find the oldest videos from this source that haven't been uploaded to this page yet
+        const unuploadedVideos = await this.prisma.video.findMany({
           where: {
             sourceId: source.id,
             uploads: { none: { facebookPageId: mapping.facebookPageId } }
           },
-          orderBy: { createdAt: 'asc' }
+          orderBy: { createdAt: 'asc' },
+          take: mapping.videosPerDay || 1
         });
 
-        if (unuploadedVideo) {
-          await this.prisma.uploadHistory.create({
-            data: {
-              videoId: unuploadedVideo.id,
-              facebookPageId: mapping.facebookPageId,
-              status: 'PENDING'
-            }
-          });
+        if (unuploadedVideos && unuploadedVideos.length > 0) {
+          for (const video of unuploadedVideos) {
+            await this.prisma.uploadHistory.create({
+              data: {
+                videoId: video.id,
+                facebookPageId: mapping.facebookPageId,
+                status: 'PENDING'
+              }
+            });
+            this.logsService.log('INFO', `Cloud Auto-Poster: Queued video '${video.title}' to post!`);
+          }
           
           if (mapping.scheduledTime) {
             await this.prisma.mapping.update({
@@ -423,7 +427,6 @@ export class SyncService {
               data: { lastScheduledRun: new Date() }
             });
           }
-          this.logsService.log('INFO', `Cloud Auto-Poster: Queued video '${unuploadedVideo.title}' to post now!`);
         } else {
            this.logsService.log('INFO', `Cloud Auto-Poster: No pending videos found in Mega.nz for this page.`);
         }

@@ -92,6 +92,7 @@ model Mapping {
   lastScheduledRun DateTime?
   source           Source       @relation(fields: [sourceId], references: [id])
   facebookPage     FacebookPage @relation(fields: [facebookPageId], references: [id])
+  videosPerDay     Int          @default(1)
 
   @@unique([sourceId, facebookPageId])
 }

@@ -25,6 +25,7 @@ export default function MappingsPage() {
   // Form state
   const [sourceId, setSourceId] = useState('');
   const [facebookPageId, setFacebookPageId] = useState('');
+  const [videosPerDay, setVideosPerDay] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -127,7 +128,7 @@ export default function MappingsPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ sourceId, facebookPageId })
+        body: JSON.stringify({ sourceId, facebookPageId, videosPerDay })
       });
       if (res.ok) {
         setShowModal(false);
@@ -198,6 +199,11 @@ export default function MappingsPage() {
                     className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500"
                     title="Leave empty to post immediately on new video"
                   />
+                  {mapping.source?.platform === 'MEGA_CLOUD' && (
+                    <span className="text-xs text-purple-400 mt-2 font-semibold">
+                      {mapping.videosPerDay} {mapping.videosPerDay === 1 ? 'Video' : 'Videos'} / Day
+                    </span>
+                  )}
                 </div>
                 
                 <div className="flex items-center gap-4">
@@ -258,8 +264,21 @@ export default function MappingsPage() {
                   ))}
                 </select>
               </div>
-              
-              <div className="flex gap-4 pt-4">
+              {sources.find(s => s.id === sourceId)?.platform === 'MEGA_CLOUD' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Videos per Day (Auto-scheduled 1 min apart)</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    max="100"
+                    value={videosPerDay} 
+                    onChange={(e) => setVideosPerDay(parseInt(e.target.value))} 
+                    required 
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              )}
+              <div className="flex justify-end gap-3 mt-6">
                 <button 
                   type="button" 
                   onClick={() => setShowModal(false)} 
