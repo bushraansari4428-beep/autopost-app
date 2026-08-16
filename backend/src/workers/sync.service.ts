@@ -641,7 +641,7 @@ export class SyncService {
   async processLocalVideo(facebookPageId: string, filePath: string, videoTitle: string) {
     try {
       const page = await this.prisma.facebookPage.findUnique({
-        where: { pageId: facebookPageId }
+        where: { id: facebookPageId }
       });
 
       if (!page || page.status !== 'ACTIVE') {
