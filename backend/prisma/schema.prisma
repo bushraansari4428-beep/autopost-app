@@ -75,6 +75,7 @@ enum Platform {
   KUAISHOU
   DRIVE
   LOCAL_FOLDER
+  MEGA_CLOUD
 }
 
 enum Status {

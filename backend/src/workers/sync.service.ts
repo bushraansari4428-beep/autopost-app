@@ -10,6 +10,7 @@ import Parser from 'rss-parser';
 import { InstagramRelayClient } from './instagram-relay.client';
 import { getLatestTikTokVideo, downloadTikTokVideo } from './tiktok.scraper';
 import { extractXiaohongshuVideo, downloadXiaohongshuVideo } from './xiaohongshu.scraper';
+import { MegaService } from './mega.service';
 
 @Injectable()
 export class SyncService {
@@ -732,6 +733,71 @@ export class SyncService {
     }
   }
 
+  async processCloudUpload(facebookPageId: string, videoTitle: string, buffer: Buffer) {
+    try {
+      const page = await this.prisma.facebookPage.findUnique({
+        where: { id: facebookPageId }
+      });
+
+      if (!page || page.status !== 'ACTIVE') {
+        throw new Error('Active Facebook Page not found with that Facebook Page ID');
+      }
+
+      this.logsService.log('INFO', `Starting Cloud Upload for page ${page.name}`);
+      
+      let cloudSource: any = await this.prisma.source.findFirst({
+        where: { platform: 'MEGA_CLOUD', userId: page.userId }
+      });
+      
+      if (!cloudSource) {
+        cloudSource = await this.prisma.source.create({
+          data: {
+            platform: 'MEGA_CLOUD',
+            name: 'Cloud Video Uploader',
+            url: 'cloud://mega',
+            userId: page.userId,
+          }
+        });
+      }
+
+      const ext = '.mp4';
+      const filename = `cloud_${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
+      
+      // Upload buffer to Mega
+      const megaLink = await this.megaService.uploadFile(filename, buffer);
+
+      const finalDescription = this.formatFacebookCaption(videoTitle, 'MEGA_CLOUD', '');
+
+      const video = await this.prisma.video.create({
+        data: {
+          sourceId: cloudSource.id,
+          originalId: filename,
+          title: videoTitle,
+          description: finalDescription,
+          url: megaLink,
+          mp4Url: megaLink,
+          publishedAt: new Date(),
+        }
+      });
+
+      // Schedule it immediately as pending
+      await this.prisma.uploadHistory.create({
+        data: {
+          videoId: video.id,
+          facebookPageId: page.id,
+          status: 'PENDING'
+        }
+      });
+
+      this.logsService.log('INFO', `Successfully saved cloud video ${videoTitle} to Mega and queued for page ${page.name}`);
+      return { success: true, message: 'Video uploaded to Cloud and scheduled successfully!' };
+    } catch (e: any) {
+      this.logger.error(`Error in processCloudUpload: ${e.message}`, e.stack);
+      this.logsService.log('ERROR', `Cloud upload failed: ${e.message}`);
+      throw e;
+    }
+  }
+
 
   async processPendingUploads() {
     if (this.isProcessing) {
@@ -884,6 +950,15 @@ export class SyncService {
        } else {
            throw new Error(`Failed to extract MP4 video stream from RedNote / Xiaohongshu URL: ${targetUrl}`);
        }
+    } else if (targetUrl.includes('mega.nz')) {
+       this.logger.log(`Downloading video from Mega.nz: ${targetUrl}`);
+       const downloadedPath = await this.megaService.downloadFile(targetUrl);
+       if (downloadedPath && fs.existsSync(downloadedPath)) {
+          this.logsService.log('INFO', `Successfully downloaded video from Mega.nz to ${downloadedPath}`);
+          videoUrl = 'local://' + downloadedPath; // signal that it's already a local file
+       } else {
+          throw new Error(`Failed to download video from Mega.nz: ${targetUrl}`);
+       }
     } else {
       this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
       const loaderRes = await fetch(`https://loader.to/ajax/download.php?format=720&url=${encodedUrl}`);
@@ -923,13 +998,46 @@ export class SyncService {
     let fbRes: any;
     let fbData: any;
 
+    const isMegaLocal = videoUrl.startsWith('local://');
     const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
     const isXhsOrRedNote = targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink') || targetUrl.includes('rednote') || videoUrl.includes('xhs') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu');
 
     const sourcePlatform = uploadHistory.video?.source?.platform;
     const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl);
 
-    if (isTiktokOrCdn || isXhsOrRedNote) {
+    if (isMegaLocal) {
+      const localFilePath = videoUrl.replace('local://', '');
+      this.logsService.log('INFO', `Uploading physical video from Mega directly to Facebook...`);
+      fbData = await new Promise((resolve, reject) => {
+         const { spawn } = require('child_process');
+         const curl = spawn('curl', [
+            '-s', '-X', 'POST',
+            `https://graph-video.facebook.com/v19.0/${pageId}/videos`,
+            '-F', `access_token=${accessToken}`,
+            '-F', `description=${finalDescription}`,
+            '-F', `source=@${localFilePath}`
+         ]);
+         
+         let out = ''; let errOut = '';
+         curl.stdout.on('data', (d: any) => out += d);
+         curl.stderr.on('data', (d: any) => errOut += d);
+         curl.on('close', (code: number) => {
+            if (code === 0) {
+               try { 
+                  const parsed = JSON.parse(out);
+                  if (parsed.error) reject(new Error(parsed.error.message));
+                  else resolve(parsed); 
+               } catch(e) { reject(new Error('Failed to parse Facebook response')); }
+            } else reject(new Error(`cURL failed. ${errOut}`));
+         });
+      });
+      // Cleanup local temp file
+      if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+      
+      // Auto-Delete from Mega.nz Cloud Storage
+      this.logsService.log('INFO', `Auto-Cleaning: Deleting video from Mega.nz to free up space...`);
+      await this.megaService.deleteFile(targetUrl);
+    } else if (isTiktokOrCdn || isXhsOrRedNote) {
       this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
       try {

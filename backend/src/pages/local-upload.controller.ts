@@ -51,4 +51,27 @@ export class LocalUploadController {
       throw new BadRequestException(error.message);
     }
   }
+  @Post(':id/cloud-upload')
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(
+    FileInterceptor('video', {
+      storage: multer.memoryStorage(),
+    }),
+  )
+  async uploadCloudVideo(
+    @Param('id') pageId: string,
+    @UploadedFile() file: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No video file provided');
+    }
+
+    try {
+      const originalName = path.parse(file.originalname).name;
+      const result = await this.syncService.processCloudUpload(pageId, originalName, file.buffer);
+      return result;
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
 }
