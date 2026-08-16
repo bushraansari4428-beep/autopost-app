@@ -169,7 +169,12 @@ export class SyncService {
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
     await this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.id}`);
-    
+
+    if (mapping.source.platform === 'LOCAL_FOLDER') {
+      await this.logsService.log('INFO', `Test skipped: LOCAL_FOLDER mappings are managed by your Desktop App.`);
+      return { success: true, message: 'Local PC Folders are connected properly. Please use the Desktop app to upload videos.' };
+    }
+
     let urlsToScan = [mapping.source.url];
     if (mapping.source.platform === 'YOUTUBE' && !mapping.source.url.includes('/shorts') && !mapping.source.url.includes('/videos') && mapping.source.url.includes('@')) {
       urlsToScan = [
