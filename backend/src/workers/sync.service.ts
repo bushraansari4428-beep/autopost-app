@@ -784,16 +784,31 @@ export class SyncService {
       this.logsService.log('INFO', `Starting Cloud Upload for page ${page.name}`);
       
       let cloudSource: any = await this.prisma.source.findFirst({
-        where: { platform: 'MEGA_CLOUD', userId: page.userId }
+        where: { platform: 'MEGA_CLOUD', url: `cloud://${page.id}` }
       });
       
       if (!cloudSource) {
         cloudSource = await this.prisma.source.create({
           data: {
             platform: 'MEGA_CLOUD',
-            name: 'Cloud Video Uploader',
-            url: 'cloud://mega',
+            name: `Cloud Uploads (${page.name})`,
+            url: `cloud://${page.id}`,
             userId: page.userId,
+          }
+        });
+      }
+
+      // Ensure a mapping exists so the user can set a schedule for it
+      let mapping = await this.prisma.mapping.findFirst({
+        where: { sourceId: cloudSource.id, facebookPageId: page.id }
+      });
+
+      if (!mapping) {
+        await this.prisma.mapping.create({
+          data: {
+            sourceId: cloudSource.id,
+            facebookPageId: page.id,
+            scheduledTime: '12:00' // Default schedule
           }
         });
       }
