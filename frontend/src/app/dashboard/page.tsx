@@ -9,7 +9,7 @@ export default function Dashboard() {
     failedUploads: 0
   });
   const [recentUploads, setRecentUploads] = useState<any[]>([]);
-  const [pendingQueue, setPendingQueue] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [upcomingSchedules, setUpcomingSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,11 +22,12 @@ export default function Dashboard() {
 
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [resSources, resPages, resHistory, resMappings] = await Promise.all([
+      const [resSources, resPages, resHistory, resMappings, resLogs] = await Promise.all([
         fetch('/api/sources', { headers, cache: 'no-store' }).catch(() => null),
         fetch('/api/pages', { headers, cache: 'no-store' }).catch(() => null),
         fetch('/api/history', { headers, cache: 'no-store' }).catch(() => null),
-        fetch('/api/mappings', { headers, cache: 'no-store' }).catch(() => null)
+        fetch('/api/mappings', { headers, cache: 'no-store' }).catch(() => null),
+        fetch('/api/logs', { headers, cache: 'no-store' }).catch(() => null)
       ]);
 
       let sourcesCount = 0;
@@ -44,15 +45,21 @@ export default function Dashboard() {
       let successCount = 0;
       let failCount = 0;
       let recent: any[] = [];
-      let pending: any[] = [];
 
       if (resHistory && resHistory.ok) {
         const history = await resHistory.json();
         if (Array.isArray(history)) {
           successCount = history.filter(h => h.status === 'COMPLETED' || h.status === 'SUCCESS').length;
           failCount = history.filter(h => h.status === 'FAILED' || h.status === 'ERROR').length;
-          pending = history.filter(h => h.status === 'PENDING' || h.status === 'PROCESSING' || h.status === 'IN_PROGRESS');
           recent = history.slice(0, 5);
+        }
+      }
+
+      let fetchedLogs: any[] = [];
+      if (resLogs && resLogs.ok) {
+        const parsedLogs = await resLogs.json();
+        if (Array.isArray(parsedLogs)) {
+          fetchedLogs = parsedLogs;
         }
       }
 
@@ -89,7 +96,7 @@ export default function Dashboard() {
         failedUploads: failCount
       });
       setRecentUploads(recent);
-      setPendingQueue(pending);
+      setLogs(fetchedLogs);
       setUpcomingSchedules(upcoming);
     } catch (error) {
       console.error('Error fetching dashboard statistics:', error);
@@ -249,46 +256,42 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col h-full">
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center justify-between">
-            <span>Queue Status</span>
-            <span className="text-xs font-normal px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full">
-              {pendingQueue.length} Pending
-            </span>
-          </h2>
-          {loading ? (
-            <div className="text-center py-12 text-gray-500 animate-pulse flex-1 flex items-center justify-center">Checking active queue...</div>
-          ) : pendingQueue.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 border border-dashed border-gray-800 rounded-xl flex-1 flex flex-col items-center justify-center">
-              <svg className="w-8 h-8 text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Queue is empty and up to date.</span>
+        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl overflow-hidden shadow-xl flex flex-col font-mono text-sm h-[400px]">
+          <div className="bg-gray-900/80 px-4 py-3 border-b border-gray-800 flex gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              <span className="text-xs text-green-500 font-bold">SYSTEM LOGS</span>
             </div>
-          ) : (
-            <div className="space-y-3 mt-2 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-              {pendingQueue.map(item => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-blue-900/10 border border-blue-500/20 rounded-xl animate-pulse">
-                  <div className="min-w-0 flex-1 mr-4">
-                    <p className="font-semibold text-blue-200 text-sm truncate">
-                      {item.video?.title || 'Unknown Video'}
-                    </p>
-                    <div className="flex items-center text-[11px] text-gray-400 mt-1 space-x-1 truncate">
-                      <span className="text-gray-400 truncate max-w-[150px]">
-                        {item.video?.source?.platform ? <span className="text-gray-500 text-[10px]">[{item.video.source.platform}] </span> : null}
-                        {item.video?.source?.name || 'Unknown Source'}
-                      </span>
-                      <svg className="w-2.5 h-2.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                      <span className="text-blue-300 font-medium truncate max-w-[100px]">{item.facebookPage?.name || item.facebookPageId}</span>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-[10px] font-bold whitespace-nowrap tracking-wider">
-                    {item.status}
+          </div>
+          <div className="p-4 flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+            {loading && logs.length === 0 ? (
+              <div className="text-gray-500 text-center py-10">Loading live logs...</div>
+            ) : logs.length === 0 ? (
+              <div className="text-gray-500 text-center py-10">No system logs recorded yet.</div>
+            ) : (
+              logs.map((log: any) => (
+                <div key={log.id} className="flex gap-3 text-xs">
+                  <span className="text-gray-600 shrink-0">[{new Date(log.createdAt).toLocaleTimeString()}]</span>
+                  <span className={`shrink-0 font-bold ${
+                    log.level === 'INFO' ? 'text-blue-400' :
+                    log.level === 'WARN' ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    [{log.level}]
                   </span>
+                  <span className="text-gray-300 break-words">{log.message}</span>
                 </div>
-              ))}
+              ))
+            )}
+            <div className="flex gap-4 animate-pulse mt-4 text-xs">
+              <span className="text-gray-600">[Waiting for new events...]</span>
             </div>
-          )}
+          </div>
         </div>
       </div>
 

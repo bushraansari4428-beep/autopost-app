@@ -62,7 +62,6 @@ export default function DashboardLayout({
   ];
 
   const adminItems = [
-    { name: 'Logs', href: '/dashboard/logs' },
     { name: 'Users', href: '/dashboard/users' },
     { name: 'Settings', href: '/dashboard/settings' },
   ];
