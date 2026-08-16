@@ -64,6 +64,9 @@ export class MappingsService {
   }
 
   update(id: string, updateData: any) {
+    if (updateData.scheduledTime !== undefined) {
+      updateData.lastScheduledRun = null;
+    }
     return this.prisma.mapping.update({
       where: { id },
       data: updateData,
