@@ -393,6 +393,43 @@ export class SyncService {
       return;
     }
 
+    if (source.platform === 'MEGA_CLOUD') {
+      this.logger.log(`Processing Cloud Upload queue for source: ${sourceId}`);
+      const targetMappings = dueMappingIds ? source.mappings.filter((m: any) => dueMappingIds.includes(m.id)) : source.mappings;
+      
+      for (const mapping of targetMappings) {
+        // Find the oldest video from this source that hasn't been uploaded to this page yet
+        const unuploadedVideo = await this.prisma.video.findFirst({
+          where: {
+            sourceId: source.id,
+            uploads: { none: { facebookPageId: mapping.facebookPageId } }
+          },
+          orderBy: { createdAt: 'asc' }
+        });
+
+        if (unuploadedVideo) {
+          await this.prisma.uploadHistory.create({
+            data: {
+              videoId: unuploadedVideo.id,
+              facebookPageId: mapping.facebookPageId,
+              status: 'PENDING'
+            }
+          });
+          
+          if (mapping.scheduledTime) {
+            await this.prisma.mapping.update({
+              where: { id: mapping.id },
+              data: { lastScheduledRun: new Date() }
+            });
+          }
+          this.logsService.log('INFO', `Cloud Auto-Poster: Queued video '${unuploadedVideo.title}' to post now!`);
+        } else {
+           this.logsService.log('INFO', `Cloud Auto-Poster: No pending videos found in Mega.nz for this page.`);
+        }
+      }
+      return;
+    }
+
     try {
       let urlsToScan = [source.url];
       if (source.platform === 'YOUTUBE' && !source.url.includes('/shorts') && !source.url.includes('/videos') && source.url.includes('@')) {
@@ -780,16 +817,7 @@ export class SyncService {
         }
       });
 
-      // Schedule it immediately as pending
-      await this.prisma.uploadHistory.create({
-        data: {
-          videoId: video.id,
-          facebookPageId: page.id,
-          status: 'PENDING'
-        }
-      });
-
-      this.logsService.log('INFO', `Successfully saved cloud video ${videoTitle} to Mega and queued for page ${page.name}`);
+      this.logsService.log('INFO', `Successfully saved cloud video ${videoTitle} to Mega. It will be posted at the scheduled time!`);
       return { success: true, message: 'Video uploaded to Cloud and scheduled successfully!' };
     } catch (e: any) {
       this.logger.error(`Error in processCloudUpload: ${e.message}`, e.stack);

@@ -57,6 +57,7 @@ export default function DashboardLayout({
     { name: 'Sources', href: '/dashboard/sources' },
     { name: 'Facebook Pages', href: '/dashboard/pages' },
     { name: 'Mappings', href: '/dashboard/mappings' },
+    { name: 'Upload to Cloud', href: '/dashboard/upload' },
     { name: 'Upload History', href: '/dashboard/history' },
   ];
 
