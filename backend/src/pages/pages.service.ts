@@ -122,32 +122,9 @@ export class PagesService {
         recentVideos: [] as any[]
       },
       demographics: {
-        topCountries: [
-          { country: 'United States (USA)', code: 'US', percentage: 42, count: 0 },
-          { country: 'United Kingdom (UK)', code: 'GB', percentage: 18, count: 0 },
-          { country: 'Canada', code: 'CA', percentage: 12, count: 0 },
-          { country: 'Australia', code: 'AU', percentage: 9, count: 0 },
-          { country: 'Other Global', code: 'GLOBAL', percentage: 19, count: 0 }
-        ],
-        topCities: [
-          { city: 'New York, USA', percentage: 14 },
-          { city: 'Los Angeles, USA', percentage: 11 },
-          { city: 'London, UK', percentage: 9 },
-          { city: 'Toronto, Canada', percentage: 6 },
-          { city: 'Sydney, Australia', percentage: 5 }
-        ],
-        genderAndAge: {
-          male: 58,
-          female: 42,
-          topAgeGroup: '25 - 34 years (44%)',
-          distribution: [
-            { group: '18-24', percentage: 18 },
-            { group: '25-34', percentage: 44 },
-            { group: '35-44', percentage: 24 },
-            { group: '45-54', percentage: 10 },
-            { group: '55+', percentage: 4 }
-          ]
-        }
+        topCountries: [],
+        topCities: [],
+        genderAndAge: null
       },
       timestamp: new Date().toISOString()
     };
@@ -170,29 +147,37 @@ export class PagesService {
         stats.followers.total = totalFollowers;
         stats.followers.likes = fanCount;
         
-        // Calculate realistic live net and new follower trends based on real follower count
-        const calculatedNew = Math.max(12, Math.floor(totalFollowers * 0.032));
-        const calculatedRemoves = Math.max(2, Math.floor(totalFollowers * 0.005));
-        stats.followers.newFollowers = calculatedNew;
-        stats.followers.netFollowers = calculatedNew - calculatedRemoves;
-
-        // Reach & Engagement calculations using real talking_about_count and followers
-        const estReach = Math.max(talkingAbout * 8, Math.floor(totalFollowers * 0.65) + 1450);
-        const estEngaged = Math.max(talkingAbout, Math.floor(totalFollowers * 0.08) + 210);
-        stats.reachAndEngagement.totalReach = estReach;
-        stats.reachAndEngagement.engagedUsers = estEngaged;
-        stats.reachAndEngagement.interactions = talkingAbout + Math.floor(estEngaged * 1.4);
-        
+        // We will fetch insights for growth, reach, and demographics below.
+        // For basic info, we just rely on totalFollowers and talkingAbout.
+        stats.reachAndEngagement.interactions = talkingAbout;
         if (totalFollowers > 0) {
-          const rate = ((estEngaged / totalFollowers) * 100).toFixed(1);
+          const rate = ((talkingAbout / totalFollowers) * 100).toFixed(1);
           stats.reachAndEngagement.engagementRate = `${rate}%`;
         }
 
-        // Update demographic counts dynamically based on real total followers
-        stats.demographics.topCountries = stats.demographics.topCountries.map((c: any) => ({
-          ...c,
-          count: Math.floor((c.percentage / 100) * (totalFollowers || 2500))
-        }));
+        // Try to fetch true reach and engagement insights
+        const basicInsightsUrl = `https://graph.facebook.com/v19.0/${pageId}/insights?metric=page_impressions_unique,page_post_engagements,page_fan_adds,page_fan_removes&period=day&access_token=${accessToken}`;
+        const resBasicInsights = await fetch(basicInsightsUrl).catch(() => null);
+        
+        if (resBasicInsights && resBasicInsights.ok) {
+          const basicData = await resBasicInsights.json();
+          const basicInsights = basicData.data || [];
+          
+          for (const item of basicInsights) {
+            if (item.name === 'page_impressions_unique' && item.values?.[0]?.value) {
+              stats.reachAndEngagement.totalReach = Number(item.values[0].value);
+            }
+            if (item.name === 'page_post_engagements' && item.values?.[0]?.value) {
+              stats.reachAndEngagement.engagedUsers = Number(item.values[0].value);
+            }
+            if (item.name === 'page_fan_adds' && item.values?.[0]?.value) {
+              stats.followers.newFollowers = Number(item.values[0].value);
+            }
+            if (item.name === 'page_fan_removes' && item.values?.[0]?.value) {
+              stats.followers.netFollowers = stats.followers.newFollowers - Number(item.values[0].value);
+            }
+          }
+        }
       }
 
       // 2. Fetch real uploaded videos directly from Facebook Graph API
@@ -210,9 +195,9 @@ export class PagesService {
         const recent: any[] = [];
 
         for (const v of fbVideos) {
-          const vViews = v.views || Math.floor(Math.random() * 450) + 150;
-          const vLikes = v.likes?.summary?.total_count || Math.floor(vViews * 0.1);
-          const vComments = v.comments?.summary?.total_count || Math.floor(vViews * 0.02);
+          const vViews = v.views || 0;
+          const vLikes = v.likes?.summary?.total_count || 0;
+          const vComments = v.comments?.summary?.total_count || 0;
           
           viewsSum += vViews;
           likesSum += vLikes;
@@ -235,18 +220,14 @@ export class PagesService {
           stats.videoPerformance.totalComments = commentsSum;
           stats.videoPerformance.recentVideos = recent;
         } else {
-          // If no videos returned yet by Graph API, estimate metrics for auto-post records
-          const fallbackViews = uploads.length * 850;
-          stats.videoPerformance.totalViews = fallbackViews;
-          stats.videoPerformance.totalReactions = Math.floor(fallbackViews * 0.08);
-          stats.videoPerformance.totalComments = Math.floor(fallbackViews * 0.015);
+          stats.videoPerformance.totalViews = 0;
+          stats.videoPerformance.totalReactions = 0;
+          stats.videoPerformance.totalComments = 0;
         }
       } else {
-        // Fallback calculation when video endpoint is restricted by token permissions
-        const estViews = Math.max(2450, totalFollowers * 3 + (uploads.length * 600));
-        stats.videoPerformance.totalViews = estViews;
-        stats.videoPerformance.totalReactions = Math.floor(estViews * 0.075);
-        stats.videoPerformance.totalComments = Math.floor(estViews * 0.018);
+        stats.videoPerformance.totalViews = 0;
+        stats.videoPerformance.totalReactions = 0;
+        stats.videoPerformance.totalComments = 0;
       }
 
       // 3. Try fetching real demographic insights if token has read_insights permission

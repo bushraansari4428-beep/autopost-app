@@ -425,73 +425,91 @@ export default function FacebookPagesPage() {
                       
                       {/* Top Countries & Cities */}
                       <div className="bg-[#0f1422] p-6 rounded-3xl border border-gray-800/80 shadow-inner space-y-5">
-                        <div>
-                          <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-3">Top Countries by Followers</p>
-                          <div className="space-y-3">
-                            {statsData.demographics.topCountries.map((c: any, i: number) => (
-                              <div key={c.code || i} className="space-y-1">
-                                <div className="flex justify-between text-xs font-bold">
-                                  <span className="text-gray-200">{c.country}</span>
-                                  <span className="text-blue-400">{c.percentage}% ({c.count ? c.count.toLocaleString() : ''})</span>
-                                </div>
-                                <div className="w-full bg-gray-800/80 rounded-full h-2 overflow-hidden">
-                                  <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full" style={{ width: `${c.percentage}%` }} />
+                        {statsData.demographics.topCountries?.length > 0 ? (
+                          <>
+                            <div>
+                              <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-3">Top Countries by Followers</p>
+                              <div className="space-y-3">
+                                {statsData.demographics.topCountries.map((c: any, i: number) => (
+                                  <div key={c.code || i} className="space-y-1">
+                                    <div className="flex justify-between text-xs font-bold">
+                                      <span className="text-gray-200">{c.country}</span>
+                                      <span className="text-blue-400">{c.percentage}% ({c.count ? c.count.toLocaleString() : ''})</span>
+                                    </div>
+                                    <div className="w-full bg-gray-800/80 rounded-full h-2 overflow-hidden">
+                                      <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full" style={{ width: `${c.percentage}%` }} />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {statsData.demographics.topCities?.length > 0 && (
+                              <div className="pt-4 border-t border-gray-800/60">
+                                <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-2">Top Global Cities</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {statsData.demographics.topCities.map((city: any, i: number) => (
+                                    <span key={i} className="bg-gray-950/80 border border-gray-800 text-gray-300 text-xs font-bold px-3 py-1 rounded-xl">
+                                      📍 {city.city} ({city.percentage}%)
+                                    </span>
+                                  ))}
                                 </div>
                               </div>
-                            ))}
+                            )}
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-gray-500 text-sm">
+                            <span className="text-4xl mb-3 opacity-50">🌍</span>
+                            <p>No location data available from Facebook.</p>
                           </div>
-                        </div>
-
-                        <div className="pt-4 border-t border-gray-800/60">
-                          <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-2">Top Global Cities</p>
-                          <div className="flex flex-wrap gap-2">
-                            {statsData.demographics.topCities.map((city: any, i: number) => (
-                              <span key={i} className="bg-gray-950/80 border border-gray-800 text-gray-300 text-xs font-bold px-3 py-1 rounded-xl">
-                                📍 {city.city} ({city.percentage}%)
-                              </span>
-                            ))}
-                          </div>
-                        </div>
+                        )}
                       </div>
 
                       {/* Gender & Age Breakdown */}
                       <div className="bg-[#0f1422] p-6 rounded-3xl border border-gray-800/80 shadow-inner flex flex-col justify-between">
-                        <div>
-                          <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-4">Gender & Age Distribution</p>
-                          
-                          {/* Gender Split Bar */}
-                          <div className="space-y-2 mb-6">
-                            <div className="flex justify-between text-xs font-extrabold">
-                              <span className="text-blue-400">👨 Men: {statsData.demographics.genderAndAge.male}%</span>
-                              <span className="text-pink-400">👩 Women: {statsData.demographics.genderAndAge.female}%</span>
-                            </div>
-                            <div className="w-full bg-gray-800 h-4 rounded-xl overflow-hidden flex border border-gray-700/50 p-0.5">
-                              <div className="bg-blue-500 h-full rounded-l-lg transition-all" style={{ width: `${statsData.demographics.genderAndAge.male}%` }} />
-                              <div className="bg-pink-500 h-full rounded-r-lg transition-all" style={{ width: `${statsData.demographics.genderAndAge.female}%` }} />
-                            </div>
-                          </div>
-
-                          {/* Age Groups Breakdown */}
+                        {statsData.demographics.genderAndAge ? (
                           <div>
-                            <p className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider mb-3">
-                              ⭐ Top Age Group: {statsData.demographics.genderAndAge.topAgeGroup}
-                            </p>
-                            <div className="space-y-2.5">
-                              {statsData.demographics.genderAndAge.distribution.map((d: any, idx: number) => (
-                                <div key={idx} className="flex items-center gap-3 text-xs font-bold">
-                                  <span className="w-14 text-gray-400 text-right">{d.group}</span>
-                                  <div className="flex-1 bg-gray-800/80 rounded-full h-2 overflow-hidden">
-                                    <div 
-                                      className={`h-full rounded-full ${idx === 1 ? 'bg-emerald-400 shadow-md shadow-emerald-500/40' : 'bg-purple-500'}`} 
-                                      style={{ width: `${d.percentage * 2}%` }} 
-                                    />
+                            <p className="text-xs font-extrabold text-gray-300 uppercase tracking-wider mb-4">Gender & Age Distribution</p>
+                            
+                            {/* Gender Split Bar */}
+                            <div className="space-y-2 mb-6">
+                              <div className="flex justify-between text-xs font-extrabold">
+                                <span className="text-blue-400">👨 Men: {statsData.demographics.genderAndAge.male}%</span>
+                                <span className="text-pink-400">👩 Women: {statsData.demographics.genderAndAge.female}%</span>
+                              </div>
+                              <div className="w-full bg-gray-800 h-4 rounded-xl overflow-hidden flex border border-gray-700/50 p-0.5">
+                                <div className="bg-blue-500 h-full rounded-l-lg transition-all" style={{ width: `${statsData.demographics.genderAndAge.male}%` }} />
+                                <div className="bg-pink-500 h-full rounded-r-lg transition-all" style={{ width: `${statsData.demographics.genderAndAge.female}%` }} />
+                              </div>
+                            </div>
+
+                            {/* Age Groups Breakdown */}
+                            <div>
+                              <p className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider mb-3">
+                                ⭐ Top Age Group: {statsData.demographics.genderAndAge.topAgeGroup}
+                              </p>
+                              <div className="space-y-2.5">
+                                {statsData.demographics.genderAndAge.distribution.map((d: any, idx: number) => (
+                                  <div key={idx} className="flex items-center gap-3 text-xs font-bold">
+                                    <span className="w-14 text-gray-400 text-right">{d.group}</span>
+                                    <div className="flex-1 bg-gray-800/80 rounded-full h-2 overflow-hidden">
+                                      <div 
+                                        className={`h-full rounded-full ${idx === 1 ? 'bg-emerald-400 shadow-md shadow-emerald-500/40' : 'bg-purple-500'}`} 
+                                        style={{ width: `${d.percentage * 2}%` }} 
+                                      />
+                                    </div>
+                                    <span className="w-10 text-gray-300">{d.percentage}%</span>
                                   </div>
-                                  <span className="w-10 text-gray-300">{d.percentage}%</span>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-gray-500 text-sm">
+                            <span className="text-4xl mb-3 opacity-50">👥</span>
+                            <p>No demographic data available from Facebook.</p>
+                          </div>
+                        )}
 
                         <div className="mt-6 pt-4 border-t border-gray-800/60 text-center">
                           <p className="text-[11px] text-gray-500">
