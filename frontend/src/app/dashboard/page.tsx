@@ -217,7 +217,10 @@ export default function Dashboard() {
                         {item.video?.title || 'Unknown Video'}
                       </p>
                       <div className="flex items-center text-xs text-gray-400 mt-1.5 space-x-1.5 truncate">
-                        <span className="font-medium text-gray-300 truncate max-w-[120px]">{item.video?.source?.name || item.video?.source?.platform || 'Unknown Source'}</span>
+                        <span className="font-medium text-gray-300 truncate max-w-[200px]">
+                          {item.video?.source?.platform ? <span className="text-gray-500 font-normal">[{item.video.source.platform}] </span> : null}
+                          {item.video?.source?.name || 'Unknown Source'}
+                        </span>
                         <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                         <span className="font-medium text-blue-300 truncate max-w-[120px]">{item.facebookPage?.name || 'Unknown Page'}</span>
                       </div>
@@ -271,7 +274,10 @@ export default function Dashboard() {
                       {item.video?.title || 'Unknown Video'}
                     </p>
                     <div className="flex items-center text-[11px] text-gray-400 mt-1 space-x-1 truncate">
-                      <span className="text-gray-400 truncate max-w-[100px]">{item.video?.source?.name || 'Unknown Source'}</span>
+                      <span className="text-gray-400 truncate max-w-[150px]">
+                        {item.video?.source?.platform ? <span className="text-gray-500 text-[10px]">[{item.video.source.platform}] </span> : null}
+                        {item.video?.source?.name || 'Unknown Source'}
+                      </span>
                       <svg className="w-2.5 h-2.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                       <span className="text-blue-300 font-medium truncate max-w-[100px]">{item.facebookPage?.name || item.facebookPageId}</span>
                     </div>
