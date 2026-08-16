@@ -6,10 +6,11 @@ export default function CloudUploadPage() {
   const router = useRouter();
   const [pages, setPages] = useState<any[]>([]);
   const [selectedPageId, setSelectedPageId] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [dragActive, setDragActive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     fetchPages();
@@ -45,10 +46,11 @@ export default function CloudUploadPage() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.type.includes('video/mp4') || droppedFile.name.endsWith('.mp4')) {
-        setFile(droppedFile);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files) as File[];
+      const validFiles = droppedFiles.filter(f => f.type.includes('video/mp4') || f.name.endsWith('.mp4'));
+      if (validFiles.length > 0) {
+        setFiles(prev => [...prev, ...validFiles]);
         setMessage({ type: '', text: '' });
       } else {
         setMessage({ type: 'error', text: 'Only MP4 video files are supported.' });
@@ -57,15 +59,23 @@ export default function CloudUploadPage() {
   };
 
   const handleFileChange = (e: any) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setMessage({ type: '', text: '' });
+    if (e.target.files && e.target.files.length > 0) {
+      const selectedFiles = Array.from(e.target.files) as File[];
+      const validFiles = selectedFiles.filter(f => f.type.includes('video/mp4') || f.name.endsWith('.mp4'));
+      if (validFiles.length > 0) {
+        setFiles(prev => [...prev, ...validFiles]);
+        setMessage({ type: '', text: '' });
+      }
     }
   };
 
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleUpload = async () => {
-    if (!file) {
-      setMessage({ type: 'error', text: 'Please select a video file to upload.' });
+    if (files.length === 0) {
+      setMessage({ type: 'error', text: 'Please select video files to upload.' });
       return;
     }
     if (!selectedPageId) {
@@ -77,33 +87,45 @@ export default function CloudUploadPage() {
     setMessage({ type: '', text: '' });
     const token = localStorage.getItem('token');
     
-    const formData = new FormData();
-    formData.append('video', file);
+    let successCount = 0;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setUploadProgress(i + 1);
+      const formData = new FormData();
+      formData.append('video', file);
 
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pages/${selectedPageId}/cloud-upload`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
-      });
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pages/${selectedPageId}/cloud-upload`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: formData
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        setMessage({ type: 'success', text: data.message || 'Video uploaded to Cloud successfully! It will be posted at your scheduled time.' });
-        setFile(null);
-        // Reset file input UI
-        const fileInput = document.getElementById('video-upload') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
-      } else {
-        setMessage({ type: 'error', text: data.message || 'Upload failed.' });
+        if (res.ok) {
+          successCount++;
+        }
+      } catch (e: any) {
+        console.error('Upload failed for', file.name, e);
       }
-    } catch (e: any) {
-      setMessage({ type: 'error', text: 'An unexpected error occurred during upload.' });
-    } finally {
-      setIsUploading(false);
     }
+
+    if (successCount === files.length) {
+      setMessage({ type: 'success', text: `Successfully uploaded ${successCount} video(s) to Cloud! They will be posted at your scheduled time.` });
+      setFiles([]);
+    } else if (successCount > 0) {
+      setMessage({ type: 'success', text: `Uploaded ${successCount} out of ${files.length} videos successfully.` });
+      setFiles(files.slice(successCount));
+    } else {
+      setMessage({ type: 'error', text: 'Upload failed for all videos.' });
+    }
+    
+    setUploadProgress(0);
+    setIsUploading(false);
+    const fileInput = document.getElementById('video-upload') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
   };
 
   return (
@@ -142,7 +164,7 @@ export default function CloudUploadPage() {
         <div 
           className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-200 ${
             dragActive ? 'border-blue-500 bg-blue-500/10' : 
-            file ? 'border-green-500/50 bg-green-500/5' : 'border-gray-700 hover:border-gray-600 bg-gray-950'
+            files.length > 0 ? 'border-green-500/50 bg-green-500/5' : 'border-gray-700 hover:border-gray-600 bg-gray-950'
           }`}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
@@ -153,25 +175,36 @@ export default function CloudUploadPage() {
             type="file"
             id="video-upload"
             accept="video/mp4"
+            multiple
             onChange={handleFileChange}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             disabled={isUploading}
           />
           
           <div className="flex flex-col items-center justify-center space-y-4 pointer-events-none">
-            {file ? (
-              <>
-                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center text-green-400">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
+            {files.length > 0 ? (
+              <div className="w-full max-h-60 overflow-y-auto z-10 relative space-y-2 pointer-events-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-lg font-semibold text-white">{files.length} video(s) selected</p>
+                  <p className="text-xs text-gray-500">Add more by dragging or clicking</p>
                 </div>
-                <div>
-                  <p className="text-lg font-semibold text-white">{file.name}</p>
-                  <p className="text-sm text-gray-400">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
-                </div>
-                <p className="text-xs text-gray-500">Click or drag a different file to replace</p>
-              </>
+                {files.map((f, i) => (
+                  <div key={i} className="flex justify-between items-center bg-gray-900/80 p-3 rounded-xl border border-gray-700">
+                    <div className="flex items-center space-x-3 truncate">
+                      <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 shrink-0">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                      </div>
+                      <div className="truncate">
+                        <p className="text-sm font-semibold text-white truncate">{f.name}</p>
+                        <p className="text-xs text-gray-400">{(f.size / (1024 * 1024)).toFixed(2)} MB</p>
+                      </div>
+                    </div>
+                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFile(i); }} disabled={isUploading} className="text-red-400 hover:text-red-300 p-2 shrink-0">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
             ) : (
               <>
                 <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center text-gray-400">
@@ -210,9 +243,9 @@ export default function CloudUploadPage() {
         <div className="mt-8">
           <button
             onClick={handleUpload}
-            disabled={!file || !selectedPageId || isUploading}
+            disabled={files.length === 0 || !selectedPageId || isUploading}
             className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 flex justify-center items-center ${
-              !file || !selectedPageId || isUploading
+              files.length === 0 || !selectedPageId || isUploading
                 ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20'
             }`}
@@ -223,10 +256,10 @@ export default function CloudUploadPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Uploading to Cloud... Please wait
+                Uploading {uploadProgress} of {files.length}... Please wait
               </>
             ) : (
-              'Upload & Schedule Video'
+              'Upload & Schedule Video' + (files.length > 1 ? 's' : '')
             )}
           </button>
         </div>
