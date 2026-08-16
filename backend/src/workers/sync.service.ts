@@ -8,8 +8,8 @@ import * as path from 'path';
 import * as os from 'os';
 import Parser from 'rss-parser';
 import { InstagramRelayClient } from './instagram-relay.client';
-import { getLatestTikTokVideo, downloadTikTokVideo } from './tiktok.scraper';
-import { extractXiaohongshuVideo, downloadXiaohongshuVideo } from './xiaohongshu.scraper';
+import { getLatestTikTokVideos, downloadTikTokVideo } from './tiktok.scraper';
+import { extractXiaohongshuVideos, downloadXiaohongshuVideo } from './xiaohongshu.scraper';
 import { MegaService } from './mega.service';
 
 @Injectable()
@@ -273,9 +273,9 @@ export class SyncService {
 
         } else if (mapping.source.platform === 'XIAOHONGSHU') {
           await this.logsService.log('INFO', `Executing RedNote/Xiaohongshu multi-layer extraction for ${mapping.source.url}...`);
-          const xhsVideo = await extractXiaohongshuVideo(mapping.source.url);
-          if (xhsVideo) {
-            latestVideo = xhsVideo;
+          const xhsVideos = await extractXiaohongshuVideos(mapping.source.url, 1);
+          if (xhsVideos.length > 0) {
+            latestVideo = xhsVideos[0];
             await this.logsService.log('INFO', `Successfully found Xiaohongshu Video: ${latestVideo.title?.substring(0, 80)}...`);
           }
         } else if (mapping.source.platform === 'KUAISHOU') {
@@ -299,9 +299,9 @@ export class SyncService {
           }
         } else if (mapping.source.platform === 'TIKTOK') {
           await this.logsService.log('INFO', `Executing high-res TikTok extraction with original caption preservation for ${mapping.source.url}...`);
-          const tkVideo = await this.extractTikTokVideo(mapping.source.url);
-          if (tkVideo) {
-            latestVideo = tkVideo;
+          const tkVideos = await this.extractTikTokVideos(mapping.source.url, 1);
+          if (tkVideos.length > 0) {
+            latestVideo = tkVideos[0];
             await this.logsService.log('INFO', `Successfully found TikTok Video: ${latestVideo.title?.substring(0, 80)}...`);
           }
         }
@@ -522,9 +522,9 @@ export class SyncService {
 
         } else if (source.platform === 'XIAOHONGSHU') {
           this.logger.log(`Executing RedNote/Xiaohongshu multi-layer extraction for ${source.url}...`);
-          const xhsVideo = await extractXiaohongshuVideo(source.url);
-          if (xhsVideo) {
-             latestVideos.push(xhsVideo);
+          const xhsVideos = await extractXiaohongshuVideos(source.url, 5);
+          if (xhsVideos.length > 0) {
+             latestVideos.push(...xhsVideos);
           }
         } else if (source.platform === 'KUAISHOU') {
           const urlParts = source.url.split('/').filter(Boolean);
@@ -560,15 +560,15 @@ export class SyncService {
       if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM' && source.platform !== 'XIAOHONGSHU' && source.platform !== 'KUAISHOU') {
         if (source.platform === 'TIKTOK') {
           this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
-          const tkVideo = await this.extractTikTokVideo(source.url);
-          if (tkVideo) {
-            latestVideos.push(tkVideo);
-            this.logger.log(`Found TikTok video: ${tkVideo.title?.substring(0, 80)}`);
+          const tkVideos = await this.extractTikTokVideos(source.url, 5);
+          if (tkVideos.length > 0) {
+            latestVideos.push(...tkVideos);
+            this.logger.log(`Found TikTok video(s). Count: ${tkVideos.length}`);
           }
         } else {
           for (const url of urlsToScan) {
             const ytDlpCmd = this.getYtDlpCmd();
-            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
+            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 5 "${url}"`;
             try {
               this.logger.log(`Scanning URL: ${url}`);
               const { stdout, stderr } = await execPromise(cmd, {
@@ -576,9 +576,16 @@ export class SyncService {
               });
 
               if (stdout && stdout.trim()) {
-                latestVideos.push(JSON.parse(stdout));
-                this.logger.log(`Found YouTube video: ${latestVideos[0].title}`);
-                break;
+                const lines = stdout.trim().split('\n');
+                for (const line of lines) {
+                  if (line.trim()) {
+                    try { latestVideos.push(JSON.parse(line)); } catch(e) {}
+                  }
+                }
+                if (latestVideos.length > 0) {
+                  this.logger.log(`Found YouTube video(s). Count: ${latestVideos.length}`);
+                  break;
+                }
               } else if (stderr) {
                 this.logger.warn(`yt-dlp stderr for ${url}: ${stderr}`);
               }
@@ -1374,23 +1381,21 @@ export class SyncService {
     return null;
   }
 
-  private async extractTikTokVideo(rawUrl: string): Promise<any> {
+  private async extractTikTokVideos(rawUrl: string, limit = 5): Promise<any[]> {
     try {
       this.logger.log(`Calling native TikTok scraper for: ${rawUrl}`);
-      const tkMeta = await getLatestTikTokVideo(rawUrl);
-      if (tkMeta) {
-        return {
-          id: tkMeta.id,
-          title: tkMeta.caption,
-          description: tkMeta.caption,
-          url: tkMeta.url,
-          mp4Url: tkMeta.playUrl || tkMeta.downloadUrl,
-          timestamp: tkMeta.createTime
-        };
-      }
+      const tkMetas = await getLatestTikTokVideos(rawUrl, limit);
+      return tkMetas.map(tkMeta => ({
+        id: tkMeta.id,
+        title: tkMeta.caption,
+        description: tkMeta.caption,
+        url: tkMeta.url,
+        mp4Url: tkMeta.playUrl || tkMeta.downloadUrl,
+        timestamp: tkMeta.createTime
+      }));
     } catch (e: any) {
       this.logger.warn(`Native TikTok extraction failed: ${e.message}`);
+      return [];
     }
-    return null;
   }
 }

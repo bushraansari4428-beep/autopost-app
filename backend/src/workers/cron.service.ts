@@ -50,23 +50,37 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
       for (const source of sources) {
         const dueMappingIds: string[] = [];
         
-        for (const mapping of source.mappings) {
-          if (!mapping.scheduledTime) {
-            dueMappingIds.push(mapping.id);
-            continue;
-          }
+        let shouldMonitorExternal = false;
+        if (source.platform !== 'MEGA_CLOUD') {
+           const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+           if (!source.lastChecked || source.lastChecked <= thirtyMinsAgo) {
+             shouldMonitorExternal = true;
+           }
+        }
 
-          if (currentPktTimeStr >= mapping.scheduledTime) {
-            if (!mapping.lastScheduledRun) {
+        for (const mapping of source.mappings) {
+          if (source.platform === 'MEGA_CLOUD') {
+            if (!mapping.scheduledTime) {
               dueMappingIds.push(mapping.id);
-            } else {
-               const lastRunUTC = new Date(mapping.lastScheduledRun);
-               const lastRunPkt = new Date(lastRunUTC.getTime() + (5 * 60 * 60 * 1000));
-               const lastRunDateString = lastRunPkt.toISOString().split('T')[0];
-               
-               if (lastRunDateString !== todayPktDateString) {
-                 dueMappingIds.push(mapping.id);
-               }
+              continue;
+            }
+
+            if (currentPktTimeStr >= mapping.scheduledTime) {
+              if (!mapping.lastScheduledRun) {
+                dueMappingIds.push(mapping.id);
+              } else {
+                 const lastRunUTC = new Date(mapping.lastScheduledRun);
+                 const lastRunPkt = new Date(lastRunUTC.getTime() + (5 * 60 * 60 * 1000));
+                 const lastRunDateString = lastRunPkt.toISOString().split('T')[0];
+                 
+                 if (lastRunDateString !== todayPktDateString) {
+                   dueMappingIds.push(mapping.id);
+                 }
+              }
+            }
+          } else {
+            if (shouldMonitorExternal) {
+              dueMappingIds.push(mapping.id);
             }
           }
         }

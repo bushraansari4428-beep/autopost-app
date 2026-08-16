@@ -83,17 +83,15 @@ class TikTokSessionManager {
 
 const sessionManager = new TikTokSessionManager();
 
-export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVideoMetadata> {
+export async function getLatestTikTokVideos(inputUrl: string, limit = 5): Promise<TikTokVideoMetadata[]> {
   const cleanUrl = inputUrl.split('?')[0].replace(/\/$/, '').trim();
   const isVideoUrl = cleanUrl.includes('/video/') || cleanUrl.includes('/v/');
   
-  
-
-  let awemeId = '';
+  let awemeIds: { id: string, username: string }[] = [];
   let username = 'user';
 
   if (isVideoUrl) {
-    // Attempt oEmbed to get aweme_id reliably (officially supported endpoint)
+    let awemeId = '';
     try {
       const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(cleanUrl)}`;
       const oembedRes = await axios.get(oembedUrl, { headers: { 'Accept': 'application/json' }, timeout: 10000 });
@@ -105,6 +103,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
       const vidMatch = cleanUrl.match(/(?:video|v)\/(\d{18,20})/);
       awemeId = vidMatch ? vidMatch[1] : '';
     }
+    if (awemeId) awemeIds.push({ id: awemeId, username });
   } else {
     const usernameMatch = cleanUrl.match(/@([a-zA-Z0-9_.-]+)/);
     const uname = usernameMatch ? usernameMatch[1] : '';
@@ -116,27 +115,22 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
         
         console.log("Attempting Playwright fallback for TikWM...");
         const browser = await chromium.launch({ headless: true });
-        const context = await browser.newContext({
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        });
-        const page = await context.newPage();
+        const page = await browser.newPage();
         
-        await page.goto(`https://www.tikwm.com/api/user/posts?unique_id=${uname}&count=1`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.goto(`https://www.tikwm.com/api/user/posts?unique_id=${uname}&count=${limit}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
         
-        let tikwmRes = null;
+        let tikwmRes: any = null;
         for (let i = 0; i < 10; i++) {
           const content = await page.evaluate(() => document.body.innerText);
           try {
             tikwmRes = JSON.parse(content);
-            if (tikwmRes && tikwmRes.data) break; // Valid JSON received
-          } catch (e) {
-            await page.waitForTimeout(1000);
-          }
+            if (tikwmRes && tikwmRes.data) break;
+          } catch (e) { await page.waitForTimeout(1000); }
         }
         await browser.close();
+        
         if (tikwmRes && tikwmRes.data && tikwmRes.data.videos && tikwmRes.data.videos.length > 0) {
-           const v = tikwmRes.data.videos[0];
-           return {
+           return tikwmRes.data.videos.slice(0, limit).map((v: any) => ({
              id: v.video_id,
              caption: v.title,
              hashtags: [],
@@ -145,7 +139,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
              author: v.author?.unique_id || uname,
              createTime: v.create_time,
              url: `https://www.tiktok.com/@${v.author?.unique_id || uname}/video/${v.video_id}`
-           };
+           }));
         }
       } catch (err: any) {
         console.log(`Playwright TikWM API failed for ${uname}:`, err.message);
@@ -161,7 +155,7 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
         const page = await browser.newPage();
         await page.goto(`https://www.tiktok.com/@${uname}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
         
-        let scriptContent = null;
+        let scriptContent: string | null = null;
         for (let i = 0; i < 10; i++) {
           scriptContent = await page.evaluate(() => {
             const script = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
@@ -176,9 +170,9 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
           const data = JSON.parse(scriptContent);
           const defaultScope = data['__DEFAULT_SCOPE__'] || data || {};
           const userDetail = defaultScope['webapp.user-detail'] || {};
-          const itemIds = userDetail?.itemList || [];
+          const itemIds: string[] = userDetail?.itemList || [];
           if (itemIds.length > 0) {
-            awemeId = itemIds[0];
+            awemeIds = itemIds.slice(0, limit).map(id => ({ id, username: uname }));
           }
         }
       } catch (err: any) {
@@ -187,66 +181,53 @@ export async function getLatestTikTokVideo(inputUrl: string): Promise<TikTokVide
     }
   }
 
-  if (!awemeId) {
-    throw new Error('Failed to resolve TikTok video ID from URL via any method');
-  }
+  if (awemeIds.length === 0) throw new Error('Failed to resolve TikTok video IDs from URL');
 
-  // Query /api/item/detail/ with Native HTTP params
-  const endpoint = 'https://www.tiktok.com/api/item/detail/';
-  const params = new URLSearchParams({
-    aweme_id: awemeId,
-    aid: '1988',
-    app_name: 'tiktok_web',
-    ...sessionManager.getDeviceParams()
-  });
+  const results: TikTokVideoMetadata[] = [];
+  for (const item of awemeIds) {
+    const awemeId = item.id;
+    const uname = item.username;
+    const endpoint = 'https://www.tiktok.com/api/item/detail/';
+    const params = new URLSearchParams({
+      aweme_id: awemeId,
+      aid: '1988',
+      app_name: 'tiktok_web',
+      ...sessionManager.getDeviceParams()
+    });
 
-  let urlWithParams = `${endpoint}?${params.toString()}`;
+    let urlWithParams = `${endpoint}?${params.toString()}`;
 
-  // Attempt X-Bogus signature natively if package is available
-  try {
-    const xbogusModule = require('tiktok-signature');
-    if (typeof xbogusModule === 'function' || xbogusModule.Signer) {
-      const Signer = xbogusModule.Signer || xbogusModule;
-      const signer = new Signer(null, DEFAULT_USER_AGENT);
-      await signer.init();
-      const signInfo = await signer.sign(urlWithParams);
-      if (signInfo && signInfo.signed_url) {
-        urlWithParams = signInfo.signed_url;
+    try {
+      const xbogusModule = require('tiktok-signature');
+      if (typeof xbogusModule === 'function' || xbogusModule.Signer) {
+        const Signer = xbogusModule.Signer || xbogusModule;
+        const signer = new Signer(null, DEFAULT_USER_AGENT);
+        await signer.init();
+        const signInfo = await signer.sign(urlWithParams);
+        if (signInfo && signInfo.signed_url) urlWithParams = signInfo.signed_url;
       }
-    }
-  } catch (err) {
-    console.log('No pure-JS xbogus module found or generation failed. Proceeding without signature as fallback.');
+    } catch (err) {}
+
+    try {
+      await sessionManager.initSession();
+      const detailRes = await axios.get(urlWithParams, { headers: sessionManager.getHeaders(), timeout: 10000 });
+      const itemInfo = detailRes.data?.itemInfo?.itemStruct;
+      if (itemInfo) {
+        results.push({
+          id: awemeId,
+          caption: itemInfo.desc || `TikTok Video ${awemeId}`,
+          hashtags: [],
+          playUrl: itemInfo.video?.playAddr || itemInfo.video?.downloadAddr || '',
+          downloadUrl: itemInfo.video?.downloadAddr || itemInfo.video?.playAddr || '',
+          author: itemInfo.author?.uniqueId || uname,
+          createTime: itemInfo.createTime || Math.floor(Date.now() / 1000),
+          url: `https://www.tiktok.com/@${itemInfo.author?.uniqueId || uname}/video/${awemeId}`
+        });
+      }
+    } catch (err: any) {}
   }
 
-  let detailRes;
-  try {
-    await sessionManager.initSession();
-    detailRes = await axios.get(urlWithParams, { headers: sessionManager.getHeaders(), timeout: 10000 });
-  } catch (err: any) {
-    if (err.response && err.response.status !== 200) {
-      throw new Error(`TikTok Web API returned ${err.response.status}. Missing or invalid X-Bogus signature for pure HTTP.`);
-    }
-    throw err;
-  }
-
-  const itemInfo = detailRes.data?.itemInfo?.itemStruct;
-  if (!itemInfo) {
-    throw new Error('Failed to extract item detail from TikTok Web API (WAF Blocked or Empty Data)');
-  }
-
-  const fullCaption = itemInfo.desc || `TikTok Video ${awemeId}`;
-  const playUrl = itemInfo.video?.playAddr || itemInfo.video?.downloadAddr || '';
-
-  return {
-    id: awemeId,
-    caption: fullCaption,
-    hashtags: [],
-    playUrl: playUrl,
-    downloadUrl: itemInfo.video?.downloadAddr || playUrl,
-    author: itemInfo.author?.uniqueId || username,
-    createTime: itemInfo.createTime || Math.floor(Date.now() / 1000),
-    url: `https://www.tiktok.com/@${itemInfo.author?.uniqueId || username}/video/${awemeId}`
-  };
+  return results;
 }
 
 export async function downloadTikTokVideo(videoUrl: string, outputPath: string): Promise<string> {
