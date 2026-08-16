@@ -114,6 +114,23 @@ export default function MappingsPage() {
     }
   };
 
+  const updateVideosPerDay = async (id: string, count: number) => {
+    setMappings(prev => prev.map(m => m.id === id ? { ...m, videosPerDay: count } : m));
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/mappings/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ videosPerDay: count })
+      });
+    } catch (err) {
+      console.error('Failed to update videos per day', err);
+    }
+  };
+
   const handleAddMapping = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sourceId || !facebookPageId) return;
@@ -200,9 +217,17 @@ export default function MappingsPage() {
                     title="Leave empty to post immediately on new video"
                   />
                   {mapping.source?.platform === 'MEGA_CLOUD' && (
-                    <span className="text-xs text-purple-400 mt-2 font-semibold">
-                      {mapping.videosPerDay} {mapping.videosPerDay === 1 ? 'Video' : 'Videos'} / Day
-                    </span>
+                    <div className="flex flex-col items-center mt-3 border-t border-gray-700/50 pt-2">
+                      <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Day (1 min apart)</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={mapping.videosPerDay || 1}
+                        onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value))}
+                        className="bg-gray-800 border border-purple-500/30 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500 w-20 text-center"
+                      />
+                    </div>
                   )}
                 </div>
                 
