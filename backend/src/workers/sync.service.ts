@@ -857,6 +857,9 @@ export class SyncService {
       if (page.userId) {
         const pageUser = await this.prisma.user.findUnique({ where: { id: page.userId } });
         if (pageUser) {
+          if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
+            throw new Error('Mega Cloud credentials are not configured. Please update your profile.');
+          }
           megaEmail = pageUser.megaEmail;
           megaPassword = pageUser.megaPassword;
         }
@@ -1132,8 +1135,12 @@ export class SyncService {
       if (uploadHistory.facebookPage?.userId) {
         const pageUser = await this.prisma.user.findUnique({ where: { id: uploadHistory.facebookPage.userId } });
         if (pageUser) {
-          megaEmail = pageUser.megaEmail;
-          megaPassword = pageUser.megaPassword;
+          if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
+            this.logsService.log('ERROR', `Mega Cloud credentials missing for user ${pageUser.id}. Cannot auto-delete.`);
+          } else {
+            megaEmail = pageUser.megaEmail;
+            megaPassword = pageUser.megaPassword;
+          }
         }
       }
       
