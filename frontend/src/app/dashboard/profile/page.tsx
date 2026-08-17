@@ -78,7 +78,6 @@ export default function ProfilePage() {
         <h2 className="text-xl font-bold text-white mb-6">Mega Cloud Integration</h2>
         <p className="text-gray-400 text-sm mb-6">
           Connect your Mega Cloud account to automatically pull and upload videos.
-          Note: If you leave this empty, the system might use the global admin account.
         </p>
 
         {message.text && (
