@@ -336,6 +336,33 @@ export class SyncService {
 
       if (!latestVideo) {
         await this.logsService.log('ERROR', `Test failed: No videos found at source ${mapping.source.url}`);
+        
+        try {
+          const dummyVideoId = 'test_fail_' + Date.now().toString();
+          const dummyVideo = await this.prisma.video.upsert({
+            where: { sourceId_originalId: { sourceId: mapping.sourceId, originalId: dummyVideoId } },
+            update: {},
+            create: {
+              sourceId: mapping.sourceId,
+              originalId: dummyVideoId,
+              title: 'Extraction Failed',
+              publishedAt: new Date(),
+              url: mapping.source.url,
+            }
+          });
+
+          await this.prisma.uploadHistory.create({
+            data: {
+              videoId: dummyVideo.id,
+              facebookPageId: mapping.facebookPageId,
+              status: 'FAILED',
+              errorMessage: 'Test extraction failed: No videos found at source'
+            }
+          });
+        } catch (e) {
+          // ignore creation errors for dummy stats
+        }
+
         return { success: false, message: 'No videos found' };
       }
 
