@@ -22,6 +22,39 @@ export class UsersService {
     return users;
   }
 
+  async getProfile(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        megaEmail: true,
+      }
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async updateProfile(id: string, data: { megaEmail?: string; megaPassword?: string }) {
+    const updateData: any = {};
+    if (data.megaEmail !== undefined) updateData.megaEmail = data.megaEmail;
+    if (data.megaPassword !== undefined) updateData.megaPassword = data.megaPassword;
+
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        megaEmail: true,
+      }
+    });
+    return user;
+  }
+
   async create(data: { email: string; password?: string; role: Role; name?: string; note?: string; expiresAt?: Date | null }) {
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email }

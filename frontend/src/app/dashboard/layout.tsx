@@ -124,8 +124,18 @@ export default function DashboardLayout({
           </nav>
         </div>
 
-        {/* Logout Section */}
-        <div className="p-4 border-t border-gray-800 shrink-0">
+        {/* Profile and Logout Section */}
+        <div className="p-4 border-t border-gray-800 shrink-0 space-y-2">
+          <Link 
+            href="/dashboard/profile"
+            className={`block w-full px-4 py-2.5 rounded-xl font-bold tracking-wide transition-colors text-left ${
+              pathname === '/dashboard/profile'
+                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20'
+                : 'text-gray-300 hover:text-white hover:bg-gray-800/80'
+            }`}
+          >
+            My Profile
+          </Link>
           <Link 
             href="/" 
             onClick={() => localStorage.removeItem('token')}

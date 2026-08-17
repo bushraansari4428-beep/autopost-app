@@ -7,32 +7,34 @@ import * as fs from 'fs';
 @Injectable()
 export class MegaService {
   private readonly logger = new Logger(MegaService.name);
-  private storage: Storage | null = null;
+  private storageMap = new Map<string, Storage>();
 
-  async getStorage(): Promise<Storage> {
-    if (this.storage) {
-      return this.storage;
-    }
-
-    const email = process.env.MEGA_EMAIL;
-    const password = process.env.MEGA_PASSWORD;
+  async getStorage(megaEmail?: string, megaPassword?: string): Promise<Storage> {
+    const email = megaEmail || process.env.MEGA_EMAIL;
+    const password = megaPassword || process.env.MEGA_PASSWORD;
 
     if (!email || !password) {
-      throw new Error('MEGA_EMAIL or MEGA_PASSWORD environment variables are not set.');
+      throw new Error('MEGA credentials are not provided or set in environment variables.');
+    }
+
+    if (this.storageMap.has(email)) {
+      return this.storageMap.get(email)!;
     }
 
     this.logger.log(`Logging into Mega.nz with ${email}...`);
-    this.storage = await new Storage({ 
+    const storage = await new Storage({ 
       email, 
       password,
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }).ready;
-    this.logger.log(`Successfully connected to Mega.nz!`);
-    return this.storage;
+    
+    this.storageMap.set(email, storage);
+    this.logger.log(`Successfully connected to Mega.nz for ${email}!`);
+    return storage;
   }
 
-  async uploadFile(filename: string, buffer: Buffer): Promise<string> {
-    const storage = await this.getStorage();
+  async uploadFile(filename: string, buffer: Buffer, megaEmail?: string, megaPassword?: string): Promise<string> {
+    const storage = await this.getStorage(megaEmail, megaPassword);
     
     // Find or create 'AutoPost_Cloud' folder
     let targetFolder = storage.root.children?.find(c => c.name === 'AutoPost_Cloud');
@@ -74,9 +76,9 @@ export class MegaService {
     });
   }
 
-  async deleteFile(megaUrl: string): Promise<boolean> {
+  async deleteFile(megaUrl: string, megaEmail?: string, megaPassword?: string): Promise<boolean> {
     try {
-      const storage = await this.getStorage();
+      const storage = await this.getStorage(megaEmail, megaPassword);
       
       // We need to parse the file ID from the URL or just search all children for the link
       const targetFolder = storage.root.children?.find(c => c.name === 'AutoPost_Cloud');

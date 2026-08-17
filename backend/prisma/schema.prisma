@@ -20,6 +20,8 @@ model User {
   expiresAt        DateTime?
   role             Role           @default(USER)
   note             String?
+  megaEmail        String?
+  megaPassword     String?
   facebookPages    FacebookPage[]
   sources          Source[]
   deviceId         String?

@@ -853,8 +853,17 @@ export class SyncService {
       const ext = '.mp4';
       const filename = `cloud_${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
       
+      let megaEmail, megaPassword;
+      if (page.userId) {
+        const pageUser = await this.prisma.user.findUnique({ where: { id: page.userId } });
+        if (pageUser) {
+          megaEmail = pageUser.megaEmail;
+          megaPassword = pageUser.megaPassword;
+        }
+      }
+
       // Upload buffer to Mega
-      const megaLink = await this.megaService.uploadFile(filename, buffer);
+      const megaLink = await this.megaService.uploadFile(filename, buffer, megaEmail, megaPassword);
 
       const finalDescription = this.formatFacebookCaption(videoTitle, 'MEGA_CLOUD', '');
 
@@ -1118,7 +1127,17 @@ export class SyncService {
       
       // Auto-Delete from Mega.nz Cloud Storage
       this.logsService.log('INFO', `Auto-Cleaning: Deleting video from Mega.nz to free up space...`);
-      await this.megaService.deleteFile(targetUrl);
+      
+      let megaEmail, megaPassword;
+      if (uploadHistory.facebookPage?.userId) {
+        const pageUser = await this.prisma.user.findUnique({ where: { id: uploadHistory.facebookPage.userId } });
+        if (pageUser) {
+          megaEmail = pageUser.megaEmail;
+          megaPassword = pageUser.megaPassword;
+        }
+      }
+      
+      await this.megaService.deleteFile(targetUrl, megaEmail, megaPassword);
     } else if (isTiktokOrCdn || isXhsOrRedNote) {
       this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
