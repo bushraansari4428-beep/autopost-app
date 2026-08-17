@@ -863,7 +863,7 @@ export class SyncService {
       }
 
       // Upload buffer to Mega
-      const megaLink = await this.megaService.uploadFile(filename, buffer, megaEmail, megaPassword);
+      const megaLink = await this.megaService.uploadFile(filename, buffer, megaEmail || undefined, megaPassword || undefined);
 
       const finalDescription = this.formatFacebookCaption(videoTitle, 'MEGA_CLOUD', '');
 
@@ -1137,7 +1137,7 @@ export class SyncService {
         }
       }
       
-      await this.megaService.deleteFile(targetUrl, megaEmail, megaPassword);
+      await this.megaService.deleteFile(targetUrl, megaEmail || undefined, megaPassword || undefined);
     } else if (isTiktokOrCdn || isXhsOrRedNote) {
       this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
