@@ -269,6 +269,23 @@ export default function SourcesPage() {
                   />
                 </div>
               )}
+
+              {platform === 'YOUTUBE' && (
+                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <h4 className="text-sm font-semibold text-blue-400 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    How to add a YouTube Source perfectly
+                  </h4>
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    Standard <code className="bg-gray-800 px-1 rounded text-gray-200">@handles</code> can sometimes be blocked by YouTube. For 100% reliable auto-posting, please use your <strong>YouTube Channel ID</strong> (starts with UC):
+                  </p>
+                  <ol className="list-decimal ml-5 mt-2 text-xs text-gray-400 space-y-1">
+                    <li>Go to <a href="https://commentpicker.com/youtube-channel-id.php" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">CommentPicker YouTube ID tool</a>.</li>
+                    <li>Paste your YouTube handle or link to get the <strong className="text-gray-200">UC...</strong> ID.</li>
+                    <li>Enter the URL here like this: <code className="bg-gray-800 px-1 rounded text-gray-200">https://youtube.com/channel/UC...</code></li>
+                  </ol>
+                </div>
+              )}
               
               <div className="flex gap-3 pt-4">
                 <button 
