@@ -191,8 +191,8 @@ export class SyncService {
       const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
       
       // Try RSS feed first if it's a channel URL
-      if (mapping.source.url.includes('/channel/UC')) {
-        const channelId = mapping.source.url.split('/channel/')[1].split('/')[0].split('?')[0];
+      if (mapping.source.url.includes('/channel/UC') || mapping.source.url.startsWith('UC')) {
+        const channelId = mapping.source.url.startsWith('UC') ? mapping.source.url.trim() : mapping.source.url.split('/channel/')[1].split('/')[0].split('?')[0];
         const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         this.logger.log(`Trying RSS feed for channel: ${channelId}`);
         await this.logsService.log('INFO', `Trying RSS feed for channel: ${channelId}`);
@@ -474,8 +474,8 @@ export class SyncService {
       let latestVideos: any[] = [];
       const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
 
-      if (source.url.includes('/channel/UC')) {
-        const channelId = source.url.split('/channel/')[1].split('/')[0].split('?')[0];
+      if (source.url.includes('/channel/UC') || source.url.startsWith('UC')) {
+        const channelId = source.url.startsWith('UC') ? source.url.trim() : source.url.split('/channel/')[1].split('/')[0].split('?')[0];
         const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
         this.logger.log(`Cron: Trying RSS feed for channel: ${channelId}`);
         try {

@@ -282,7 +282,7 @@ export default function SourcesPage() {
                   <ol className="list-decimal ml-5 mt-2 text-xs text-gray-400 space-y-1">
                     <li>Go to <a href="https://commentpicker.com/youtube-channel-id.php" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">CommentPicker YouTube ID tool</a>.</li>
                     <li>Paste your YouTube handle or link to get the <strong className="text-gray-200">UC...</strong> ID.</li>
-                    <li>Enter the URL here like this: <code className="bg-gray-800 px-1 rounded text-gray-200">https://youtube.com/channel/UC...</code></li>
+                    <li>Enter ONLY the ID here (e.g. <code className="bg-gray-800 px-1 rounded text-gray-200">UCeHRZFTBJeG8hZco6i9RyVA</code>) OR the full URL. Both will work!</li>
                   </ol>
                 </div>
               )}
