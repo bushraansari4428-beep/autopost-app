@@ -126,6 +126,9 @@ export default function CloudUploadPage() {
     setIsUploading(false);
     const fileInput = document.getElementById('video-upload') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
+    
+    // Refresh page data to update the cloud queue count
+    fetchPages();
   };
 
   return (
@@ -155,6 +158,18 @@ export default function CloudUploadPage() {
               </option>
             ))}
           </select>
+          
+          {selectedPageId && (
+            <div className="mt-3 inline-flex items-center space-x-2 bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+              </svg>
+              <span className="text-sm font-semibold">
+                {pages.find(p => p.id === selectedPageId)?.cloudQueueCount || 0} video(s) remaining in cloud queue
+              </span>
+            </div>
+          )}
+
           <p className="mt-2 text-xs text-gray-500">
             The video will be added to this page's cloud queue and posted based on its scheduled time in the Mappings tab.
           </p>

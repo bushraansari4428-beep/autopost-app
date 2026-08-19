@@ -25,12 +25,12 @@ export class PagesService {
     });
   }
 
-  findAll(user?: any) {
+  async findAll(user?: any) {
+    let pages;
     if (!user) {
-      return this.prisma.facebookPage.findMany();
-    }
-    if (user.role === 'ADMIN') {
-      return this.prisma.facebookPage.findMany({
+      pages = await this.prisma.facebookPage.findMany({ orderBy: { createdAt: 'desc' } });
+    } else if (user.role === 'ADMIN') {
+      pages = await this.prisma.facebookPage.findMany({
         where: {
           OR: [
             { userId: user.id },
@@ -39,11 +39,23 @@ export class PagesService {
         },
         orderBy: { createdAt: 'desc' }
       });
+    } else {
+      pages = await this.prisma.facebookPage.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' }
+      });
     }
-    return this.prisma.facebookPage.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' }
-    });
+
+    // Attach cloud queue count for each page
+    return Promise.all(pages.map(async (page: any) => {
+      const cloudQueueCount = await this.prisma.video.count({
+        where: {
+          source: { platform: 'MEGA_CLOUD', url: `cloud://${page.id}` },
+          uploads: { none: { facebookPageId: page.id } }
+        }
+      });
+      return { ...page, cloudQueueCount };
+    }));
   }
 
   findOne(id: string) {
