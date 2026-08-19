@@ -136,9 +136,12 @@ export default function CloudUploadPage() {
       <div className="flex justify-between items-center bg-gray-900 p-6 rounded-2xl border border-gray-800 shadow-xl">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Cloud Video Uploader</h1>
-          <p className="text-gray-400">
-            Upload videos directly to the Cloud (Mega.nz). Your laptop can be turned off, and the system will automatically download and post them at your scheduled time. Videos are automatically deleted after posting to free up space!
-          </p>
+          <div className="text-gray-400 text-sm leading-relaxed mt-2">
+            <p>Upload your local videos to the Cloud so our system can post them for you even when your PC is offline. Videos are automatically deleted after posting to free up space!</p>
+            <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <span className="font-semibold text-blue-400">Important:</span> To use this feature, you must first create a free account at <a href="https://mega.nz" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Mega.nz</a>, then enter your Mega credentials in your <strong><a href="/dashboard/profile" className="text-blue-400 hover:underline">My Cloud Profile</a></strong> tab.
+            </div>
+          </div>
         </div>
       </div>
 

@@ -70,7 +70,7 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-white tracking-tight">My Profile</h1>
+        <h1 className="text-3xl font-bold text-white tracking-tight">My Cloud Profile</h1>
         <p className="text-gray-400 mt-2">Manage your account settings and cloud connections.</p>
       </div>
 

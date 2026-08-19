@@ -134,7 +134,7 @@ export default function DashboardLayout({
                 : 'text-gray-300 hover:text-white hover:bg-gray-800/80'
             }`}
           >
-            My Profile
+            My Cloud Profile
           </Link>
           <Link 
             href="/" 
