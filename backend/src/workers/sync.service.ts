@@ -123,7 +123,8 @@ export class SyncService {
     });
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
-    this.logsService.log('INFO', `Triggering GitHub Action for TEST on mapping: ${mapping.id}`);
+    this.logsService.log('INFO', `Starting test extraction for the selected page...`);
+    this.logsService.log('INFO', 'Test request initiated successfully.');
     
     const githubToken = process.env.GITHUB_TOKEN;
     if (!githubToken) {
@@ -150,15 +151,14 @@ export class SyncService {
         this.logsService.log('ERROR', `GitHub API error: ${response.status} - ${errorText}`);
         return { success: false, message: `Failed to trigger test in background: ${response.statusText}` };
       }
-
-      this.logsService.log('INFO', 'GitHub Action triggered successfully.');
+      // this.logsService.log('INFO', 'GitHub Action triggered successfully.');
       return { 
         success: true, 
         message: 'Test successfully started in the background! Please check your Facebook page in 2-3 minutes.' 
       };
 
     } catch (e: any) {
-      this.logsService.log('ERROR', `Failed to trigger GitHub Action: ${e.message}`);
+      this.logsService.log('ERROR', `Failed to initiate test request: ${e.message}`);
       return { success: false, message: 'Failed to contact background worker.' };
     }
   }
@@ -940,7 +940,7 @@ export class SyncService {
     const pageId = uploadHistory.facebookPage.pageId;
     const accessToken = uploadHistory.facebookPage.accessToken;
     
-    this.logsService.log('INFO', `Starting native direct upload for ${video.title}...`);
+    this.logsService.log('INFO', `Preparing to upload video: ${video.title}...`);
     
     const ytId = video.originalId.replace('test_', '').split('_')[0];
     const targetUrl = video.url ? video.url : `https://www.youtube.com/watch?v=${ytId}`;
@@ -1063,7 +1063,7 @@ export class SyncService {
       }
       
       const downloadId = loaderData.id;
-      this.logsService.log('INFO', `Waiting for loader.to processing (ID: ${downloadId})...`);
+      this.logsService.log('INFO', `Processing video format, please wait...`);
       
       // Poll for up to 60 seconds
       for (let i = 0; i < 30; i++) {
@@ -1086,7 +1086,7 @@ export class SyncService {
       throw new Error('Timed out waiting for video processing to complete.');
     }
     
-    this.logsService.log('INFO', `Successfully got direct video URL! Sending to Facebook...`);
+    this.logsService.log('INFO', `Video processing complete. Uploading to Facebook...`);
     this.logger.log(`Direct URL: ${videoUrl}`);
     
     let fbRes: any;

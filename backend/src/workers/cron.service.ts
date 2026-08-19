@@ -27,7 +27,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
   }
 
   async handleCron() {
-    this.logsService.log('INFO', 'Starting scheduled source monitoring...');
+    // this.logsService.log('INFO', 'Starting scheduled source monitoring...');
     try {
       const sources = await this.prisma.source.findMany({
         where: {
@@ -36,7 +36,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
         include: { mappings: true }
       });
       if (sources.length === 0) {
-        this.logsService.log('INFO', 'No sources found to monitor.');
+        // this.logsService.log('INFO', 'No sources found to monitor.');
         return;
       }
 
@@ -91,7 +91,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      this.logsService.log('INFO', `Checked ${count} sources with due mappings.`);
+      // this.logsService.log('INFO', `Checked ${count} sources with due mappings.`);
 
       // After checking sources, process any pending uploads
       await this.syncService.processPendingUploads();
