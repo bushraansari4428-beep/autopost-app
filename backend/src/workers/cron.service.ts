@@ -44,6 +44,8 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
       const nowUTC = new Date();
       const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
       const currentPktTimeStr = `${pktTime.getUTCHours().toString().padStart(2, '0')}:${pktTime.getUTCMinutes().toString().padStart(2, '0')}`;
+      const pkHours = pktTime.getUTCHours();
+      const pkMinutes = pktTime.getUTCMinutes();
       const todayPktDateString = pktTime.toISOString().split('T')[0];
 
       let count = 0;
