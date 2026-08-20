@@ -209,13 +209,27 @@ export default function MappingsPage() {
               <div className="flex items-center gap-6">
                 <div className="flex flex-col items-center">
                   <span className="text-xs text-gray-400 mb-1">Schedule (PKT)</span>
-                  <input
-                    type="time"
-                    value={mapping.scheduledTime || ''}
-                    onChange={(e) => updateScheduleTime(mapping.id, e.target.value)}
-                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500"
-                    title="Leave empty to post immediately on new video"
-                  />
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="time"
+                      value={mapping.scheduledTime || ''}
+                      onChange={(e) => updateScheduleTime(mapping.id, e.target.value)}
+                      className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500"
+                      title="Set time to auto-post, or turn off to post immediately"
+                    />
+                    {mapping.scheduledTime && (
+                      <button
+                        onClick={() => updateScheduleTime(mapping.id, '')}
+                        className="text-gray-500 hover:text-red-400 p-1 rounded-full hover:bg-gray-700 transition-colors"
+                        title="Turn Off Schedule (Auto-post immediately)"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    )}
+                    {!mapping.scheduledTime && (
+                      <span className="text-[10px] text-green-400 font-semibold px-1 py-0.5 bg-green-400/10 rounded absolute -mt-12">REAL-TIME (OFF)</span>
+                    )}
+                  </div>
                   {mapping.source?.platform === 'MEGA_CLOUD' && (
                     <div className="flex flex-col items-center mt-3 border-t border-gray-700/50 pt-2">
                       <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Day (1 min apart)</span>
