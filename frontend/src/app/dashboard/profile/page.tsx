@@ -96,7 +96,6 @@ export default function ProfilePage() {
               value={megaEmail}
               onChange={(e) => setMegaEmail(e.target.value)}
               className="w-full bg-gray-900 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="e.g., yourname@mega.nz"
             />
           </div>
 
@@ -107,7 +106,6 @@ export default function ProfilePage() {
               value={megaPassword}
               onChange={(e) => setMegaPassword(e.target.value)}
               className="w-full bg-gray-900 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="Leave blank to keep current password"
             />
           </div>
 

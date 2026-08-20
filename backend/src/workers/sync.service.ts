@@ -482,15 +482,13 @@ export class SyncService {
             });
             this.logsService.log('INFO', `Cloud Auto-Poster: Queued video '${video.title}' to post!`);
           }
-          
-          if (mapping.scheduledTime) {
-            await this.prisma.mapping.update({
-              where: { id: mapping.id },
-              data: { lastScheduledRun: new Date() }
-            });
-          }
-        } else {
-           this.logsService.log('INFO', `Cloud Auto-Poster: No pending videos found in Mega.nz for this page.`);
+        }
+        
+        if (mapping.scheduledTime) {
+          await this.prisma.mapping.update({
+            where: { id: mapping.id },
+            data: { lastScheduledRun: new Date() }
+          });
         }
       }
       return;
