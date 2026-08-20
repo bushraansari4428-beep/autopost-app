@@ -182,7 +182,7 @@ export class SyncService {
       const queuedCount = await this.prisma.video.count({
         where: {
           sourceId: mapping.sourceId,
-          uploads: { none: { facebookPageId: mapping.facebookPageId, status: 'UPLOADED' } }
+          uploads: { none: { facebookPageId: mapping.facebookPageId, status: 'COMPLETED' } }
         }
       });
       
@@ -473,7 +473,7 @@ export class SyncService {
         const unuploadedVideos = await this.prisma.video.findMany({
           where: {
             sourceId: source.id,
-            uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['UPLOADED', 'PENDING'] } } }
+            uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['COMPLETED', 'PENDING'] } } }
           },
           orderBy: { createdAt: 'asc' },
           take: mapping.videosPerDay || 1
