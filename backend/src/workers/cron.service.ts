@@ -60,7 +60,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
 
         for (const mapping of source.mappings) {
           if (source.platform === 'MEGA_CLOUD') {
-            if (!mapping.scheduledTime) {
+            if (!mapping.scheduledTime || mapping.scheduledTime === '00:00') {
               dueMappingIds.push(mapping.id);
               continue;
             }
