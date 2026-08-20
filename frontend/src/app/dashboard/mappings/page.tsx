@@ -208,7 +208,9 @@ export default function MappingsPage() {
               
               <div className="flex items-center gap-6">
                 <div className="flex flex-col items-center">
-                  <span className="text-xs text-gray-400 mb-1">Schedule (PKT)</span>
+                  <span className="text-xs text-gray-400 mb-1">
+                    Schedule {mapping.scheduledTime ? '(PKT)' : <span className="text-green-400 font-bold text-[10px] ml-1 bg-green-400/10 px-1 py-0.5 rounded">REAL-TIME (OFF)</span>}
+                  </span>
                   <div className="flex items-center gap-1">
                     <input
                       type="time"
@@ -225,9 +227,6 @@ export default function MappingsPage() {
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                       </button>
-                    )}
-                    {!mapping.scheduledTime && (
-                      <span className="text-[10px] text-green-400 font-semibold px-1 py-0.5 bg-green-400/10 rounded absolute -mt-12">REAL-TIME (OFF)</span>
                     )}
                   </div>
                   {mapping.source?.platform === 'MEGA_CLOUD' && (
