@@ -179,16 +179,28 @@ export class SyncService {
 
     if (mapping.source.platform === 'MEGA_CLOUD') {
       await this.logsService.log('INFO', `Cloud Upload mapping detected. Verifying queue...`);
-      const queuedCount = await this.prisma.video.count({
+      const oldestVideo = await this.prisma.video.findFirst({
         where: {
           sourceId: mapping.sourceId,
-          uploads: { none: { facebookPageId: mapping.facebookPageId, status: 'COMPLETED' } }
-        }
+          uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['COMPLETED', 'PENDING'] } } }
+        },
+        orderBy: { createdAt: 'asc' }
       });
       
-      if (queuedCount > 0) {
-        await this.logsService.log('INFO', `Test passed! There are ${queuedCount} video(s) in the cloud queue ready to be posted at the scheduled time.`);
-        return { success: true, message: `Cloud connection verified. ${queuedCount} videos pending.` };
+      if (oldestVideo) {
+        await this.prisma.uploadHistory.create({
+          data: {
+            videoId: oldestVideo.id,
+            facebookPageId: mapping.facebookPageId,
+            status: 'PENDING'
+          }
+        });
+        await this.logsService.log('INFO', `Test triggered: Queued 1 video from Mega Cloud for immediate posting to Facebook!`);
+        
+        // Trigger processing immediately in background
+        this.processPendingUploads().catch(e => this.logger.error(`Error processing test upload: ${e.message}`));
+        
+        return { success: true, message: `Cloud connection verified. 1 video queued for immediate upload.` };
       } else {
          await this.logsService.log('ERROR', `Test failed: No videos found in the cloud queue for this page. Please upload videos first.`);
          return { success: false, message: 'No videos found in cloud queue' };

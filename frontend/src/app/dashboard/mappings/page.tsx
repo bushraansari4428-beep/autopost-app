@@ -218,20 +218,20 @@ export default function MappingsPage() {
                       title="Set to 00:00 to turn off scheduling"
                     />
                   </div>
-                  {mapping.source?.platform === 'MEGA_CLOUD' && (
-                    <div className="flex flex-col items-center mt-3 border-t border-gray-700/50 pt-2">
-                      <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Day (1 min apart)</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={mapping.videosPerDay || 1}
-                        onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value))}
-                        className="bg-gray-800 border border-purple-500/30 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500 w-20 text-center"
-                      />
-                    </div>
-                  )}
                 </div>
+                {mapping.source?.platform === 'MEGA_CLOUD' && (
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Day</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={mapping.videosPerDay || 1}
+                      onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value))}
+                      className="bg-gray-800 border border-purple-500/30 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500 w-16 text-center"
+                    />
+                  </div>
+                )}
                 
                 <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full">
