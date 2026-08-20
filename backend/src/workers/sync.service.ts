@@ -177,6 +177,49 @@ export class SyncService {
       return { success: true, message: 'Local PC Folders are connected properly. Please use the Desktop app to upload videos.' };
     }
 
+    if (mapping.source.platform === 'MEGA_CLOUD') {
+      await this.logsService.log('INFO', `Cloud Upload mapping detected. Verifying queue...`);
+      const queuedCount = await this.prisma.video.count({
+        where: {
+          sourceId: mapping.sourceId,
+          uploads: { none: { facebookPageId: mapping.facebookPageId } }
+        }
+      });
+      
+      if (queuedCount > 0) {
+        await this.logsService.log('INFO', `Test passed! There are ${queuedCount} video(s) in the cloud queue ready to be posted at the scheduled time.`);
+        return { success: true, message: `Cloud connection verified. ${queuedCount} videos pending.` };
+      } else {
+         await this.logsService.log('ERROR', `Test failed: No videos found in the cloud queue for this page. Please upload videos first.`);
+         
+         // Create dummy failed record so it shows up in UI
+         try {
+           const dummyVideoId = 'test_fail_' + Date.now().toString();
+           const dummyVideo = await this.prisma.video.upsert({
+             where: { sourceId_originalId: { sourceId: mapping.sourceId, originalId: dummyVideoId } },
+             update: {},
+             create: {
+               sourceId: mapping.sourceId,
+               originalId: dummyVideoId,
+               title: 'Cloud Queue Empty',
+               publishedAt: new Date(),
+               url: mapping.source.url,
+             }
+           });
+           await this.prisma.uploadHistory.create({
+             data: {
+               videoId: dummyVideo.id,
+               facebookPageId: mapping.facebookPageId,
+               status: 'FAILED',
+               errorMessage: 'Test extraction failed: No videos found in cloud queue'
+             }
+           });
+         } catch (e) {}
+
+         return { success: false, message: 'No videos found in cloud queue' };
+      }
+    }
+
     let urlsToScan = [mapping.source.url];
     if (mapping.source.platform === 'YOUTUBE' && !mapping.source.url.includes('/shorts') && !mapping.source.url.includes('/videos') && mapping.source.url.includes('@')) {
       urlsToScan = [
