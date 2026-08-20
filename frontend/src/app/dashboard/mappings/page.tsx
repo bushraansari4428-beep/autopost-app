@@ -57,7 +57,7 @@ export default function MappingsPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addToast('Test started! ' + data.message, 'success');
+        addToast(data.message, 'success');
       } else {
         addToast('Test failed: ' + (data.message || 'Unknown error'), 'error');
       }

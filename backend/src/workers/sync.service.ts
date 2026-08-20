@@ -152,9 +152,14 @@ export class SyncService {
         return { success: false, message: `Failed to trigger test in background: ${response.statusText}` };
       }
       // this.logsService.log('INFO', 'GitHub Action triggered successfully.');
+      let successMessage = 'Test successfully started in the background! Please check your Facebook page in 2-3 minutes.';
+      if (mapping.source.platform === 'MEGA_CLOUD') {
+        successMessage = '1 video from Mega Cloud is being uploaded to your Facebook page...';
+      }
+
       return { 
         success: true, 
-        message: 'Test successfully started in the background! Please check your Facebook page in 2-3 minutes.' 
+        message: successMessage 
       };
 
     } catch (e: any) {
