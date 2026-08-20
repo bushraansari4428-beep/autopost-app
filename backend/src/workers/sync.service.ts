@@ -182,7 +182,7 @@ export class SyncService {
       const queuedCount = await this.prisma.video.count({
         where: {
           sourceId: mapping.sourceId,
-          uploads: { none: { facebookPageId: mapping.facebookPageId } }
+          uploads: { none: { facebookPageId: mapping.facebookPageId, status: 'UPLOADED' } }
         }
       });
       
@@ -469,11 +469,11 @@ export class SyncService {
       const targetMappings = dueMappingIds ? source.mappings.filter((m: any) => dueMappingIds.includes(m.id)) : source.mappings;
       
       for (const mapping of targetMappings) {
-        // Find the oldest videos from this source that haven't been uploaded to this page yet
+        // Find the oldest videos from this source that haven't been successfully uploaded or queued yet
         const unuploadedVideos = await this.prisma.video.findMany({
           where: {
             sourceId: source.id,
-            uploads: { none: { facebookPageId: mapping.facebookPageId } }
+            uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['UPLOADED', 'PENDING'] } } }
           },
           orderBy: { createdAt: 'asc' },
           take: mapping.videosPerDay || 1

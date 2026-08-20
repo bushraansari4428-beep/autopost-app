@@ -51,7 +51,7 @@ export class PagesService {
       const cloudQueueCount = await this.prisma.video.count({
         where: {
           source: { platform: 'MEGA_CLOUD', url: `cloud://${page.id}` },
-          uploads: { none: { facebookPageId: page.id } }
+          uploads: { none: { facebookPageId: page.id, status: 'UPLOADED' } }
         }
       });
       return { ...page, cloudQueueCount };
