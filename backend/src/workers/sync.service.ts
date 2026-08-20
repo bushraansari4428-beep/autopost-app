@@ -864,7 +864,7 @@ export class SyncService {
       this.logsService.log('INFO', `Starting Cloud Upload for page ${page.name}`);
       
       let cloudSource: any = await this.prisma.source.findFirst({
-        where: { platform: 'MEGA_CLOUD', url: `cloud://${page.id}` }
+        where: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` }
       });
       
       if (!cloudSource) {
@@ -872,7 +872,7 @@ export class SyncService {
           data: {
             platform: 'MEGA_CLOUD',
             name: `Cloud Uploads (${page.name})`,
-            url: `cloud://${page.id}`,
+            url: `cloud://${page.pageId}`,
             userId: page.userId,
           }
         });
