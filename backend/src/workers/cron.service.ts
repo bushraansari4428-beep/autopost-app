@@ -79,8 +79,24 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
               }
             }
           } else {
-            if (shouldMonitorExternal) {
-              dueMappingIds.push(mapping.id);
+            if (!mapping.scheduledTime || mapping.scheduledTime === '00:00') {
+              if (shouldMonitorExternal) {
+                dueMappingIds.push(mapping.id);
+              }
+            } else {
+              if (currentPktTimeStr >= mapping.scheduledTime) {
+                if (!mapping.lastScheduledRun) {
+                  dueMappingIds.push(mapping.id);
+                } else {
+                   const lastRunUTC = new Date(mapping.lastScheduledRun);
+                   const lastRunPkt = new Date(lastRunUTC.getTime() + (5 * 60 * 60 * 1000));
+                   const lastRunDateString = lastRunPkt.toISOString().split('T')[0];
+                   
+                   if (lastRunDateString !== todayPktDateString) {
+                     dueMappingIds.push(mapping.id);
+                   }
+                }
+              }
             }
           }
         }
