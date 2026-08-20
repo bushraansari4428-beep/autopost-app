@@ -153,8 +153,8 @@ export default function MappingsPage() {
         setFacebookPageId('');
         fetchMappings();
       } else {
-        const errText = await res.text();
-        setErrorMsg('Error: ' + errText);
+        const data = await res.json().catch(() => null);
+        setErrorMsg(data?.message || data?.error || 'Failed to create mapping. Please try again.');
       }
     } catch (err: any) {
       console.error('Failed to add mapping', err);

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncService } from '../workers/sync.service';
 
@@ -9,7 +9,23 @@ export class MappingsService {
     private syncService: SyncService
   ) {}
 
-  create(createMappingDto: any) {
+  async create(createMappingDto: any) {
+    const existingSource = await this.prisma.mapping.findFirst({
+      where: { sourceId: createMappingDto.sourceId }
+    });
+    
+    if (existingSource) {
+      throw new BadRequestException('This source is already connected to a Facebook page. A source can only be mapped to one page at a time.');
+    }
+
+    const existingPage = await this.prisma.mapping.findFirst({
+      where: { facebookPageId: createMappingDto.facebookPageId }
+    });
+
+    if (existingPage) {
+      throw new BadRequestException('This Facebook page is already connected to a source. A page can only have one active mapping at a time.');
+    }
+
     return this.prisma.mapping.create({
       data: createMappingDto,
     });
