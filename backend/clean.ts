@@ -1,0 +1,1 @@
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { await prisma.video.deleteMany({where: {originalId: {startsWith: 'test_fail_'}}}); console.log('Cleaned'); } main();  

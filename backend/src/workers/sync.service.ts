@@ -191,31 +191,6 @@ export class SyncService {
         return { success: true, message: `Cloud connection verified. ${queuedCount} videos pending.` };
       } else {
          await this.logsService.log('ERROR', `Test failed: No videos found in the cloud queue for this page. Please upload videos first.`);
-         
-         // Create dummy failed record so it shows up in UI
-         try {
-           const dummyVideoId = 'test_fail_' + Date.now().toString();
-           const dummyVideo = await this.prisma.video.upsert({
-             where: { sourceId_originalId: { sourceId: mapping.sourceId, originalId: dummyVideoId } },
-             update: {},
-             create: {
-               sourceId: mapping.sourceId,
-               originalId: dummyVideoId,
-               title: 'Cloud Queue Empty',
-               publishedAt: new Date(),
-               url: mapping.source.url,
-             }
-           });
-           await this.prisma.uploadHistory.create({
-             data: {
-               videoId: dummyVideo.id,
-               facebookPageId: mapping.facebookPageId,
-               status: 'FAILED',
-               errorMessage: 'Test extraction failed: No videos found in cloud queue'
-             }
-           });
-         } catch (e) {}
-
          return { success: false, message: 'No videos found in cloud queue' };
       }
     }
