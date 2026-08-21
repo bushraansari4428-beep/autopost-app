@@ -1,4 +1,4 @@
-import { Controller, Post, Param, UseInterceptors, UploadedFile, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Delete, Param, UseInterceptors, UploadedFile, UseGuards, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { SyncService } from '../workers/sync.service';
@@ -70,6 +70,14 @@ export class LocalUploadController {
       const originalName = path.parse(file.originalname).name;
       const result = await this.syncService.processCloudUpload(pageId, originalName, file.buffer);
       return result;
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  @Delete(':id/cloud-queue')
+  @UseGuards(AuthGuard('jwt'))
+  async deleteCloudQueue(@Param('id') pageId: string) {
+    try {
+      return await this.syncService.deleteCloudQueue(pageId);
     } catch (error: any) {
       throw new BadRequestException(error.message);
     }

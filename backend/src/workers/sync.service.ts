@@ -923,6 +923,63 @@ export class SyncService {
     }
   }
 
+  async deleteCloudQueue(facebookPageId: string) {
+    try {
+      const page = await this.prisma.facebookPage.findUnique({
+        where: { id: facebookPageId }
+      });
+
+      if (!page) {
+        throw new Error('Facebook page not found');
+      }
+
+      let megaEmail, megaPassword;
+      if (page.userId) {
+        const pageUser = await this.prisma.user.findUnique({ where: { id: page.userId } });
+        if (pageUser) {
+          if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
+            throw new Error('Mega Cloud credentials are not configured.');
+          }
+          megaEmail = pageUser.megaEmail;
+          megaPassword = pageUser.megaPassword;
+        }
+      }
+
+      // Find videos in cloud queue
+      const videos = await this.prisma.video.findMany({
+        where: {
+          source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
+          uploads: { none: { facebookPageId: page.id, status: 'COMPLETED' } }
+        }
+      });
+
+      if (videos.length === 0) {
+        return { success: true, message: 'No pending videos found to delete.' };
+      }
+
+      let deleteCount = 0;
+      for (const video of videos) {
+        try {
+          if (video.url) {
+            await this.megaService.deleteFile(video.url, megaEmail || undefined, megaPassword || undefined);
+          }
+          await this.prisma.video.delete({ where: { id: video.id } });
+          deleteCount++;
+        } catch (err: any) {
+          this.logger.error(`Failed to delete video ${video.title}: ${err.message}`);
+        }
+      }
+
+      this.logsService.log('INFO', `Successfully deleted ${deleteCount} queued video(s) from Mega Cloud for page ${page.name}`);
+      return { success: true, message: `Successfully deleted ${deleteCount} video(s) from cloud queue.` };
+    } catch (e: any) {
+      this.logger.error(`Error in deleteCloudQueue: ${e.message}`, e.stack);
+      this.logsService.log('ERROR', `Failed to delete cloud queue videos: ${e.message}`);
+      throw e;
+    }
+  }
+
+
 
   async processPendingUploads() {
     if (this.isProcessing) {

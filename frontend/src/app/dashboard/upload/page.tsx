@@ -8,6 +8,7 @@ export default function CloudUploadPage() {
   const [selectedPageId, setSelectedPageId] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -25,7 +26,7 @@ export default function CloudUploadPage() {
       if (res.ok) {
         const data = await res.json();
         setPages(data);
-        if (data.length > 0) setSelectedPageId(data[0].id);
+        if (data.length > 0 && !selectedPageId) setSelectedPageId(data[0].id);
       }
     } catch (e) {
       console.error('Failed to fetch pages', e);
@@ -71,6 +72,34 @@ export default function CloudUploadPage() {
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeleteQueue = async () => {
+    if (!selectedPageId) return;
+    if (!confirm('Are you sure you want to delete all pending videos from Mega Cloud for this page? This cannot be undone.')) return;
+    
+    setIsDeleting(true);
+    setMessage({ type: '', text: '' });
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pages/${selectedPageId}/cloud-queue`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: 'success', text: data.message || 'Videos deleted successfully.' });
+        fetchPages();
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to delete videos.' });
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: 'Network error occurred while deleting videos.' });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleUpload = async () => {
@@ -163,13 +192,26 @@ export default function CloudUploadPage() {
           </select>
           
           {selectedPageId && (
-            <div className="mt-3 inline-flex items-center space-x-2 bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
-              </svg>
-              <span className="text-sm font-semibold">
-                {pages.find(p => p.id === selectedPageId)?.cloudQueueCount || 0} video(s) remaining in cloud queue
-              </span>
+            <div className="mt-3 flex items-center space-x-3">
+              <div className="inline-flex items-center space-x-2 bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                </svg>
+                <span className="text-sm font-semibold">
+                  {pages.find(p => p.id === selectedPageId)?.cloudQueueCount || 0} video(s) remaining in cloud queue
+                </span>
+              </div>
+              
+              <button 
+                onClick={handleDeleteQueue}
+                disabled={isDeleting || (pages.find(p => p.id === selectedPageId)?.cloudQueueCount || 0) === 0}
+                className="px-4 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>{isDeleting ? 'Deleting...' : 'Delete Videos'}</span>
+              </button>
             </div>
           )}
 
