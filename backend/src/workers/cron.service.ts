@@ -67,7 +67,11 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
               continue;
             }
 
-            if (currentPktTimeStr >= mapping.scheduledTime) {
+            const [schedH, schedM] = mapping.scheduledTime.split(':').map(Number);
+            const schedTotalMins = schedH * 60 + schedM;
+            const currentTotalMins = pkHours * 60 + pkMinutes;
+
+            if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 5) {
               if (!mapping.lastScheduledRun) {
                 dueMappingIds.push(mapping.id);
               } else {
@@ -86,7 +90,11 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
                 dueMappingIds.push(mapping.id);
               }
             } else {
-              if (currentPktTimeStr >= mapping.scheduledTime) {
+              const [schedH, schedM] = mapping.scheduledTime.split(':').map(Number);
+              const schedTotalMins = schedH * 60 + schedM;
+              const currentTotalMins = pkHours * 60 + pkMinutes;
+
+              if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 5) {
                 if (!mapping.lastScheduledRun) {
                   dueMappingIds.push(mapping.id);
                 } else {
