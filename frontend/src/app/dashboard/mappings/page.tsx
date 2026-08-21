@@ -272,7 +272,7 @@ export default function MappingsPage() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
                 >
                   <option value="" disabled>Select a source...</option>
-                  {sources.map(s => (
+                  {sources.filter(s => s.platform !== 'MEGA_CLOUD').map(s => (
                     <option key={s.id} value={s.id}>{s.name} ({s.platform})</option>
                   ))}
                 </select>

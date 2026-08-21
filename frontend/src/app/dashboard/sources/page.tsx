@@ -161,7 +161,7 @@ export default function SourcesPage() {
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Loading sources...</td>
               </tr>
-            ) : sources.length === 0 ? (
+            ) : sources.filter(s => s.platform !== 'MEGA_CLOUD').length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                   <p className="text-lg mb-2">No sources found.</p>
@@ -169,7 +169,7 @@ export default function SourcesPage() {
                 </td>
               </tr>
             ) : (
-              sources.map(source => (
+              sources.filter(s => s.platform !== 'MEGA_CLOUD').map(source => (
                 <tr key={source.id} className="hover:bg-gray-800/30 transition-colors">
                   <td className="px-6 py-5 font-medium text-white">{source.name}</td>
                   <td className="px-6 py-5">

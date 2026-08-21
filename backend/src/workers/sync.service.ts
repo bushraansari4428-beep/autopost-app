@@ -861,7 +861,7 @@ export class SyncService {
         cloudSource = await this.prisma.source.create({
           data: {
             platform: 'MEGA_CLOUD',
-            name: `Cloud Uploads (${page.name})`,
+            name: `Cloud Upload`,
             url: `cloud://${page.pageId}`,
             userId: page.userId,
           }
