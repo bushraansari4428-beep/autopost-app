@@ -37,7 +37,7 @@ export class MegaService {
     const storage = await this.getStorage(megaEmail, megaPassword);
     
     // Find or create 'AutoPost_Cloud' folder
-    let targetFolder = storage.root.children?.find(c => c.name === 'AutoPost_Cloud');
+    let targetFolder = storage.root.children?.find((c: any) => c.name === 'AutoPost_Cloud');
     if (!targetFolder) {
       targetFolder = await storage.mkdir('AutoPost_Cloud');
     }
@@ -65,11 +65,11 @@ export class MegaService {
         this.logger.log(`Download complete: ${tempPath}`);
         resolve(tempPath);
       });
-      stream.on('error', (err) => {
+      stream.on('error', (err: any) => {
         this.logger.error(`Mega download error: ${err.message}`);
         reject(err);
       });
-      writeStream.on('error', (err) => {
+      writeStream.on('error', (err: any) => {
         this.logger.error(`File write error: ${err.message}`);
         reject(err);
       });
@@ -81,7 +81,7 @@ export class MegaService {
       const storage = await this.getStorage(megaEmail, megaPassword);
       
       // We need to parse the file ID from the URL or just search all children for the link
-      const targetFolder = storage.root.children?.find(c => c.name === 'AutoPost_Cloud');
+      const targetFolder = storage.root.children?.find((c: any) => c.name === 'AutoPost_Cloud');
       if (targetFolder && targetFolder.children) {
         // Since we can't easily extract the exact file ID from a folder link,
         // we'll load the file from URL to get its ID, then find it in our storage
