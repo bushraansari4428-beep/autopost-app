@@ -73,6 +73,8 @@ export class LocalUploadController {
     } catch (error: any) {
       throw new BadRequestException(error.message);
     }
+  }
+
   @Delete(':id/cloud-queue')
   @UseGuards(AuthGuard('jwt'))
   async deleteCloudQueue(@Param('id') pageId: string) {
