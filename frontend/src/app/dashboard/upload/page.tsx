@@ -33,7 +33,7 @@ export default function CloudUploadPage() {
     }
   };
 
-  const handleDrag = (e: any) => {
+  const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -43,30 +43,26 @@ export default function CloudUploadPage() {
     }
   };
 
-  const handleDrop = (e: any) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const droppedFiles = Array.from(e.dataTransfer.files) as File[];
-      const validFiles = droppedFiles.filter(f => f.type.includes('video/mp4') || f.name.endsWith('.mp4'));
-      if (validFiles.length > 0) {
-        setFiles(prev => [...prev, ...validFiles]);
-        setMessage({ type: '', text: '' });
-      } else {
-        setMessage({ type: 'error', text: 'Only MP4 video files are supported.' });
+      const selectedFiles = Array.from(e.dataTransfer.files).filter(f => f.type === 'video/mp4' || f.name.toLowerCase().endsWith('.mp4'));
+      if (selectedFiles.length < e.dataTransfer.files.length) {
+         setMessage({ type: 'error', text: 'Only MP4 videos are allowed.' });
       }
+      setFiles(prev => [...prev, ...selectedFiles as File[]]);
     }
   };
 
-  const handleFileChange = (e: any) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const selectedFiles = Array.from(e.target.files) as File[];
-      const validFiles = selectedFiles.filter(f => f.type.includes('video/mp4') || f.name.endsWith('.mp4'));
-      if (validFiles.length > 0) {
-        setFiles(prev => [...prev, ...validFiles]);
-        setMessage({ type: '', text: '' });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files).filter(f => f.type === 'video/mp4' || f.name.toLowerCase().endsWith('.mp4'));
+      if (selectedFiles.length < e.target.files.length) {
+         setMessage({ type: 'error', text: 'Only MP4 videos are allowed.' });
       }
+      setFiles(prev => [...prev, ...selectedFiles as File[]]);
     }
   };
 
@@ -76,7 +72,6 @@ export default function CloudUploadPage() {
 
   const handleDeleteQueue = async () => {
     if (!selectedPageId) return;
-    if (!confirm('Are you sure you want to delete all pending videos from Mega Cloud for this page? This cannot be undone.')) return;
     
     setIsDeleting(true);
     setMessage({ type: '', text: '' });

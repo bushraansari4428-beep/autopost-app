@@ -963,6 +963,7 @@ export class SyncService {
           if (video.url) {
             await this.megaService.deleteFile(video.url, megaEmail || undefined, megaPassword || undefined);
           }
+          await this.prisma.uploadHistory.deleteMany({ where: { videoId: video.id } });
           await this.prisma.video.delete({ where: { id: video.id } });
           deleteCount++;
         } catch (err: any) {
