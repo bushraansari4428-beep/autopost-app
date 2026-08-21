@@ -26,6 +26,16 @@ export class MappingsService {
       throw new BadRequestException('This Facebook page is already connected to a source. A page can only have one active mapping at a time.');
     }
 
+    if (createMappingDto.scheduledTime && createMappingDto.scheduledTime !== '00:00') {
+      const nowUTC = new Date();
+      const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
+      const currentPktTimeStr = `${pktTime.getUTCHours().toString().padStart(2, '0')}:${pktTime.getUTCMinutes().toString().padStart(2, '0')}`;
+      
+      if (currentPktTimeStr >= createMappingDto.scheduledTime) {
+        createMappingDto.lastScheduledRun = new Date();
+      }
+    }
+
     return this.prisma.mapping.create({
       data: createMappingDto,
     });
@@ -81,7 +91,19 @@ export class MappingsService {
 
   update(id: string, updateData: any) {
     if (updateData.scheduledTime !== undefined) {
-      updateData.lastScheduledRun = null;
+      if (updateData.scheduledTime && updateData.scheduledTime !== '00:00') {
+        const nowUTC = new Date();
+        const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
+        const currentPktTimeStr = `${pktTime.getUTCHours().toString().padStart(2, '0')}:${pktTime.getUTCMinutes().toString().padStart(2, '0')}`;
+        
+        if (currentPktTimeStr >= updateData.scheduledTime) {
+          updateData.lastScheduledRun = new Date();
+        } else {
+          updateData.lastScheduledRun = null;
+        }
+      } else {
+        updateData.lastScheduledRun = null;
+      }
     }
     return this.prisma.mapping.update({
       where: { id },
