@@ -465,7 +465,7 @@ export class SyncService {
         const unuploadedVideos = await this.prisma.video.findMany({
           where: {
             sourceId: source.id,
-            uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['COMPLETED', 'PENDING'] } } }
+            uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['COMPLETED', 'PENDING'] }, facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } }
           },
           orderBy: { createdAt: 'asc' },
           take: mapping.videosPerDay || 1
@@ -911,6 +911,15 @@ export class SyncService {
           description: finalDescription,
           url: megaLink,
           publishedAt: new Date(),
+        }
+      });
+
+      await this.prisma.uploadHistory.create({
+        data: {
+          videoId: video.id,
+          facebookPageId: page.id,
+          status: 'COMPLETED',
+          facebookPostId: 'MEGA_CLOUD_UPLOAD'
         }
       });
 

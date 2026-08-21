@@ -226,9 +226,11 @@ export default function Dashboard() {
                       <div className="flex flex-col text-xs mt-1.5 space-y-1">
                         <div className="flex items-center">
                           <span className="text-gray-400">Action:</span>
-                          <span className="font-semibold text-green-400 ml-1.5">Posted to Facebook</span>
+                          <span className={`font-semibold ml-1.5 ${item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'text-purple-400' : 'text-green-400'}`}>
+                            {item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'Uploaded to Cloud' : 'Posted to Facebook'}
+                          </span>
                           <span className="text-gray-600 mx-2">&bull;</span>
-                          <span className="text-gray-400">Page:</span>
+                          <span className="text-gray-400">{item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'Queue:' : 'Page:'}</span>
                           <span className="font-semibold text-blue-400 ml-1.5 truncate max-w-[150px]">{item.facebookPage?.name || 'Unknown'}</span>
                         </div>
                         <div className="flex items-center">
@@ -253,7 +255,7 @@ export default function Dashboard() {
                       }`}>
                         {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
                       </span>
-                      {(item.status === 'COMPLETED' || item.status === 'SUCCESS') && item.facebookPostId && (
+                      {(item.status === 'COMPLETED' || item.status === 'SUCCESS') && item.facebookPostId && item.facebookPostId !== 'MEGA_CLOUD_UPLOAD' && (
                         <a 
                           href={`https://facebook.com/${item.facebookPostId}`}
                           target="_blank"
