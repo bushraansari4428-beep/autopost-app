@@ -243,15 +243,27 @@ export default function Dashboard() {
                         {new Date(item.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                       </p>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap uppercase tracking-wider ${
-                      item.status === 'COMPLETED' || item.status === 'SUCCESS'
-                        ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                        : item.status === 'FAILED' || item.status === 'ERROR'
-                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                        : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                    }`}>
-                      {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
-                    </span>
+                    <div className="flex flex-col items-end space-y-2">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap uppercase tracking-wider ${
+                        item.status === 'COMPLETED' || item.status === 'SUCCESS'
+                          ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                          : item.status === 'FAILED' || item.status === 'ERROR'
+                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                      }`}>
+                        {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
+                      </span>
+                      {(item.status === 'COMPLETED' || item.status === 'SUCCESS') && item.facebookPostId && (
+                        <a 
+                          href={`https://facebook.com/${item.facebookPostId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20"
+                        >
+                          View Post <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                        </a>
+                      )}
+                    </div>
                   </div>
                   {(item.status === 'FAILED' || item.status === 'ERROR') && item.errorMessage && (
                     <div className="mt-2 text-xs text-red-400/90 bg-red-500/10 p-2 rounded-lg border border-red-500/10 line-clamp-2">
