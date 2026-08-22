@@ -187,7 +187,7 @@ export class SyncService {
       const oldestVideo = await this.prisma.video.findFirst({
         where: {
           sourceId: mapping.sourceId,
-          uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['COMPLETED', 'PENDING'] } } }
+          uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['COMPLETED', 'PENDING'] }, facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } }
         },
         orderBy: { createdAt: 'asc' }
       });
