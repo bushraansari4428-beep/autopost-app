@@ -202,8 +202,12 @@ export class SyncService {
         });
         await this.logsService.log('INFO', `Test triggered: Queued 1 video from Mega Cloud for immediate posting to Facebook!`);
         
-        // GitHub Action has already been triggered above via fetch() API.
-        // It will pick up this PENDING upload in 15-30s.
+        // Run the upload since we are inside the GitHub Action worker
+        try {
+          await this.processPendingUploads();
+        } catch (e) {
+          console.error("Upload error during test:", e);
+        }
         
         return { success: true, message: `Cloud connection verified. 1 video queued for immediate upload.` };
       } else {
