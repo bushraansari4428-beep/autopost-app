@@ -999,31 +999,33 @@ export class SyncService {
     
     this.isProcessing = true;
     try {
-      const pendingUpload = await this.prisma.uploadHistory.findFirst({
-        where: { status: 'PENDING' },
-        include: { video: true, facebookPage: true },
-        orderBy: { createdAt: 'asc' }
-      });
+      while (true) {
+        const pendingUpload = await this.prisma.uploadHistory.findFirst({
+          where: { status: 'PENDING' },
+          include: { video: true, facebookPage: true },
+          orderBy: { createdAt: 'asc' }
+        });
 
-      if (!pendingUpload) {
-        return;
-      }
+        if (!pendingUpload) {
+          break; // Queue is empty, exit loop
+        }
 
-      this.logger.log(`Processing upload: ${pendingUpload.id} for video: ${pendingUpload.video.title}`);
-      
-      await this.prisma.uploadHistory.update({
-        where: { id: pendingUpload.id },
-        data: { status: 'PROCESSING' }
-      });
-
-      try {
-        await this.downloadAndUpload(pendingUpload);
-      } catch (err) {
-        this.logsService.log('ERROR', `Upload failed for ${pendingUpload.video.title}: ${err.message}`);
+        this.logger.log(`Processing upload: ${pendingUpload.id} for video: ${pendingUpload.video.title}`);
+        
         await this.prisma.uploadHistory.update({
           where: { id: pendingUpload.id },
-          data: { status: 'FAILED', errorMessage: err.message }
+          data: { status: 'PROCESSING' }
         });
+
+        try {
+          await this.downloadAndUpload(pendingUpload);
+        } catch (err: any) {
+          this.logsService.log('ERROR', `Upload failed for ${pendingUpload.video.title}: ${err.message}`);
+          await this.prisma.uploadHistory.update({
+            where: { id: pendingUpload.id },
+            data: { status: 'FAILED', errorMessage: err.message }
+          });
+        }
       }
 
     } finally {
@@ -1273,7 +1275,7 @@ export class SyncService {
              if (ffmpegPath) {
                 const { exec } = require('child_process');
                 await new Promise((resolve, reject) => {
-                   exec(`"${ffmpegPath}" -i "${tempPath}" -map_metadata -1 -c:v copy -c:a copy "${strippedPath}"`, (error: any) => {
+                   exec(`"${ffmpegPath}" -loglevel error -i "${tempPath}" -map_metadata -1 -c:v copy -c:a copy "${strippedPath}"`, (error: any) => {
                       if (error) reject(error);
                       else resolve(true);
                    });
