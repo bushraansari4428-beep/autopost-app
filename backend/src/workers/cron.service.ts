@@ -48,6 +48,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
       const pkMinutes = pktTime.getUTCMinutes();
       const todayPktDateString = pktTime.toISOString().split('T')[0];
 
+      let hasWorkToDo = false;
       let count = 0;
       for (const source of sources) {
         const dueMappingIds: string[] = [];
@@ -112,15 +113,26 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (dueMappingIds.length > 0) {
-          await this.syncService.monitorSource(source.id, dueMappingIds);
+          if (process.env.GITHUB_ACTIONS === 'true' || process.env.IS_WORKER === 'true') {
+             await this.syncService.monitorSource(source.id, dueMappingIds);
+          }
+          hasWorkToDo = true;
           count++;
         }
       }
 
-      // this.logsService.log('INFO', `Checked ${count} sources with due mappings.`);
+      const pendingUploads = await this.prisma.uploadHistory.count({ where: { status: 'PENDING' } });
+      if (pendingUploads > 0) {
+        hasWorkToDo = true;
+      }
 
-      // After checking sources, process any pending uploads
-      await this.syncService.processPendingUploads();
+      if (process.env.GITHUB_ACTIONS === 'true' || process.env.IS_WORKER === 'true') {
+        await this.syncService.processPendingUploads();
+      } else {
+        if (hasWorkToDo) {
+           await this.triggerGithubWorker();
+        }
+      }
 
       // Auto-delete expired users
       try {
@@ -141,6 +153,48 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
       }
     } catch (error) {
       this.logsService.log('ERROR', `Error in scheduled monitoring: ${error.message}`);
+    }
+  }
+
+  private lastGithubTriggerTime = 0;
+
+  private async triggerGithubWorker() {
+    const now = Date.now();
+    // Prevent triggering more than once every 5 minutes (300,000 ms)
+    if (now - this.lastGithubTriggerTime < 300000) {
+       return;
+    }
+
+    const githubToken = process.env.GITHUB_TOKEN;
+    if (!githubToken) {
+       this.logger.error('GITHUB_TOKEN missing. Cannot trigger GitHub Actions worker.');
+       return;
+    }
+
+    try {
+      this.lastGithubTriggerTime = now;
+      this.logger.log('Triggering GitHub Actions Worker (Heavy Data Plane)...');
+      
+      const response = await fetch('https://api.github.com/repos/bushraansari4428-beep/autopost-app/actions/workflows/auto-scraper.yml/dispatches', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'Authorization': `token ${githubToken}`,
+          'User-Agent': 'AutoPost-App-Orchestrator'
+        },
+        body: JSON.stringify({
+          ref: 'main'
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`GitHub API error: ${response.status} - ${errorText}`);
+      } else {
+        this.logger.log('Successfully dispatched GitHub Actions Worker!');
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to trigger GitHub Actions: ${err.message}`);
     }
   }
 }

@@ -29,11 +29,26 @@ jobs:
 
       - name: Install Dependencies
         working-directory: ./backend
-        run: npm install
+        run: npm ci
+
+      - name: Cache Playwright
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - name: Install Playwright Browsers
         working-directory: ./backend
         run: npx playwright install chromium --with-deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        
+      - name: Install Playwright OS Dependencies (If Cached)
+        working-directory: ./backend
+        run: npx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
 
       - name: Run Prisma Generate
         working-directory: ./backend
