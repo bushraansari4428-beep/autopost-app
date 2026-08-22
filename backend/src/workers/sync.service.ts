@@ -1264,6 +1264,34 @@ export class SyncService {
                throw err;
             }
           }
+
+          // Strip TikTok Metadata to avoid duplicate detection
+          this.logsService.log('INFO', 'Stripping TikTok metadata using FFmpeg to avoid duplicate detection...');
+          const strippedPath = tempPath.replace('.mp4', '_stripped.mp4');
+          try {
+             const ffmpegPath = require('ffmpeg-static');
+             if (ffmpegPath) {
+                const { exec } = require('child_process');
+                await new Promise((resolve, reject) => {
+                   exec(`"${ffmpegPath}" -i "${tempPath}" -map_metadata -1 -c:v copy -c:a copy "${strippedPath}"`, (error: any) => {
+                      if (error) reject(error);
+                      else resolve(true);
+                   });
+                });
+                if (fs.existsSync(strippedPath)) {
+                   fs.unlinkSync(tempPath);
+                   fs.renameSync(strippedPath, tempPath);
+                   this.logsService.log('INFO', 'Successfully stripped TikTok metadata and fixed hash.');
+                }
+             }
+          } catch (e: any) {
+             this.logger.warn(`Failed to strip TikTok metadata: ${e.message}`);
+             this.logsService.log('WARN', 'Failed to strip metadata. Proceeding with original video.');
+             // Proceed with original file if ffmpeg fails
+             if (fs.existsSync(strippedPath)) {
+                try { fs.unlinkSync(strippedPath); } catch (_) {}
+             }
+          }
         }
         this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath}. Uploading physical video directly to Facebook using highly reliable cURL stream...`);
 
