@@ -92,15 +92,7 @@ export class MappingsService {
   update(id: string, updateData: any) {
     if (updateData.scheduledTime !== undefined) {
       if (updateData.scheduledTime && updateData.scheduledTime !== '00:00') {
-        const nowUTC = new Date();
-        const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
-        const currentPktTimeStr = `${pktTime.getUTCHours().toString().padStart(2, '0')}:${pktTime.getUTCMinutes().toString().padStart(2, '0')}`;
-        
-        if (currentPktTimeStr >= updateData.scheduledTime) {
-          updateData.lastScheduledRun = new Date();
-        } else {
-          updateData.lastScheduledRun = null;
-        }
+        updateData.lastScheduledRun = null;
       } else {
         updateData.lastScheduledRun = null;
       }
