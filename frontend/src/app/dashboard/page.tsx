@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [recentUploads, setRecentUploads] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [upcomingSchedules, setUpcomingSchedules] = useState<any[]>([]);
+  const [lowQueuePages, setLowQueuePages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [isClearing, setIsClearing] = useState(false);
@@ -37,9 +38,10 @@ export default function Dashboard() {
       }
 
       let pagesCount = 0;
+      let pagesList: any[] = [];
       if (resPages && resPages.ok) {
-        const pages = await resPages.json();
-        if (Array.isArray(pages)) pagesCount = pages.length;
+        pagesList = await resPages.json();
+        if (Array.isArray(pagesList)) pagesCount = pagesList.length;
       }
 
       let successCount = 0;
@@ -64,9 +66,26 @@ export default function Dashboard() {
       }
 
       let upcoming: any[] = [];
+      let lowQueue: any[] = [];
+      
       if (resMappings && resMappings.ok) {
         const mappings = await resMappings.json();
         if (Array.isArray(mappings)) {
+          // Identify pages that have a cloud/local mapping and low queue count
+          if (Array.isArray(pagesList)) {
+            const cloudMappingPageIds = new Set(
+              mappings
+                .filter(m => m.source?.platform === 'MEGA_CLOUD' || m.source?.platform === 'LOCAL_FOLDER')
+                .map(m => m.facebookPageId)
+            );
+            
+            lowQueue = pagesList.filter(p => 
+              cloudMappingPageIds.has(p.id) && 
+              typeof p.cloudQueueCount === 'number' && 
+              p.cloudQueueCount <= 2
+            );
+          }
+
           // Filter mappings that have a scheduledTime
           const scheduled = mappings.filter(m => m.scheduledTime && m.source?.platform === 'MEGA_CLOUD');
           // Parse "HH:mm" strings, convert to actual upcoming Dates, and sort them
@@ -98,6 +117,7 @@ export default function Dashboard() {
       setRecentUploads(recent);
       setLogs(fetchedLogs);
       setUpcomingSchedules(upcoming);
+      setLowQueuePages(lowQueue);
     } catch (error) {
       console.error('Error fetching dashboard statistics:', error);
     } finally {
@@ -155,6 +175,32 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {lowQueuePages.length > 0 && (
+        <div className="mb-8 p-5 bg-red-900/20 border border-red-500/30 rounded-2xl flex items-start gap-4">
+          <div className="p-2 bg-red-500/20 rounded-full mt-1">
+            <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold text-red-400">Low Cloud Queue Warning</h3>
+            <p className="text-red-300 text-sm mt-1 mb-3">
+              The following pages are running out of videos in their cloud queue. Please upload new videos to avoid missing scheduled posts.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {lowQueuePages.map(page => (
+                <div key={page.id} className="bg-red-950/40 border border-red-900/50 rounded-xl p-3 flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-200 truncate pr-2">{page.name}</span>
+                  <span className="text-xs font-bold px-2 py-1 bg-red-500/20 text-red-400 rounded-md whitespace-nowrap">
+                    {page.cloudQueueCount} left
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
