@@ -60,16 +60,33 @@ export class MegaService {
     const writeStream = fs.createWriteStream(tempPath);
 
     return new Promise((resolve, reject) => {
+      // Timeout after 5 minutes
+      const timeout = setTimeout(() => {
+        reject(new Error('Mega download timed out after 5 minutes.'));
+      }, 5 * 60 * 1000);
+
       stream.pipe(writeStream);
+      
       stream.on('end', () => {
-        this.logger.log(`Download complete: ${tempPath}`);
+        clearTimeout(timeout);
+        this.logger.log(`Download stream ended: ${tempPath}`);
         resolve(tempPath);
       });
+      
+      writeStream.on('finish', () => {
+        clearTimeout(timeout);
+        this.logger.log(`File write finished: ${tempPath}`);
+        resolve(tempPath);
+      });
+
       stream.on('error', (err: any) => {
+        clearTimeout(timeout);
         this.logger.error(`Mega download error: ${err.message}`);
         reject(err);
       });
+      
       writeStream.on('error', (err: any) => {
+        clearTimeout(timeout);
         this.logger.error(`File write error: ${err.message}`);
         reject(err);
       });
