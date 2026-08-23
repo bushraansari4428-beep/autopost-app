@@ -771,8 +771,8 @@ export class SyncService {
           for (const mapping of targetMappings) {
             const alreadyQueued = videoRecord.uploads?.some(u => u.facebookPageId === mapping.facebookPageId);
             
-            // Only auto-queue if the video was published AFTER the mapping was created
-            const isNewContent = videoRecord.publishedAt >= mapping.createdAt;
+            // Only auto-queue if the video was published AFTER the source was created
+            const isNewContent = videoRecord.publishedAt >= source.createdAt;
 
             if (!alreadyQueued && isNewContent) {
               await this.prisma.uploadHistory.create({
