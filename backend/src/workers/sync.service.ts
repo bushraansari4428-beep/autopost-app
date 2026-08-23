@@ -143,6 +143,7 @@ export class SyncService {
           'Authorization': `token ${githubToken}`,
           'User-Agent': 'AutoPost-App'
         },
+        signal: AbortSignal.timeout(10000),
         body: JSON.stringify({
           ref: 'main',
           inputs: { mappingId: mappingId }
@@ -364,7 +365,7 @@ export class SyncService {
             const ytDlpCmd = this.getYtDlpCmd();
             const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
             try {
-              const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+              const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
               if (stdout && stdout.trim()) {
                 const parsed = JSON.parse(stdout);
                 const extractedUrl = parsed.url || (parsed.requested_downloads && parsed.requested_downloads[0] ? parsed.requested_downloads[0].url : null);
@@ -708,6 +709,7 @@ export class SyncService {
               this.logger.log(`Scanning URL: ${url}`);
               const { stdout, stderr } = await execPromise(cmd, {
                 maxBuffer: 1024 * 1024 * 50,
+                timeout: 3 * 60 * 1000 // 3 minutes timeout
               });
 
               if (stdout && stdout.trim()) {
@@ -836,7 +838,7 @@ export class SyncService {
       const fbData: any = await new Promise((resolve, reject) => {
          const { spawn } = require('child_process');
          const curl = spawn('curl', [
-            '-s', '-X', 'POST',
+            '-s', '-m', '300', '-X', 'POST',
             `https://graph-video.facebook.com/v19.0/${page.pageId}/videos`,
             '-F', `access_token=${page.accessToken}`,
             '-F', `description=${finalDescription}`,
@@ -1131,7 +1133,7 @@ export class SyncService {
          try {
             const ytDlpCmd = this.getYtDlpCmd();
             const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json "${targetUrl}"`;
-            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
             if (stdout && stdout.trim()) {
                const parsed = JSON.parse(stdout);
                const extractedUrl = parsed.url || (parsed.requested_downloads && parsed.requested_downloads[0] ? parsed.requested_downloads[0].url : null);
@@ -1262,7 +1264,7 @@ export class SyncService {
       fbData = await new Promise((resolve, reject) => {
          const { spawn } = require('child_process');
          const curl = spawn('curl', [
-            '-s', '-X', 'POST',
+            '-s', '-m', '300', '-X', 'POST',
             `https://graph-video.facebook.com/v19.0/${pageId}/videos`,
             '-F', `access_token=${accessToken}`,
             '-F', `description=${finalDescription}`,
@@ -1356,6 +1358,7 @@ export class SyncService {
            const { spawn } = require('child_process');
            const curl = spawn('curl', [
               '-s',
+              '-m', '300',
               '-X', 'POST',
               `https://graph-video.facebook.com/v19.0/${pageId}/videos`,
               '-F', `access_token=${accessToken}`,
@@ -1455,7 +1458,7 @@ export class SyncService {
     for (const mirror of mirrors) {
       try {
         this.logsService.log('INFO', `Polling ${mirror.name} mirror for user @${username}...`);
-        const res = await fetch(mirror.url, { headers, redirect: 'follow' });
+        const res = await fetch(mirror.url, { headers, redirect: 'follow', signal: AbortSignal.timeout(30000) });
         if (res.ok) {
           const html = await res.text();
           const regex = /(?:\/p\/|\/reel\/|\/post\/|shortcode["':\s]+)([A-Za-z0-9_-]{11})(?:[\/'"\s?#&]|$)/gi;
@@ -1503,7 +1506,7 @@ export class SyncService {
       let baseUrl = igWorkerUrl.trim().replace(/\/$/, '');
       if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
       try {
-        const res = await fetch(`${baseUrl}?username=${username}`);
+        const res = await fetch(`${baseUrl}?username=${username}`, { signal: AbortSignal.timeout(60000) });
         if (res.ok) {
           const data = await res.json();
           if (data && data.shortcode) {
@@ -1594,7 +1597,8 @@ export class SyncService {
            headers: { 
              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-           } 
+           },
+           signal: AbortSignal.timeout(60000)
         });
         const html = await response.text();
         

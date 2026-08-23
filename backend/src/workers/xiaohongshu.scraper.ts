@@ -112,8 +112,17 @@ export async function downloadXiaohongshuVideo(videoUrl: string, outputPath: str
   response.data.pipe(writer);
 
   return new Promise((resolve, reject) => {
-    writer.on('finish', () => resolve(outputPath));
+    const timeout = setTimeout(() => {
+      writer.close();
+      reject(new Error('Xiaohongshu download timed out after 5 minutes'));
+    }, 5 * 60 * 1000);
+
+    writer.on('finish', () => {
+      clearTimeout(timeout);
+      resolve(outputPath);
+    });
     writer.on('error', (err: any) => {
+      clearTimeout(timeout);
       writer.close();
       reject(err);
     });
