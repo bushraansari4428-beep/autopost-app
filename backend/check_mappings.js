@@ -10,14 +10,19 @@ async function main() {
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
-  const uploads = await prisma.uploadHistory.findMany({
-    take: 10,
-    orderBy: { createdAt: "desc" },
-    include: { video: true }
+  const page = await prisma.facebookPage.findFirst({
+    where: { name: { contains: "Rare" } }
+  });
+
+  const mappings = await prisma.mapping.findMany({
+    where: { facebookPageId: page.id },
+    include: { source: true }
   });
   
-  console.log("Recent uploads:");
-  uploads.forEach(u => console.log(u.id, u.status, u.errorMessage, u.video.title));
+  console.log("Mappings for page:", page.name);
+  for (const m of mappings) {
+    console.log(`Mapping ID: ${m.id}, Source ID: ${m.sourceId}, Source URL: ${m.source.url}, Source Platform: ${m.source.platform}`);
+  }
   
   await prisma.$disconnect();
 }

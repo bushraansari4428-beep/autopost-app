@@ -10,15 +10,12 @@ async function main() {
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
-  const uploads = await prisma.uploadHistory.findMany({
-    take: 10,
-    orderBy: { createdAt: "desc" },
-    include: { video: true }
+  await prisma.mapping.update({
+    where: { id: "5ff6d113-2bfc-4dfc-be1d-7af1ea16d893" },
+    data: { sourceId: "f3a86aef-9148-48a1-a0f1-b867ff946071" }
   });
   
-  console.log("Recent uploads:");
-  uploads.forEach(u => console.log(u.id, u.status, u.errorMessage, u.video.title));
-  
+  console.log("Mapping updated to point to the correct source with videos.");
   await prisma.$disconnect();
 }
 main().catch(console.error);

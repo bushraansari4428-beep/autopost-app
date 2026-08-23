@@ -10,15 +10,11 @@ async function main() {
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
-  const uploads = await prisma.uploadHistory.findMany({
-    take: 10,
-    orderBy: { createdAt: "desc" },
-    include: { video: true }
-  });
+  await prisma.source.delete({
+    where: { id: "ba077141-f16f-480d-afa6-985b4c4de3cb" }
+  }).catch(e => console.log("already deleted or error", e.message));
   
-  console.log("Recent uploads:");
-  uploads.forEach(u => console.log(u.id, u.status, u.errorMessage, u.video.title));
-  
+  console.log("Empty manual source deleted.");
   await prisma.$disconnect();
 }
 main().catch(console.error);

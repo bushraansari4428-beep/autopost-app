@@ -11,6 +11,10 @@ on:
         required: false
         type: string # Allow manual trigger from GitHub UI
 
+concurrency:
+  group: auto-scraper
+  cancel-in-progress: false
+
 jobs:
   sync-videos:
     runs-on: ubuntu-latest
