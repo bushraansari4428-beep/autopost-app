@@ -190,7 +190,16 @@ export class SyncService {
       const oldestVideo = await this.prisma.video.findFirst({
         where: {
           sourceId: mapping.sourceId,
-          uploads: { none: { facebookPageId: mapping.facebookPageId, status: { in: ['COMPLETED', 'PENDING'] }, facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } }
+          uploads: { 
+            none: { 
+              facebookPageId: mapping.facebookPageId, 
+              OR: [
+                { status: 'PENDING' },
+                { status: 'PROCESSING' },
+                { status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+              ]
+            } 
+          }
         },
         orderBy: { createdAt: 'asc' }
       });
@@ -468,6 +477,30 @@ export class SyncService {
       const targetMappings = dueMappingIds ? source.mappings.filter((m: any) => dueMappingIds.includes(m.id)) : source.mappings;
       
       for (const mapping of targetMappings) {
+        // Check how many videos have been queued or posted for this mapping today
+        const startOfDay = new Date();
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        
+        const uploadsToday = await this.prisma.uploadHistory.count({
+           where: {
+             facebookPageId: mapping.facebookPageId,
+             createdAt: { gte: startOfDay },
+             video: { sourceId: source.id },
+             status: { not: 'FAILED' },
+             OR: [
+                { facebookPostId: null },
+                { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+             ]
+           }
+        });
+        
+        const allowedToQueue = (mapping.videosPerDay || 1) - uploadsToday;
+        
+        if (allowedToQueue <= 0) {
+           this.logger.log(`Daily quota reached for mapping ${mapping.id}. Uploads today: ${uploadsToday}`);
+           continue;
+        }
+
         // Find the oldest videos from this source that haven't been successfully uploaded or queued yet
         const unuploadedVideos = await this.prisma.video.findMany({
           where: {
@@ -484,7 +517,7 @@ export class SyncService {
             }
           },
           orderBy: { createdAt: 'asc' },
-          take: mapping.videosPerDay || 1
+          take: allowedToQueue
         });
 
         if (unuploadedVideos && unuploadedVideos.length > 0) {
