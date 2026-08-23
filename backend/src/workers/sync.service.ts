@@ -498,10 +498,39 @@ export class SyncService {
         
         if (allowedToQueue <= 0) {
            this.logger.log(`Daily quota reached for mapping ${mapping.id}. Uploads today: ${uploadsToday}`);
+           // Mark as completed for today so the schedule doesn't keep hitting
+           if (mapping.scheduledTime) {
+             await this.prisma.mapping.update({
+               where: { id: mapping.id },
+               data: { lastScheduledRun: new Date() }
+             });
+           }
            continue;
         }
 
-        // Find the oldest videos from this source that haven't been successfully uploaded or queued yet
+        // To ensure a 2-3 minute gap, we check the most recent upload attempt for this mapping
+        const lastUpload = await this.prisma.uploadHistory.findFirst({
+           where: { 
+             facebookPageId: mapping.facebookPageId, 
+             video: { sourceId: source.id },
+             createdAt: { gte: startOfDay },
+             OR: [
+                { facebookPostId: null },
+                { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+             ]
+           },
+           orderBy: { createdAt: 'desc' }
+        });
+
+        if (lastUpload) {
+           const minsSinceLastUpload = (Date.now() - lastUpload.createdAt.getTime()) / 60000;
+           if (minsSinceLastUpload < 2) {
+               this.logger.log(`Waiting for gap. ${minsSinceLastUpload.toFixed(1)} mins elapsed out of 2 mins for mapping ${mapping.id}.`);
+               continue; // skip this cron run, wait for the next minute tick
+           }
+        }
+
+        // Queue exactly ONE video per cron run to respect the gap
         const unuploadedVideos = await this.prisma.video.findMany({
           where: {
             sourceId: source.id,
@@ -517,7 +546,7 @@ export class SyncService {
             }
           },
           orderBy: { createdAt: 'asc' },
-          take: allowedToQueue
+          take: 1
         });
 
         if (unuploadedVideos && unuploadedVideos.length > 0) {
@@ -532,13 +561,7 @@ export class SyncService {
             this.logsService.log('INFO', `Cloud Auto-Poster: Queued video '${video.title}' to post!`);
           }
         }
-        
-        if (mapping.scheduledTime) {
-          await this.prisma.mapping.update({
-            where: { id: mapping.id },
-            data: { lastScheduledRun: new Date() }
-          });
-        }
+        // Removed premature lastScheduledRun update
       }
       return;
     }
