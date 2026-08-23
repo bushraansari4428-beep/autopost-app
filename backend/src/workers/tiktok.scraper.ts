@@ -213,6 +213,7 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 5): Promis
       const detailRes = await axios.get(urlWithParams, { headers: sessionManager.getHeaders(), timeout: 10000 });
       const itemInfo = detailRes.data?.itemInfo?.itemStruct;
       if (itemInfo) {
+        require('fs').writeFileSync('tiktok_video_debug.json', JSON.stringify(itemInfo.video, null, 2));
         results.push({
           id: awemeId,
           caption: itemInfo.desc || `TikTok Video ${awemeId}`,

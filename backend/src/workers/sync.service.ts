@@ -45,6 +45,9 @@ export class SyncService {
   ) {}
 
   private getYtDlpCmd(): string {
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      return 'yt-dlp';
+    }
     if (process.platform === 'win32') {
       const winPath = path.join(process.cwd(), 'yt-dlp.exe');
       if (fs.existsSync(winPath)) return `"${winPath}"`;
@@ -1055,28 +1058,11 @@ export class SyncService {
     let videoUrl = null;
 
     if (targetUrl.includes('tiktok.com')) {
-      this.logger.log(`Extracting fresh TikTok MP4 stream for upload: ${targetUrl}`);
+      this.logger.log(`Extracting HD TikTok MP4 stream for upload: ${targetUrl}`);
       
-      try {
-        const tkVideos = await this.extractTikTokVideos(targetUrl, 1);
-        const tkVideo = tkVideos.length > 0 ? tkVideos[0] : null;
-        if (tkVideo && tkVideo.mp4Url) {
-          videoUrl = tkVideo.mp4Url;
-          this.logsService.log('INFO', `Successfully acquired fresh TikTok video stream via TikWM/extractTikTokVideo.`);
-        }
-      } catch (err: any) {
-        this.logger.warn(`Fresh stream extraction failed for TikTok: ${err.message}`);
-      }
-      
-      // Fallback to the one saved in the database during sync
-      if (!videoUrl && video.mp4Url) {
-        this.logger.log(`Using database fallback MP4 stream for TikTok.`);
-        videoUrl = video.mp4Url;
-      }
-      
-      // Fallback to yt-dlp for extraction
+      // Always use yt-dlp for HD TikTok downloads (unwatermarked)
       if (!videoUrl && targetUrl) {
-         this.logsService.log('INFO', 'Attempting to extract TikTok MP4 stream using universal yt-dlp fallback...');
+         this.logsService.log('INFO', 'Attempting to extract HD TikTok MP4 stream using yt-dlp...');
          try {
             const ytDlpCmd = this.getYtDlpCmd();
             const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json "${targetUrl}"`;
