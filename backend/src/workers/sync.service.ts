@@ -1065,7 +1065,7 @@ export class SyncService {
 
   async processPendingUploads() {
     if (this.isProcessing) {
-      this.logger.log('Already processing uploads, skipping this cycle.');
+      this.logsService.log('WARN', 'Already processing uploads, skipping this cycle. Waiting for current upload to finish.');
       return;
     }
     
@@ -1316,7 +1316,7 @@ export class SyncService {
                this.logsService.log('WARN', 'TikTok CDN returned 403 Forbidden. Falling back to yt-dlp direct download...');
                const ytDlpCmd = this.getYtDlpCmd();
                const cmd = `${ytDlpCmd} --cookies cookies.txt -o "${tempPath}" "${targetUrl}"`;
-               await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50 });
+               await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
             } else {
                throw err;
             }
