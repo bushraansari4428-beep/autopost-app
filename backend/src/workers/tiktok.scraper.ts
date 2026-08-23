@@ -134,8 +134,8 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 5): Promis
              id: v.video_id,
              caption: v.title,
              hashtags: [],
-             playUrl: v.play,
-             downloadUrl: v.play,
+             playUrl: v.hdplay || v.play,
+             downloadUrl: v.hdplay || v.play,
              author: v.author?.unique_id || uname,
              createTime: v.create_time,
              url: `https://www.tiktok.com/@${v.author?.unique_id || uname}/video/${v.video_id}`
@@ -214,12 +214,23 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 5): Promis
       const itemInfo = detailRes.data?.itemInfo?.itemStruct;
       if (itemInfo) {
         require('fs').writeFileSync('tiktok_video_debug.json', JSON.stringify(itemInfo.video, null, 2));
+        let bestUrl = itemInfo.video?.playAddr || itemInfo.video?.downloadAddr || '';
+        if (itemInfo.video?.bitrateInfo && Array.isArray(itemInfo.video.bitrateInfo) && itemInfo.video.bitrateInfo.length > 0) {
+          const sortedBitrates = itemInfo.video.bitrateInfo.sort((a: any, b: any) => (b.Bitrate || 0) - (a.Bitrate || 0));
+          const bestBitrate = sortedBitrates[0];
+          if (bestBitrate?.PlayAddr?.UrlList?.length > 0) {
+            bestUrl = bestBitrate.PlayAddr.UrlList[0];
+          } else if (bestBitrate?.PlayAddr?.urlList?.length > 0) {
+            bestUrl = bestBitrate.PlayAddr.urlList[0];
+          }
+        }
+        
         results.push({
           id: awemeId,
           caption: itemInfo.desc || `TikTok Video ${awemeId}`,
           hashtags: [],
-          playUrl: itemInfo.video?.playAddr || itemInfo.video?.downloadAddr || '',
-          downloadUrl: itemInfo.video?.downloadAddr || itemInfo.video?.playAddr || '',
+          playUrl: bestUrl,
+          downloadUrl: bestUrl,
           author: itemInfo.author?.uniqueId || uname,
           createTime: itemInfo.createTime || Math.floor(Date.now() / 1000),
           url: `https://www.tiktok.com/@${itemInfo.author?.uniqueId || uname}/video/${awemeId}`
