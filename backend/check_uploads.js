@@ -8,7 +8,7 @@ async function run() {
   });
   await client.connect();
 
-  const res = await client.query(`SELECT id, "sourceId", "facebookPageId", "videosPerDay", "scheduledTime" FROM "Mapping" WHERE "sourceId" = 'f3a86aef-9148-48a1-a0f1-b867ff946071'`);
+  const res = await client.query(`SELECT id, status, "facebookPostId", "createdAt" FROM "UploadHistory" ORDER BY "createdAt" DESC LIMIT 10`);
   console.log(res.rows);
   
   await client.end();

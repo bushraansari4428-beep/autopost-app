@@ -16,10 +16,12 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     this.logger.log('==== CRON SERVICE INIT (Auto-timer enabled: 1 minute) ====');
-    // Run every 1 minute (60000 ms)
-    this.timer = setInterval(() => this.handleCron(), 60000);
-    // Also run immediately on startup
-    this.handleCron();
+    if (process.env.GITHUB_ACTIONS !== 'true' && process.env.IS_WORKER !== 'true') {
+      // Run every 1 minute (60000 ms)
+      this.timer = setInterval(() => this.handleCron(), 60000);
+      // Also run immediately on startup
+      this.handleCron();
+    }
   }
 
   onModuleDestroy() {

@@ -8,7 +8,7 @@ async function run() {
   });
   await client.connect();
 
-  const res = await client.query(`SELECT id, "sourceId", "facebookPageId", "videosPerDay", "scheduledTime" FROM "Mapping" WHERE "sourceId" = 'f3a86aef-9148-48a1-a0f1-b867ff946071'`);
+  const res = await client.query(`SELECT v.title, u."createdAt" FROM "UploadHistory" u JOIN "Video" v ON u."videoId" = v.id WHERE v."sourceId" = 'f3a86aef-9148-48a1-a0f1-b867ff946071' AND u.status = 'COMPLETED'`);
   console.log(res.rows);
   
   await client.end();
