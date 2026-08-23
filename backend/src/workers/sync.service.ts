@@ -418,11 +418,12 @@ export class SyncService {
         return { success: false, message: 'No videos found' };
       }
 
-      await this.logsService.log('INFO', `Test: Found video ${latestVideo.title}. Queuing for upload.`);
+      await this.logsService.log('INFO', `Test: Found video ${latestVideo.title || latestVideo.caption}. Queuing for upload.`);
       
-      const publishedAt = latestVideo.timestamp ? new Date(latestVideo.timestamp * 1000) : new Date();
+      const ts = latestVideo.timestamp || latestVideo.createTime;
+      const publishedAt = ts ? new Date(ts * 1000) : new Date();
       
-      const formattedCaption = this.formatFacebookCaption(latestVideo.description || latestVideo.title, mapping.source.platform, mapping.source.url);
+      const formattedCaption = this.formatFacebookCaption(latestVideo.description || latestVideo.title || latestVideo.caption, mapping.source.platform, mapping.source.url);
       const newVideo = await this.prisma.video.create({
         data: {
           title: formattedCaption,
@@ -746,9 +747,10 @@ export class SyncService {
           });
 
           if (!videoRecord) {
-            this.logsService.log('INFO', `Found new video: ${videoData.title}`);
-            const publishedAt = videoData.timestamp ? new Date(videoData.timestamp * 1000) : new Date();
-            const formattedCaption = this.formatFacebookCaption(videoData.description || videoData.title, source.platform, source.url);
+            this.logsService.log('INFO', `Found new video: ${videoData.title || videoData.caption}`);
+            const ts = videoData.timestamp || videoData.createTime;
+            const publishedAt = ts ? new Date(ts * 1000) : new Date();
+            const formattedCaption = this.formatFacebookCaption(videoData.description || videoData.title || videoData.caption, source.platform, source.url);
             videoRecord = await this.prisma.video.create({
               data: {
                 title: formattedCaption,
@@ -768,7 +770,11 @@ export class SyncService {
 
           for (const mapping of targetMappings) {
             const alreadyQueued = videoRecord.uploads?.some(u => u.facebookPageId === mapping.facebookPageId);
-            if (!alreadyQueued) {
+            
+            // Only auto-queue if the video was published AFTER the mapping was created
+            const isNewContent = videoRecord.publishedAt >= mapping.createdAt;
+
+            if (!alreadyQueued && isNewContent) {
               await this.prisma.uploadHistory.create({
                 data: {
                   videoId: videoRecord.id,
