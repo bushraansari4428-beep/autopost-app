@@ -94,6 +94,28 @@ export default function SourcesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (platform === 'TIKTOK' && url && !url.toLowerCase().includes('tiktok.com')) {
+      setErrorMsg('Invalid URL for TikTok. Please enter a valid TikTok profile URL.');
+      return;
+    }
+    if (platform === 'INSTAGRAM' && url && !url.toLowerCase().includes('instagram.com')) {
+      setErrorMsg('Invalid URL for Instagram. Please enter a valid Instagram profile URL.');
+      return;
+    }
+    if (platform === 'YOUTUBE' && url && !(url.toLowerCase().includes('youtube.com') || url.startsWith('UC'))) {
+      setErrorMsg('Invalid URL for YouTube. Please enter a valid YouTube channel URL or ID.');
+      return;
+    }
+    if (platform === 'XIAOHONGSHU' && url && !(url.toLowerCase().includes('xiaohongshu.com') || url.toLowerCase().includes('xhslink.com') || url.toLowerCase().includes('xhslink.cn'))) {
+      setErrorMsg('Invalid URL for Xiaohongshu. Please enter a valid Xiaohongshu profile URL.');
+      return;
+    }
+    if (platform === 'KUAISHOU' && url && !url.toLowerCase().includes('kuaishou.com')) {
+      setErrorMsg('Invalid URL for Kuaishou. Please enter a valid Kuaishou profile URL.');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg('');
     try {
@@ -265,7 +287,13 @@ export default function SourcesPage() {
                     onChange={(e) => setUrl(e.target.value)} 
                     required 
                     className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                    placeholder="https://youtube.com/@channel"
+                    placeholder={
+                      platform === 'TIKTOK' ? 'https://www.tiktok.com/@username' :
+                      platform === 'INSTAGRAM' ? 'https://www.instagram.com/username' :
+                      platform === 'XIAOHONGSHU' ? 'https://www.xiaohongshu.com/user/profile/...' :
+                      platform === 'KUAISHOU' ? 'https://www.kuaishou.com/profile/...' :
+                      'https://youtube.com/@channel'
+                    }
                   />
                 </div>
               )}
