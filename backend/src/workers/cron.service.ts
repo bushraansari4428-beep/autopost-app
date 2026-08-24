@@ -70,22 +70,23 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
               continue;
             }
 
-            const [schedH, schedM] = mapping.scheduledTime.split(':').map(Number);
-            const schedTotalMins = schedH * 60 + schedM;
-            const currentTotalMins = pkHours * 60 + pkMinutes;
+            const timeSlots = mapping.scheduledTime.split(',').map(t => t.trim()).filter(Boolean);
+            let isDue = false;
 
-            if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
-              if (!mapping.lastScheduledRun) {
-                dueMappingIds.push(mapping.id);
-              } else {
-                 const lastRunUTC = new Date(mapping.lastScheduledRun);
-                 const lastRunPkt = new Date(lastRunUTC.getTime() + (5 * 60 * 60 * 1000));
-                 const lastRunDateString = lastRunPkt.toISOString().split('T')[0];
-                 
-                 if (lastRunDateString !== todayPktDateString) {
-                   dueMappingIds.push(mapping.id);
-                 }
+            for (const timeStr of timeSlots) {
+              const [schedH, schedM] = timeStr.split(':').map(Number);
+              const schedTotalMins = schedH * 60 + schedM;
+              const currentTotalMins = pkHours * 60 + pkMinutes;
+
+              if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
+                // If we match any slot, we mark it as due. 
+                // We rely on sync.service to check if the quota for this specific slot is reached.
+                isDue = true;
+                break;
               }
+            }
+            if (isDue) {
+               dueMappingIds.push(mapping.id);
             }
           } else {
             if (!mapping.scheduledTime || mapping.scheduledTime === '00:00') {
@@ -93,22 +94,20 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
                 dueMappingIds.push(mapping.id);
               }
             } else {
-              const [schedH, schedM] = mapping.scheduledTime.split(':').map(Number);
-              const schedTotalMins = schedH * 60 + schedM;
-              const currentTotalMins = pkHours * 60 + pkMinutes;
+              const timeSlots = mapping.scheduledTime.split(',').map(t => t.trim()).filter(Boolean);
+              let isDue = false;
+              for (const timeStr of timeSlots) {
+                const [schedH, schedM] = timeStr.split(':').map(Number);
+                const schedTotalMins = schedH * 60 + schedM;
+                const currentTotalMins = pkHours * 60 + pkMinutes;
 
-              if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
-                if (!mapping.lastScheduledRun) {
-                  dueMappingIds.push(mapping.id);
-                } else {
-                   const lastRunUTC = new Date(mapping.lastScheduledRun);
-                   const lastRunPkt = new Date(lastRunUTC.getTime() + (5 * 60 * 60 * 1000));
-                   const lastRunDateString = lastRunPkt.toISOString().split('T')[0];
-                   
-                   if (lastRunDateString !== todayPktDateString) {
-                     dueMappingIds.push(mapping.id);
-                   }
+                if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
+                  isDue = true;
+                  break;
                 }
+              }
+              if (isDue) {
+                 dueMappingIds.push(mapping.id);
               }
             }
           }

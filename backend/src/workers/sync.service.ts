@@ -486,7 +486,20 @@ export class SyncService {
         let startOfSlotUTC = new Date(pktTime.getTime() - (5 * 60 * 60 * 1000));
         
         if (mapping.scheduledTime) {
-          const [schedH, schedM] = mapping.scheduledTime.split(':').map(Number);
+          const timeSlots = mapping.scheduledTime.split(',').map((t: string) => t.trim()).filter(Boolean);
+          const currentTotalMins = pktTime.getUTCHours() * 60 + pktTime.getUTCMinutes();
+          let activeSlot = timeSlots[0]; // fallback
+          
+          for (const timeStr of timeSlots) {
+            const [schedH, schedM] = timeStr.split(':').map(Number);
+            const schedTotalMins = schedH * 60 + schedM;
+            if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
+              activeSlot = timeStr;
+              break;
+            }
+          }
+          
+          const [schedH, schedM] = activeSlot.split(':').map(Number);
           const slotStartPkt = new Date(pktTime);
           slotStartPkt.setUTCHours(schedH, schedM, 0, 0);
           startOfSlotUTC = new Date(slotStartPkt.getTime() - (5 * 60 * 60 * 1000));
