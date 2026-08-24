@@ -480,8 +480,11 @@ export class SyncService {
       
       for (const mapping of targetMappings) {
         // Check how many videos have been queued or posted for this mapping today
-        const startOfDay = new Date();
-        startOfDay.setUTCHours(0, 0, 0, 0);
+        // Calculate PKT start of day (00:00:00 PKT -> 19:00:00 UTC previous day)
+        const now = new Date();
+        const pktTime = new Date(now.getTime() + (5 * 60 * 60 * 1000));
+        pktTime.setUTCHours(0, 0, 0, 0);
+        const startOfDay = new Date(pktTime.getTime() - (5 * 60 * 60 * 1000));
         
         const uploadsToday = await this.prisma.uploadHistory.count({
            where: {
