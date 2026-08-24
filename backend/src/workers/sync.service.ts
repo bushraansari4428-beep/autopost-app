@@ -479,17 +479,27 @@ export class SyncService {
       const targetMappings = dueMappingIds ? source.mappings.filter((m: any) => dueMappingIds.includes(m.id)) : source.mappings;
       
       for (const mapping of targetMappings) {
-        // Check how many videos have been queued or posted for this mapping today
-        // Calculate PKT start of day (00:00:00 PKT -> 19:00:00 UTC previous day)
+        // Calculate the exact start of the scheduled slot in PKT today
         const now = new Date();
         const pktTime = new Date(now.getTime() + (5 * 60 * 60 * 1000));
-        pktTime.setUTCHours(0, 0, 0, 0);
-        const startOfDay = new Date(pktTime.getTime() - (5 * 60 * 60 * 1000));
         
-        const uploadsToday = await this.prisma.uploadHistory.count({
+        let startOfSlotUTC = new Date(pktTime.getTime() - (5 * 60 * 60 * 1000));
+        
+        if (mapping.scheduledTime) {
+          const [schedH, schedM] = mapping.scheduledTime.split(':').map(Number);
+          const slotStartPkt = new Date(pktTime);
+          slotStartPkt.setUTCHours(schedH, schedM, 0, 0);
+          startOfSlotUTC = new Date(slotStartPkt.getTime() - (5 * 60 * 60 * 1000));
+        } else {
+          // Fallback if no schedule (should not happen for MEGA_CLOUD)
+          pktTime.setUTCHours(0, 0, 0, 0);
+          startOfSlotUTC = new Date(pktTime.getTime() - (5 * 60 * 60 * 1000));
+        }
+        
+        const uploadsThisSlot = await this.prisma.uploadHistory.count({
            where: {
              facebookPageId: mapping.facebookPageId,
-             createdAt: { gte: startOfDay },
+             createdAt: { gte: startOfSlotUTC },
              video: { sourceId: source.id },
              status: { not: 'FAILED' },
              OR: [
@@ -499,10 +509,10 @@ export class SyncService {
            }
         });
         
-        const allowedToQueue = (mapping.videosPerDay || 1) - uploadsToday;
+        const allowedToQueue = (mapping.videosPerDay || 1) - uploadsThisSlot;
         
         if (allowedToQueue <= 0) {
-           this.logger.log(`Daily quota reached for mapping ${mapping.id}. Uploads today: ${uploadsToday}`);
+           this.logger.log(`Slot quota reached for mapping ${mapping.id}. Uploads this slot: ${uploadsThisSlot}`);
            // Mark as completed for today so the schedule doesn't keep hitting
            if (mapping.scheduledTime) {
              await this.prisma.mapping.update({
@@ -518,7 +528,7 @@ export class SyncService {
            where: { 
              facebookPageId: mapping.facebookPageId, 
              video: { sourceId: source.id },
-             createdAt: { gte: startOfDay },
+             createdAt: { gte: startOfSlotUTC },
              OR: [
                 { facebookPostId: null },
                 { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }

@@ -232,7 +232,7 @@ export default function MappingsPage() {
                 </div>
                 {mapping.source?.platform === 'MEGA_CLOUD' && (
                   <div className="flex flex-col items-center">
-                    <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Day</span>
+                    <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Slot</span>
                     <input
                       type="number"
                       min="1"
@@ -304,7 +304,7 @@ export default function MappingsPage() {
               </div>
               {sources.find(s => s.id === sourceId)?.platform === 'MEGA_CLOUD' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Videos per Day (Auto-scheduled 1 min apart)</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Videos / Schedule (Auto-scheduled 1 min apart)</label>
                   <input 
                     type="number" 
                     min="1"
