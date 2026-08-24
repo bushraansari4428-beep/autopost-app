@@ -210,7 +210,7 @@ export default function MappingsPage() {
                 <div className="flex flex-col items-center">
                   <span className="text-xs text-gray-400 mb-1">Schedule (PKT)</span>
                   <div className="flex flex-wrap items-center gap-1 max-w-[200px] justify-center">
-                    {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : []).map((t, idx) => (
+                    {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [] as string[]).map((t: string, idx: number) => (
                       <div key={idx} className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1">
                         <span className="text-sm text-white">{t.trim()}</span>
                         <button 
