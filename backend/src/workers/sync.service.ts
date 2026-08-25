@@ -126,50 +126,42 @@ export class SyncService {
     });
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
-    this.logsService.log('INFO', `Starting test extraction for the selected page...`);
-    this.logsService.log('INFO', 'Test request initiated successfully.');
+    await this.logsService.log('INFO', `Starting test extraction for the selected page...`);
+    await this.logsService.log('INFO', 'Test request initiated successfully.');
     
+    // Execute immediately in background on current server
+    this.executeTestMapping(mappingId).catch(err => {
+      this.logger.error(`Error in executeTestMapping: ${err.message}`);
+    });
+
     const githubToken = process.env.GITHUB_TOKEN;
-    if (!githubToken) {
-       this.logsService.log('ERROR', 'GITHUB_TOKEN is missing in environment variables.');
-       return { success: false, message: 'Server configuration error: GITHUB_TOKEN missing. Cannot trigger test.' };
+    if (githubToken) {
+      try {
+        fetch('https://api.github.com/repos/bushraansari4428-beep/autopost-app/actions/workflows/auto-scraper.yml/dispatches', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': `token ${githubToken}`,
+            'User-Agent': 'AutoPost-App'
+          },
+          signal: AbortSignal.timeout(5000),
+          body: JSON.stringify({
+            ref: 'main',
+            inputs: { mappingId: mappingId }
+          })
+        }).catch(() => {});
+      } catch (_) {}
     }
 
-    try {
-      const response = await fetch('https://api.github.com/repos/bushraansari4428-beep/autopost-app/actions/workflows/auto-scraper.yml/dispatches', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'Authorization': `token ${githubToken}`,
-          'User-Agent': 'AutoPost-App'
-        },
-        signal: AbortSignal.timeout(10000),
-        body: JSON.stringify({
-          ref: 'main',
-          inputs: { mappingId: mappingId }
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logsService.log('ERROR', `GitHub API error: ${response.status} - ${errorText}`);
-        return { success: false, message: `Failed to trigger test in background: ${response.statusText}` };
-      }
-      // this.logsService.log('INFO', 'GitHub Action triggered successfully.');
-      let successMessage = 'Test successfully started in the background! Please check your Facebook page in 2-3 minutes.';
-      if (mapping.source.platform === 'MEGA_CLOUD') {
-        successMessage = '1 video from Mega Cloud is being uploaded to your Facebook page...';
-      }
-
-      return { 
-        success: true, 
-        message: successMessage 
-      };
-
-    } catch (e: any) {
-      this.logsService.log('ERROR', `Failed to initiate test request: ${e.message}`);
-      return { success: false, message: 'Failed to contact background worker.' };
+    let successMessage = 'Test successfully started in the background! Please check your Facebook page in 2-3 minutes.';
+    if (mapping.source.platform === 'MEGA_CLOUD') {
+      successMessage = '1 video from Mega Cloud is being uploaded to your Facebook page...';
     }
+
+    return { 
+      success: true, 
+      message: successMessage 
+    };
   }
 
   async executeTestMapping(mappingId: string) {
@@ -1020,6 +1012,24 @@ export class SyncService {
          } catch (e: any) {
             this.logsService.log('ERROR', `yt-dlp stream extraction failed: ${e.message.substring(0, 200)}...`);
          }
+      }
+
+      // TikWM direct HTTP fallback for single video download URL if yt-dlp did not resolve
+      if (!videoUrl && targetUrl) {
+        try {
+          this.logsService.log('INFO', 'Attempting to extract HD TikTok MP4 stream via TikWM HTTP API...');
+          const axios = require('axios');
+          const tikwmRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(targetUrl)}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            timeout: 10000
+          });
+          if (tikwmRes.data?.data?.hdplay || tikwmRes.data?.data?.play) {
+            videoUrl = tikwmRes.data.data.hdplay || tikwmRes.data.data.play;
+            this.logsService.log('INFO', 'Successfully obtained HD TikTok video stream via TikWM API!');
+          }
+        } catch (err: any) {
+          this.logsService.log('ERROR', `TikWM API stream fallback failed: ${err.message}`);
+        }
       }
 
       if (!videoUrl) {
