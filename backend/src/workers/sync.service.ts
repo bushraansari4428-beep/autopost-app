@@ -175,11 +175,12 @@ export class SyncService {
   async executeTestMapping(mappingId: string) {
     const mapping = await this.prisma.mapping.findUnique({
       where: { id: mappingId },
-      include: { source: true }
+      include: { source: true, facebookPage: true }
     });
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
-    await this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.source.name} (${mapping.source.platform}) -> ${mapping.facebookPage.name}`);
+    const pageName = mapping.facebookPage?.name || 'Facebook Page';
+    await this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.source.name} (${mapping.source.platform}) -> ${pageName}`);
 
     if (mapping.source.platform === 'LOCAL_FOLDER') {
       await this.logsService.log('INFO', `Test skipped: LOCAL_FOLDER mappings are managed by your Desktop App.`);
@@ -475,14 +476,17 @@ export class SyncService {
           const tkVideos = await this.extractTikTokVideos(source.url, 50);
           if (tkVideos.length > 0) {
             latestVideos.push(...tkVideos);
-            this.logger.log(`Found TikTok video(s). Count: ${tkVideos.length}`);
+            this.logger.log(`Found TikTok video(s) via native scraper. Count: ${tkVideos.length}`);
           }
-        } else {
+        }
+        
+        // Universal fallback for YouTube / TikTok if native extraction returned 0 videos
+        if (latestVideos.length === 0) {
           for (const url of urlsToScan) {
             const ytDlpCmd = this.getYtDlpCmd();
             const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 50 "${url}"`;
             try {
-              this.logger.log(`Scanning URL: ${url}`);
+              this.logger.log(`Scanning URL via yt-dlp fallback: ${url}`);
               const { stdout, stderr } = await execPromise(cmd, {
                 maxBuffer: 1024 * 1024 * 50,
                 timeout: 3 * 60 * 1000 // 3 minutes timeout
@@ -496,14 +500,14 @@ export class SyncService {
                   }
                 }
                 if (latestVideos.length > 0) {
-                  this.logger.log(`Found YouTube video(s). Count: ${latestVideos.length}`);
+                  this.logger.log(`Found video(s) via yt-dlp. Count: ${latestVideos.length}`);
                   break;
                 }
               } else if (stderr) {
                 this.logger.warn(`yt-dlp stderr for ${url}: ${stderr}`);
               }
             } catch (error) {
-              this.logger.warn(`Failed to scan ${url}: ${error.message}`);
+              this.logger.warn(`Failed to scan ${url} via yt-dlp: ${error.message}`);
             }
           }
         }
