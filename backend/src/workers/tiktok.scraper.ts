@@ -87,200 +87,105 @@ const sessionManager = new TikTokSessionManager();
 export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promise<TikTokVideoMetadata[]> {
   const cleanUrl = inputUrl.split('?')[0].replace(/\/$/, '').trim();
   const isVideoUrl = cleanUrl.includes('/video/') || cleanUrl.includes('/v/');
-  
-  let awemeIds: { id: string, username: string }[] = [];
-  let username = 'user';
+  const usernameMatch = cleanUrl.match(/@([a-zA-Z0-9_.-]+)/);
+  const uname = usernameMatch ? usernameMatch[1] : '';
 
+  // 1. Direct, ultra-fast yt-dlp extraction (No browser, no Playwright, unwatermarked HD streams)
+  try {
+    const ytDlpCmd = process.env.GITHUB_ACTIONS === 'true' ? 'yt-dlp' : (process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+    const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+    const extractCmd = isVideoUrl
+      ? `${ytDlpCmd} ${cookieArg} --dump-json "${cleanUrl}"`
+      : `${ytDlpCmd} ${cookieArg} --dump-json --playlist-end ${limit} "${cleanUrl}"`;
+    
+    console.log(`Executing yt-dlp TikTok extraction: ${extractCmd}`);
+    const { stdout } = await execPromise(extractCmd, {
+      maxBuffer: 1024 * 1024 * 50,
+      timeout: 2 * 60 * 1000
+    });
+
+    if (stdout && stdout.trim()) {
+      const lines = stdout.trim().split('\n');
+      const ytVideos: TikTokVideoMetadata[] = [];
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          const bestUrl = parsed.url || (parsed.requested_downloads?.[0]?.url) || '';
+          ytVideos.push({
+            id: parsed.id,
+            caption: parsed.title || parsed.description || `TikTok Video ${parsed.id}`,
+            hashtags: [],
+            playUrl: bestUrl,
+            downloadUrl: bestUrl,
+            author: parsed.uploader || uname || 'user',
+            createTime: parsed.timestamp || Math.floor(Date.now() / 1000),
+            url: parsed.webpage_url || `https://www.tiktok.com/@${uname}/video/${parsed.id}`
+          });
+        } catch (_) {}
+      }
+      if (ytVideos.length > 0) {
+        console.log(`Successfully extracted ${ytVideos.length} TikTok video(s) via yt-dlp.`);
+        return ytVideos;
+      }
+    }
+  } catch (err: any) {
+    console.log(`yt-dlp TikTok extraction error:`, err.message);
+  }
+
+  // 2. Direct HTTP TikWM fallback (zero browser overhead)
+  if (uname) {
+    try {
+      console.log(`Attempting direct HTTP TikWM API for @${uname}...`);
+      const tikwmUrl = `https://www.tikwm.com/api/user/posts?unique_id=${encodeURIComponent(uname)}&count=${limit}`;
+      const res = await axios.get(tikwmUrl, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': DEFAULT_USER_AGENT,
+          'Accept': 'application/json, text/plain, */*'
+        }
+      });
+      if (res.data && res.data.data && Array.isArray(res.data.data.videos) && res.data.data.videos.length > 0) {
+        console.log(`Successfully extracted ${res.data.data.videos.length} videos from TikWM API.`);
+        return res.data.data.videos.slice(0, limit).map((v: any) => ({
+          id: v.video_id,
+          caption: v.title || `TikTok Video ${v.video_id}`,
+          hashtags: [],
+          playUrl: v.hdplay || v.play,
+          downloadUrl: v.hdplay || v.play,
+          author: v.author?.unique_id || uname,
+          createTime: v.create_time || Math.floor(Date.now() / 1000),
+          url: `https://www.tiktok.com/@${v.author?.unique_id || uname}/video/${v.video_id}`
+        }));
+      }
+    } catch (e: any) {
+      console.log(`TikWM direct HTTP failed:`, e.message);
+    }
+  }
+
+  // 3. Fallback for single video URL via oEmbed API
   if (isVideoUrl) {
-    let awemeId = '';
     try {
       const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(cleanUrl)}`;
       const oembedRes = await axios.get(oembedUrl, { headers: { 'Accept': 'application/json' }, timeout: 10000 });
       if (oembedRes.data && oembedRes.data.embed_product_id) {
-        awemeId = oembedRes.data.embed_product_id;
-        username = oembedRes.data.author_unique_id || username;
-      }
-    } catch (err) {
-      const vidMatch = cleanUrl.match(/(?:video|v)\/(\d{18,20})/);
-      awemeId = vidMatch ? vidMatch[1] : '';
-    }
-    if (awemeId) awemeIds.push({ id: awemeId, username });
-  } else {
-    const usernameMatch = cleanUrl.match(/@([a-zA-Z0-9_.-]+)/);
-    const uname = usernameMatch ? usernameMatch[1] : '';
-    if (uname) {
-      try {
-        const { chromium } = require('playwright-extra');
-        const stealth = require('puppeteer-extra-plugin-stealth')();
-        chromium.use(stealth);
-        
-        console.log("Attempting Playwright fallback for TikWM...");
-        const browser = await chromium.launch({ headless: true });
-        const page = await browser.newPage();
-        
-        await page.goto(`https://www.tikwm.com/api/user/posts?unique_id=${uname}&count=${limit}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        
-        let tikwmRes: any = null;
-        for (let i = 0; i < 10; i++) {
-          const content = await page.evaluate(() => document.body.innerText);
-          try {
-            tikwmRes = JSON.parse(content);
-            if (tikwmRes && tikwmRes.data) break;
-          } catch (e) { await page.waitForTimeout(1000); }
-        }
-        await browser.close();
-        
-        if (tikwmRes && tikwmRes.data && tikwmRes.data.videos && tikwmRes.data.videos.length > 0) {
-           return tikwmRes.data.videos.slice(0, limit).map((v: any) => ({
-             id: v.video_id,
-             caption: v.title,
-             hashtags: [],
-             playUrl: v.hdplay || v.play,
-             downloadUrl: v.hdplay || v.play,
-             author: v.author?.unique_id || uname,
-             createTime: v.create_time,
-             url: `https://www.tiktok.com/@${v.author?.unique_id || uname}/video/${v.video_id}`
-           }));
-        }
-      } catch (err: any) {
-        console.log(`Playwright TikWM API failed for ${uname}:`, err.message);
-      }
-      
-      try {
-        console.log("Attempting Playwright fallback for TikTok HTML...");
-        const { chromium } = require('playwright-extra');
-        const stealth = require('puppeteer-extra-plugin-stealth')();
-        chromium.use(stealth);
-        
-        const browser = await chromium.launch({ headless: true });
-        const page = await browser.newPage();
-        await page.goto(`https://www.tiktok.com/@${uname}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        
-        let scriptContent: string | null = null;
-        for (let i = 0; i < 10; i++) {
-          scriptContent = await page.evaluate(() => {
-            const script = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
-            return script ? script.textContent : null;
-          });
-          if (scriptContent) break;
-          await page.waitForTimeout(1000);
-        }
-        await browser.close();
-        
-        if (scriptContent) {
-          const data = JSON.parse(scriptContent);
-          const defaultScope = data['__DEFAULT_SCOPE__'] || data || {};
-          const userDetail = defaultScope['webapp.user-detail'] || {};
-          const itemIds: string[] = userDetail?.itemList || [];
-          if (itemIds.length > 0) {
-            awemeIds = itemIds.slice(0, limit).map(id => ({ id, username: uname }));
-          }
-        }
-      } catch (err: any) {
-        console.log(`Playwright TikTok HTML failed:`, err.message);
-      }
-
-      // 3. Fallback to yt-dlp to extract user videos directly
-      if (awemeIds.length === 0) {
-        try {
-          console.log(`Attempting yt-dlp extraction for TikTok: ${cleanUrl}`);
-          const ytDlpCmd = process.env.GITHUB_ACTIONS === 'true' ? 'yt-dlp' : (process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
-          const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
-          const { stdout } = await execPromise(`${ytDlpCmd} ${cookieArg} --dump-json --playlist-end ${limit} "${cleanUrl}"`, {
-            maxBuffer: 1024 * 1024 * 50,
-            timeout: 3 * 60 * 1000
-          });
-          if (stdout && stdout.trim()) {
-            const lines = stdout.trim().split('\n');
-            const ytVideos: TikTokVideoMetadata[] = [];
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              try {
-                const parsed = JSON.parse(line);
-                const bestUrl = parsed.url || (parsed.requested_downloads?.[0]?.url) || '';
-                ytVideos.push({
-                  id: parsed.id,
-                  caption: parsed.title || parsed.description || `TikTok Video ${parsed.id}`,
-                  hashtags: [],
-                  playUrl: bestUrl,
-                  downloadUrl: bestUrl,
-                  author: parsed.uploader || uname || 'user',
-                  createTime: parsed.timestamp || Math.floor(Date.now() / 1000),
-                  url: parsed.webpage_url || `https://www.tiktok.com/@${uname}/video/${parsed.id}`
-                });
-              } catch (_) {}
-            }
-            if (ytVideos.length > 0) {
-              console.log(`Successfully extracted ${ytVideos.length} TikTok video(s) via yt-dlp fallback.`);
-              return ytVideos;
-            }
-          }
-        } catch (err: any) {
-          console.log(`yt-dlp TikTok extraction failed:`, err.message);
-        }
-      }
-    }
-  }
-
-  if (awemeIds.length === 0) throw new Error('Failed to resolve TikTok video IDs from URL');
-
-  const results: TikTokVideoMetadata[] = [];
-  for (const item of awemeIds) {
-    const awemeId = item.id;
-    const uname = item.username;
-    const endpoint = 'https://www.tiktok.com/api/item/detail/';
-    const params = new URLSearchParams({
-      aweme_id: awemeId,
-      aid: '1988',
-      app_name: 'tiktok_web',
-      ...sessionManager.getDeviceParams()
-    });
-
-    let urlWithParams = `${endpoint}?${params.toString()}`;
-
-    try {
-      const xbogusModule = require('tiktok-signature');
-      if (typeof xbogusModule === 'function' || xbogusModule.Signer) {
-        const Signer = xbogusModule.Signer || xbogusModule;
-        const signer = new Signer(null, DEFAULT_USER_AGENT);
-        await signer.init();
-        const signInfo = await signer.sign(urlWithParams);
-        if (signInfo && signInfo.signed_url) urlWithParams = signInfo.signed_url;
-      }
-    } catch (err) {}
-
-    try {
-      await sessionManager.initSession();
-      const detailRes = await axios.get(urlWithParams, { headers: sessionManager.getHeaders(), timeout: 10000 });
-      const itemInfo = detailRes.data?.itemInfo?.itemStruct;
-      if (itemInfo) {
-        require('fs').writeFileSync('tiktok_video_debug.json', JSON.stringify(itemInfo.video, null, 2));
-        let bestUrl = itemInfo.video?.playAddr || itemInfo.video?.downloadAddr || '';
-        if (itemInfo.video?.bitrateInfo && Array.isArray(itemInfo.video.bitrateInfo) && itemInfo.video.bitrateInfo.length > 0) {
-          const sortedBitrates = itemInfo.video.bitrateInfo.sort((a: any, b: any) => (b.Bitrate || 0) - (a.Bitrate || 0));
-          const bestBitrate = sortedBitrates[0];
-          if (bestBitrate?.PlayAddr?.UrlList?.length > 0) {
-            bestUrl = bestBitrate.PlayAddr.UrlList[0];
-          } else if (bestBitrate?.PlayAddr?.urlList?.length > 0) {
-            bestUrl = bestBitrate.PlayAddr.urlList[0];
-          }
-        }
-        
-        results.push({
+        const awemeId = oembedRes.data.embed_product_id;
+        const author = oembedRes.data.author_unique_id || 'user';
+        return [{
           id: awemeId,
-          caption: itemInfo.desc || `TikTok Video ${awemeId}`,
+          caption: oembedRes.data.title || `TikTok Video ${awemeId}`,
           hashtags: [],
-          playUrl: bestUrl,
-          downloadUrl: bestUrl,
-          author: itemInfo.author?.uniqueId || uname,
-          createTime: itemInfo.createTime || Math.floor(Date.now() / 1000),
-          url: `https://www.tiktok.com/@${itemInfo.author?.uniqueId || uname}/video/${awemeId}`
-        });
+          playUrl: '',
+          downloadUrl: '',
+          author: author,
+          createTime: Math.floor(Date.now() / 1000),
+          url: cleanUrl
+        }];
       }
-    } catch (err: any) {}
+    } catch (_) {}
   }
 
-  return results;
+  throw new Error('Failed to resolve TikTok video IDs from URL');
 }
 
 export async function downloadTikTokVideo(videoUrl: string, outputPath: string): Promise<string> {
