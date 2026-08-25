@@ -179,285 +179,32 @@ export class SyncService {
     });
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
-    await this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.id}`);
+    await this.logsService.log('INFO', `Starting TEST for mapping: ${mapping.source.name} (${mapping.source.platform}) -> ${mapping.facebookPage.name}`);
 
     if (mapping.source.platform === 'LOCAL_FOLDER') {
       await this.logsService.log('INFO', `Test skipped: LOCAL_FOLDER mappings are managed by your Desktop App.`);
       return { success: true, message: 'Local PC Folders are connected properly. Please use the Desktop app to upload videos.' };
     }
 
-    if (mapping.source.platform === 'MEGA_CLOUD') {
-      await this.logsService.log('INFO', `Cloud Upload mapping detected. Verifying queue...`);
-      const oldestVideo = await this.prisma.video.findFirst({
-        where: {
-          sourceId: mapping.sourceId,
-          uploads: { 
-            none: { 
-              facebookPageId: mapping.facebookPageId, 
-              OR: [
-                { status: 'PENDING' },
-                { status: 'PROCESSING' },
-                { status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
-              ]
-            } 
-          }
-        },
-        orderBy: { createdAt: 'asc' }
-      });
-      
-      if (oldestVideo) {
-        await this.prisma.uploadHistory.create({
-          data: {
-            videoId: oldestVideo.id,
-            facebookPageId: mapping.facebookPageId,
-            status: 'PENDING'
-          }
-        });
-        await this.logsService.log('INFO', `Test triggered: Queued 1 video from Mega Cloud for immediate posting to Facebook!`);
-        
-        // Run the upload since we are inside the GitHub Action worker
-        try {
-          await this.processPendingUploads();
-        } catch (e) {
-          console.error("Upload error during test:", e);
-        }
-        
-        return { success: true, message: `Cloud connection verified. 1 video queued for immediate upload.` };
-      } else {
-         await this.logsService.log('ERROR', `Test failed: No videos found in the cloud queue for this page. Please upload videos first.`);
-         return { success: false, message: 'No videos found in cloud queue' };
-      }
-    }
-
-    let urlsToScan = [mapping.source.url];
-    if (mapping.source.platform === 'YOUTUBE' && !mapping.source.url.includes('/shorts') && !mapping.source.url.includes('/videos') && mapping.source.url.includes('@')) {
-      urlsToScan = [
-        mapping.source.url.replace(/\/$/, '') + '/videos',
-        mapping.source.url.replace(/\/$/, '') + '/shorts'
-      ];
-    }
-
     try {
-      let latestVideo = null;
-      
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
-      
-      // Try RSS feed first if it's a channel URL
-      if (mapping.source.url.includes('/channel/UC') || mapping.source.url.startsWith('UC')) {
-        const channelId = mapping.source.url.startsWith('UC') ? mapping.source.url.trim() : mapping.source.url.split('/channel/')[1].split('/')[0].split('?')[0];
-        const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-        this.logger.log(`Trying RSS feed for channel: ${channelId}`);
-        await this.logsService.log('INFO', `Trying RSS feed for channel: ${channelId}`);
-        try {
-          const rssRes = await fetch(rssUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-          });
-          if (rssRes.ok) {
-            const xml = await rssRes.text();
-            await this.logsService.log('INFO', `RSS feed fetched successfully. Length: ${xml.length}`);
-            const videoIdMatch = xml.match(/<yt:videoId>(.*?)<\/yt:videoId>/);
-            const titleMatch = xml.match(/<title>(.*?)<\/title>/g); // Second match is usually the first video
-            if (videoIdMatch && videoIdMatch[1]) {
-              latestVideo = {
-                id: videoIdMatch[1],
-                title: titleMatch && titleMatch.length > 1 ? titleMatch[1].replace(/<[^>]+>/g, '') : 'New Video',
-                url: `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,
-                timestamp: Math.floor(Date.now() / 1000)
-              };
-              await this.logsService.log('INFO', `Extracted video ID: ${videoIdMatch[1]}`);
-            } else {
-              await this.logsService.log('ERROR', `RSS feed XML did not contain <yt:videoId>. Sample: ${xml.substring(0, 100)}`);
-            }
-          } else {
-            await this.logsService.log('ERROR', `RSS feed HTTP error: ${rssRes.status} ${rssRes.statusText}`);
-          }
-        } catch(e) {
-          this.logger.warn(`RSS feed failed: ${e.message}`);
-          await this.logsService.log('ERROR', `RSS feed fetch failed: ${e.message}`);
-        }
-      }
+      // 1. Run monitorSource with isTest = true to discover and queue the oldest unposted video
+      await this.monitorSource(mapping.source.id, [mapping.id], true);
 
-      if (!latestVideo) {
-        if (mapping.source.platform === 'INSTAGRAM') {
-          try {
-            const username = mapping.source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
-            const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
-
-            if (braveApiKey) {
-              this.logsService.log('INFO', `Searching Brave API for latest Reel by ${username}...`);
-              const query = `site:instagram.com "${username}"`;
-              const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-              
-              const res = await fetch(searchUrl, {
-                headers: {
-                  'Accept': 'application/json',
-                  'X-Subscription-Token': braveApiKey
-                }
-              });
-              
-              if (res.ok) {
-                const data = await res.json();
-                const results = data.web?.results || [];
-                for (const result of results) {
-                  if (result.url && result.url.includes('instagram.com/')) {
-                    const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
-                    if (shortcodeMatch) {
-                      latestVideo = {
-                        id: shortcodeMatch[2],
-                        url: result.url,
-                        title: `Instagram Post`,
-                        timestamp: Math.floor(Date.now() / 1000)
-                      };
-                      this.logsService.log('INFO', `Found post from Brave Search: ${result.url}`);
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-            
-            if (!latestVideo) {
-              latestVideo = await this.pollInstagramProfile(username);
-            }
-          } catch (e) {
-            this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
-          }
-
-        } else if (mapping.source.platform === 'XIAOHONGSHU') {
-          await this.logsService.log('INFO', `Executing RedNote/Xiaohongshu multi-layer extraction for ${mapping.source.url}...`);
-          const xhsVideos = await extractXiaohongshuVideos(mapping.source.url, 1);
-          if (xhsVideos.length > 0) {
-            latestVideo = xhsVideos[0];
-            await this.logsService.log('INFO', `Successfully found Xiaohongshu Video: ${latestVideo.title?.substring(0, 80)}...`);
-          }
-        } else if (mapping.source.platform === 'KUAISHOU') {
-          // Extract user ID from URL
-          const urlParts = mapping.source.url.split('/').filter(Boolean);
-          const userId = urlParts[urlParts.length - 1]; // e.g. /profile/userId or /user/userId
-          
-          this.logsService.log('INFO', `Scraping SSR HTML for latest ${mapping.source.platform} video for user ${userId}...`);
-          const ssrUrl = await this.scrapeLatestFromSSR(mapping.source.platform, mapping.source.url, userId);
-          
-          if (!ssrUrl) {
-             this.logsService.log('ERROR', `Could not find any video for ${mapping.source.platform} user ${userId} via SSR`);
-          } else {
-             this.logsService.log('INFO', `Found latest video via SSR: ${ssrUrl}`);
-             latestVideo = {
-               id: 'ssr_' + Date.now(),
-               url: ssrUrl,
-               title: `${mapping.source.platform} Video`,
-               timestamp: Math.floor(Date.now() / 1000)
-             };
-          }
-        } else if (mapping.source.platform === 'TIKTOK') {
-          await this.logsService.log('INFO', `Executing high-res TikTok extraction with original caption preservation for ${mapping.source.url}...`);
-          const tkVideos = await this.extractTikTokVideos(mapping.source.url, 1);
-          if (tkVideos.length > 0) {
-            latestVideo = tkVideos[0];
-            await this.logsService.log('INFO', `Successfully found TikTok Video: ${latestVideo.title?.substring(0, 80)}...`);
-          }
-        }
-        
-        // Universal fallback for anything that failed (except Xiaohongshu which strictly uses Playwright)
-        if (!latestVideo && mapping.source.platform !== 'XIAOHONGSHU') {
-          await this.logsService.log('INFO', `Attempting universal yt-dlp fallback extraction for ${mapping.source.url}...`);
-          for (const url of urlsToScan) {
-            const ytDlpCmd = this.getYtDlpCmd();
-            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 1 "${url}"`;
-            try {
-              const { stdout, stderr } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
-              if (stdout && stdout.trim()) {
-                const parsed = JSON.parse(stdout);
-                const extractedUrl = parsed.url || (parsed.requested_downloads && parsed.requested_downloads[0] ? parsed.requested_downloads[0].url : null);
-                latestVideo = {
-                   id: parsed.id,
-                   title: parsed.title || parsed.description || 'New Video',
-                   url: parsed.webpage_url || url,
-                   mp4Url: extractedUrl,
-                   timestamp: parsed.timestamp || Math.floor(Date.now() / 1000)
-                };
-                await this.logsService.log('INFO', `Successfully extracted via yt-dlp: ${latestVideo.title?.substring(0, 80)}...`);
-                break;
-              }
-            } catch (e: any) {
-              await this.logsService.log('ERROR', `yt-dlp error: ${e.message.substring(0, 200)}...`);
-            }
-          }
-        }
-      }
-
-      if (!latestVideo) {
-        await this.logsService.log('ERROR', `Test failed: No videos found at source ${mapping.source.url}`);
-        
-        try {
-          const dummyVideoId = 'test_fail_' + Date.now().toString();
-          const dummyVideo = await this.prisma.video.upsert({
-            where: { sourceId_originalId: { sourceId: mapping.sourceId, originalId: dummyVideoId } },
-            update: {},
-            create: {
-              sourceId: mapping.sourceId,
-              originalId: dummyVideoId,
-              title: 'Extraction Failed',
-              publishedAt: new Date(),
-              url: mapping.source.url,
-            }
-          });
-
-          await this.prisma.uploadHistory.create({
-            data: {
-              videoId: dummyVideo.id,
-              facebookPageId: mapping.facebookPageId,
-              status: 'FAILED',
-              errorMessage: 'Test extraction failed: No videos found at source'
-            }
-          });
-        } catch (e) {
-          // ignore creation errors for dummy stats
-        }
-
-        return { success: false, message: 'No videos found' };
-      }
-
-      await this.logsService.log('INFO', `Test: Found video ${latestVideo.title || latestVideo.caption}. Queuing for upload.`);
-      
-      const ts = latestVideo.timestamp || latestVideo.createTime;
-      const publishedAt = ts ? new Date(ts * 1000) : new Date();
-      
-      const formattedCaption = this.formatFacebookCaption(latestVideo.description || latestVideo.title || latestVideo.caption, mapping.source.platform, mapping.source.url);
-      const newVideo = await this.prisma.video.create({
-        data: {
-          title: formattedCaption,
-          description: formattedCaption,
-          originalId: 'test_' + latestVideo.id + '_' + Date.now(),
-          publishedAt: publishedAt,
-          url: latestVideo.webpage_url || latestVideo.url || '',
-          sourceId: mapping.source.id,
-        }
-      });
-
-      await this.prisma.uploadHistory.create({
-        data: {
-          videoId: newVideo.id,
-          facebookPageId: mapping.facebookPageId,
-          status: 'PENDING'
-        }
-      });
-
-      // Run uploads async and wait for them to finish before returning so the CLI doesn't exit!
+      // 2. Process pending uploads immediately
       try {
         await this.processPendingUploads();
       } catch (e) {
         console.error("Upload error during test:", e);
       }
 
-      return { success: true, message: 'Test video found and queued for processing. Check Logs for progress.' };
-
-    } catch (e) {
+      return { success: true, message: 'Test execution finished! The oldest available video was queued and processed. Check Logs for status.' };
+    } catch (e: any) {
+      await this.logsService.log('ERROR', `Test failed: ${e.message}`);
       return { success: false, message: e.message };
     }
   }
 
-  async monitorSource(sourceId: string, dueMappingIds?: string[]) {
+  async monitorSource(sourceId: string, dueMappingIds?: string[], isTest = false) {
     this.logger.log(`Processing monitoring job for source: ${sourceId}`);
     
     const source = await this.prisma.source.findUnique({ 
@@ -522,40 +269,42 @@ export class SyncService {
            }
         });
         
-        const allowedToQueue = (mapping.videosPerDay || 1) - uploadsThisSlot;
-        
-        if (allowedToQueue <= 0) {
-           this.logger.log(`Slot quota reached for mapping ${mapping.id}. Uploads this slot: ${uploadsThisSlot}`);
-           // Mark as completed for today so the schedule doesn't keep hitting
-           if (mapping.scheduledTime) {
-             await this.prisma.mapping.update({
-               where: { id: mapping.id },
-               data: { lastScheduledRun: new Date() }
-             });
-           }
-           continue;
-        }
+        if (!isTest) {
+          const allowedToQueue = (mapping.videosPerDay || 1) - uploadsThisSlot;
+          
+          if (allowedToQueue <= 0) {
+             this.logger.log(`Slot quota reached for mapping ${mapping.id}. Uploads this slot: ${uploadsThisSlot}`);
+             // Mark as completed for today so the schedule doesn't keep hitting
+             if (mapping.scheduledTime) {
+               await this.prisma.mapping.update({
+                 where: { id: mapping.id },
+                 data: { lastScheduledRun: new Date() }
+               });
+             }
+             continue;
+          }
 
-        // To ensure a 2-3 minute gap, we check the most recent upload attempt for this mapping
-        const lastUpload = await this.prisma.uploadHistory.findFirst({
-           where: { 
-             facebookPageId: mapping.facebookPageId, 
-             video: { sourceId: source.id },
-             createdAt: { gte: startOfSlotUTC },
-             OR: [
-                { facebookPostId: null },
-                { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
-             ]
-           },
-           orderBy: { createdAt: 'desc' }
-        });
+          // To ensure a 2-3 minute gap, we check the most recent upload attempt for this mapping
+          const lastUpload = await this.prisma.uploadHistory.findFirst({
+             where: { 
+               facebookPageId: mapping.facebookPageId, 
+               video: { sourceId: source.id },
+               createdAt: { gte: startOfSlotUTC },
+               OR: [
+                  { facebookPostId: null },
+                  { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+               ]
+             },
+             orderBy: { createdAt: 'desc' }
+          });
 
-        if (lastUpload) {
-           const minsSinceLastUpload = (Date.now() - lastUpload.createdAt.getTime()) / 60000;
-           if (minsSinceLastUpload < 2) {
-               this.logger.log(`Waiting for gap. ${minsSinceLastUpload.toFixed(1)} mins elapsed out of 2 mins for mapping ${mapping.id}.`);
-               continue; // skip this cron run, wait for the next minute tick
-           }
+          if (lastUpload) {
+             const minsSinceLastUpload = (Date.now() - lastUpload.createdAt.getTime()) / 60000;
+             if (minsSinceLastUpload < 2) {
+                 this.logger.log(`Waiting for gap. ${minsSinceLastUpload.toFixed(1)} mins elapsed out of 2 mins for mapping ${mapping.id}.`);
+                 continue; // skip this cron run, wait for the next minute tick
+             }
+          }
         }
 
         // Queue exactly ONE video per cron run to respect the gap
@@ -839,28 +588,30 @@ export class SyncService {
           }
         });
 
-        const allowedToQueue = (mapping.videosPerDay || 1) - uploadsThisSlot;
-        
-        if (allowedToQueue <= 0) {
-          this.logger.log(`Slot quota reached for mapping ${mapping.id}. Uploads this slot: ${uploadsThisSlot} / Limit: ${mapping.videosPerDay || 1}`);
-          continue;
-        }
-
-        // Check 2-minute gap between uploads
-        const lastUpload = await this.prisma.uploadHistory.findFirst({
-          where: {
-            facebookPageId: mapping.facebookPageId,
-            video: { sourceId: source.id },
-            createdAt: { gte: startOfSlotUTC }
-          },
-          orderBy: { createdAt: 'desc' }
-        });
-
-        if (lastUpload) {
-          const minsSinceLastUpload = (Date.now() - lastUpload.createdAt.getTime()) / 60000;
-          if (minsSinceLastUpload < 2) {
-            this.logger.log(`Waiting for 2-min gap. ${minsSinceLastUpload.toFixed(1)} mins elapsed for mapping ${mapping.id}.`);
+        if (!isTest) {
+          const allowedToQueue = (mapping.videosPerDay || 1) - uploadsThisSlot;
+          
+          if (allowedToQueue <= 0) {
+            this.logger.log(`Slot quota reached for mapping ${mapping.id}. Uploads this slot: ${uploadsThisSlot} / Limit: ${mapping.videosPerDay || 1}`);
             continue;
+          }
+
+          // Check 2-minute gap between uploads
+          const lastUpload = await this.prisma.uploadHistory.findFirst({
+            where: {
+              facebookPageId: mapping.facebookPageId,
+              video: { sourceId: source.id },
+              createdAt: { gte: startOfSlotUTC }
+            },
+            orderBy: { createdAt: 'desc' }
+          });
+
+          if (lastUpload) {
+            const minsSinceLastUpload = (Date.now() - lastUpload.createdAt.getTime()) / 60000;
+            if (minsSinceLastUpload < 2) {
+              this.logger.log(`Waiting for 2-min gap. ${minsSinceLastUpload.toFixed(1)} mins elapsed for mapping ${mapping.id}.`);
+              continue;
+            }
           }
         }
 
