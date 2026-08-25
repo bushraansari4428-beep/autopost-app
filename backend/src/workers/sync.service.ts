@@ -685,7 +685,7 @@ export class SyncService {
 
         } else if (source.platform === 'XIAOHONGSHU') {
           this.logger.log(`Executing RedNote/Xiaohongshu multi-layer extraction for ${source.url}...`);
-          const xhsVideos = await extractXiaohongshuVideos(source.url, 5);
+          const xhsVideos = await extractXiaohongshuVideos(source.url, 30);
           if (xhsVideos.length > 0) {
              latestVideos.push(...xhsVideos);
           }
@@ -723,7 +723,7 @@ export class SyncService {
       if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM' && source.platform !== 'XIAOHONGSHU' && source.platform !== 'KUAISHOU') {
         if (source.platform === 'TIKTOK') {
           this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
-          const tkVideos = await this.extractTikTokVideos(source.url, 5);
+          const tkVideos = await this.extractTikTokVideos(source.url, 50);
           if (tkVideos.length > 0) {
             latestVideos.push(...tkVideos);
             this.logger.log(`Found TikTok video(s). Count: ${tkVideos.length}`);
@@ -731,7 +731,7 @@ export class SyncService {
         } else {
           for (const url of urlsToScan) {
             const ytDlpCmd = this.getYtDlpCmd();
-            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 5 "${url}"`;
+            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 50 "${url}"`;
             try {
               this.logger.log(`Scanning URL: ${url}`);
               const { stdout, stderr } = await execPromise(cmd, {
@@ -760,20 +760,20 @@ export class SyncService {
         }
       }
       
+      // 1. Save all newly discovered videos into the Database
       for (const videoData of latestVideos) {
         try {
           const platformVideoId = videoData.id;
+          if (!platformVideoId) continue;
           
           let videoRecord = await this.prisma.video.findFirst({
             where: {
               sourceId: source.id,
               originalId: platformVideoId
-            },
-            include: { uploads: true }
+            }
           });
 
           if (!videoRecord) {
-            this.logsService.log('INFO', `Found new video: ${videoData.title || videoData.caption}`);
             const ts = videoData.timestamp || videoData.createTime;
             const publishedAt = ts ? new Date(ts * 1000) : new Date();
             const formattedCaption = this.formatFacebookCaption(videoData.description || videoData.title || videoData.caption, source.platform, source.url);
@@ -785,40 +785,117 @@ export class SyncService {
                 publishedAt: publishedAt,
                 url: videoData.webpage_url || videoData.url || '',
                 sourceId: source.id,
-              },
-              include: { uploads: true }
-            });
-          }
-
-          const targetMappings = dueMappingIds 
-            ? source.mappings.filter(m => dueMappingIds.includes(m.id))
-            : source.mappings;
-
-          for (const mapping of targetMappings) {
-            const alreadyQueued = videoRecord.uploads?.some(u => u.facebookPageId === mapping.facebookPageId);
-            
-            // Only auto-queue if the video was published AFTER the source was created
-            const isNewContent = videoRecord.publishedAt >= source.createdAt;
-
-            if (!alreadyQueued && isNewContent) {
-              await this.prisma.uploadHistory.create({
-                data: {
-                  videoId: videoRecord.id,
-                  facebookPageId: mapping.facebookPageId,
-                  status: 'PENDING'
-                }
-              });
-
-              if (mapping.scheduledTime) {
-                await this.prisma.mapping.update({
-                  where: { id: mapping.id },
-                  data: { lastScheduledRun: new Date() }
-                });
               }
+            });
+            this.logsService.log('INFO', `Discovered video: ${videoData.title || videoData.caption} (Published: ${publishedAt.toISOString().split('T')[0]})`);
+          }
+        } catch (e: any) {
+          this.logger.error(`Error saving discovered video: ${e.message}`);
+        }
+      }
+
+      // 2. Process Target Mappings in Oldest-to-Newest Sequence with Slot Limits
+      const targetMappings = dueMappingIds 
+        ? source.mappings.filter((m: any) => dueMappingIds.includes(m.id))
+        : source.mappings;
+
+      for (const mapping of targetMappings) {
+        // Calculate PKT slot start time
+        const now = new Date();
+        const pktTime = new Date(now.getTime() + (5 * 60 * 60 * 1000));
+        let startOfSlotUTC = new Date(pktTime.getTime() - (5 * 60 * 60 * 1000));
+        
+        if (mapping.scheduledTime && mapping.scheduledTime !== '00:00') {
+          const timeSlots = mapping.scheduledTime.split(',').map((t: string) => t.trim()).filter(Boolean);
+          const currentTotalMins = pktTime.getUTCHours() * 60 + pktTime.getUTCMinutes();
+          let activeSlot = timeSlots[0]; // fallback
+          
+          for (const timeStr of timeSlots) {
+            const [schedH, schedM] = timeStr.split(':').map(Number);
+            const schedTotalMins = schedH * 60 + schedM;
+            if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
+              activeSlot = timeStr;
+              break;
             }
           }
-        } catch (e) {
-          this.logger.error(`Error parsing video data: ${e.message}`);
+          
+          const [schedH, schedM] = activeSlot.split(':').map(Number);
+          const slotStartPkt = new Date(pktTime);
+          slotStartPkt.setUTCHours(schedH, schedM, 0, 0);
+          startOfSlotUTC = new Date(slotStartPkt.getTime() - (5 * 60 * 60 * 1000));
+        } else {
+          // If no schedule (or 00:00), calculate start of PKT day
+          const slotStartPkt = new Date(pktTime);
+          slotStartPkt.setUTCHours(0, 0, 0, 0);
+          startOfSlotUTC = new Date(slotStartPkt.getTime() - (5 * 60 * 60 * 1000));
+        }
+
+        const uploadsThisSlot = await this.prisma.uploadHistory.count({
+          where: {
+            facebookPageId: mapping.facebookPageId,
+            createdAt: { gte: startOfSlotUTC },
+            video: { sourceId: source.id },
+            status: { not: 'FAILED' }
+          }
+        });
+
+        const allowedToQueue = (mapping.videosPerDay || 1) - uploadsThisSlot;
+        
+        if (allowedToQueue <= 0) {
+          this.logger.log(`Slot quota reached for mapping ${mapping.id}. Uploads this slot: ${uploadsThisSlot} / Limit: ${mapping.videosPerDay || 1}`);
+          continue;
+        }
+
+        // Check 2-minute gap between uploads
+        const lastUpload = await this.prisma.uploadHistory.findFirst({
+          where: {
+            facebookPageId: mapping.facebookPageId,
+            video: { sourceId: source.id },
+            createdAt: { gte: startOfSlotUTC }
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        if (lastUpload) {
+          const minsSinceLastUpload = (Date.now() - lastUpload.createdAt.getTime()) / 60000;
+          if (minsSinceLastUpload < 2) {
+            this.logger.log(`Waiting for 2-min gap. ${minsSinceLastUpload.toFixed(1)} mins elapsed for mapping ${mapping.id}.`);
+            continue;
+          }
+        }
+
+        // Fetch the OLDEST unposted video for this mapping from this source
+        const oldestUnpostedVideo = await this.prisma.video.findFirst({
+          where: {
+            sourceId: source.id,
+            uploads: {
+              none: {
+                facebookPageId: mapping.facebookPageId,
+                OR: [
+                  { status: 'PENDING' },
+                  { status: 'PROCESSING' },
+                  { status: 'COMPLETED' }
+                ]
+              }
+            }
+          },
+          orderBy: [
+            { publishedAt: 'asc' },
+            { createdAt: 'asc' }
+          ]
+        });
+
+        if (oldestUnpostedVideo) {
+          await this.prisma.uploadHistory.create({
+            data: {
+              videoId: oldestUnpostedVideo.id,
+              facebookPageId: mapping.facebookPageId,
+              status: 'PENDING'
+            }
+          });
+          this.logsService.log('INFO', `Auto-Poster: Queued oldest unposted video '${oldestUnpostedVideo.title}' (Published: ${oldestUnpostedVideo.publishedAt ? oldestUnpostedVideo.publishedAt.toISOString().split('T')[0] : 'Unknown'}) to Facebook Page!`);
+        } else {
+          this.logger.log(`All discovered videos for source ${source.name} have already been uploaded to page ${mapping.facebookPageId}.`);
         }
       }
 
@@ -1661,7 +1738,7 @@ export class SyncService {
     return null;
   }
 
-  private async extractTikTokVideos(rawUrl: string, limit = 5): Promise<any[]> {
+  private async extractTikTokVideos(rawUrl: string, limit = 50): Promise<any[]> {
     try {
       this.logger.log(`Calling native TikTok scraper for: ${rawUrl}`);
       const tkMetas = await getLatestTikTokVideos(rawUrl, limit);

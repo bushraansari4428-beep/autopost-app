@@ -26,16 +26,6 @@ export class MappingsService {
       throw new BadRequestException('This Facebook page is already connected to a source. A page can only have one active mapping at a time.');
     }
 
-    if (createMappingDto.scheduledTime && createMappingDto.scheduledTime !== '00:00') {
-      const nowUTC = new Date();
-      const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
-      const currentPktTimeStr = `${pktTime.getUTCHours().toString().padStart(2, '0')}:${pktTime.getUTCMinutes().toString().padStart(2, '0')}`;
-      
-      if (currentPktTimeStr >= createMappingDto.scheduledTime) {
-        createMappingDto.lastScheduledRun = new Date();
-      }
-    }
-
     return this.prisma.mapping.create({
       data: createMappingDto,
     });

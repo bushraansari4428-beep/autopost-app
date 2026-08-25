@@ -83,7 +83,7 @@ class TikTokSessionManager {
 
 const sessionManager = new TikTokSessionManager();
 
-export async function getLatestTikTokVideos(inputUrl: string, limit = 5): Promise<TikTokVideoMetadata[]> {
+export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promise<TikTokVideoMetadata[]> {
   const cleanUrl = inputUrl.split('?')[0].replace(/\/$/, '').trim();
   const isVideoUrl = cleanUrl.includes('/video/') || cleanUrl.includes('/v/');
   

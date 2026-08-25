@@ -250,19 +250,17 @@ export default function MappingsPage() {
                     </button>
                   </div>
                 </div>
-                {mapping.source?.platform === 'MEGA_CLOUD' && (
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Slot</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={mapping.videosPerDay || 1}
-                      onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value))}
-                      className="bg-gray-800 border border-purple-500/30 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500 w-16 text-center"
-                    />
-                  </div>
-                )}
+                <div className="flex flex-col items-center">
+                  <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Slot</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={mapping.videosPerDay || 1}
+                    onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value) || 1)}
+                    className="bg-gray-800 border border-purple-500/30 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500 w-16 text-center"
+                  />
+                </div>
                 
                 <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full">
@@ -322,20 +320,18 @@ export default function MappingsPage() {
                   ))}
                 </select>
               </div>
-              {sources.find(s => s.id === sourceId)?.platform === 'MEGA_CLOUD' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Videos / Schedule (Auto-scheduled 1 min apart)</label>
-                  <input 
-                    type="number" 
-                    min="1"
-                    max="100"
-                    value={videosPerDay} 
-                    onChange={(e) => setVideosPerDay(parseInt(e.target.value))} 
-                    required 
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Videos / Slot (Auto-scheduled with 2 min gap)</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  max="100"
+                  value={videosPerDay} 
+                  onChange={(e) => setVideosPerDay(parseInt(e.target.value) || 1)} 
+                  required 
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button 
                   type="button" 
