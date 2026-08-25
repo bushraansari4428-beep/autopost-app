@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execPromise } from '../utils/exec.util';
 
 export interface TikTokVideoMetadata {
   id: string;
@@ -177,6 +178,46 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
         }
       } catch (err: any) {
         console.log(`Playwright TikTok HTML failed:`, err.message);
+      }
+
+      // 3. Fallback to yt-dlp to extract user videos directly
+      if (awemeIds.length === 0) {
+        try {
+          console.log(`Attempting yt-dlp extraction for TikTok: ${cleanUrl}`);
+          const ytDlpCmd = process.env.GITHUB_ACTIONS === 'true' ? 'yt-dlp' : (process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+          const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+          const { stdout } = await execPromise(`${ytDlpCmd} ${cookieArg} --dump-json --playlist-end ${limit} "${cleanUrl}"`, {
+            maxBuffer: 1024 * 1024 * 50,
+            timeout: 3 * 60 * 1000
+          });
+          if (stdout && stdout.trim()) {
+            const lines = stdout.trim().split('\n');
+            const ytVideos: TikTokVideoMetadata[] = [];
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const parsed = JSON.parse(line);
+                const bestUrl = parsed.url || (parsed.requested_downloads?.[0]?.url) || '';
+                ytVideos.push({
+                  id: parsed.id,
+                  caption: parsed.title || parsed.description || `TikTok Video ${parsed.id}`,
+                  hashtags: [],
+                  playUrl: bestUrl,
+                  downloadUrl: bestUrl,
+                  author: parsed.uploader || uname || 'user',
+                  createTime: parsed.timestamp || Math.floor(Date.now() / 1000),
+                  url: parsed.webpage_url || `https://www.tiktok.com/@${uname}/video/${parsed.id}`
+                });
+              } catch (_) {}
+            }
+            if (ytVideos.length > 0) {
+              console.log(`Successfully extracted ${ytVideos.length} TikTok video(s) via yt-dlp fallback.`);
+              return ytVideos;
+            }
+          }
+        } catch (err: any) {
+          console.log(`yt-dlp TikTok extraction failed:`, err.message);
+        }
       }
     }
   }

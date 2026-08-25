@@ -470,13 +470,17 @@ export class SyncService {
         }
       }
       
+      await this.logsService.log('INFO', `Scanning source ${source.name} (${source.platform})...`);
+
       if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM' && source.platform !== 'XIAOHONGSHU' && source.platform !== 'KUAISHOU') {
         if (source.platform === 'TIKTOK') {
           this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
+          await this.logsService.log('INFO', `Scanning TikTok source: ${source.url}`);
           const tkVideos = await this.extractTikTokVideos(source.url, 50);
           if (tkVideos.length > 0) {
             latestVideos.push(...tkVideos);
             this.logger.log(`Found TikTok video(s) via native scraper. Count: ${tkVideos.length}`);
+            await this.logsService.log('INFO', `Found ${tkVideos.length} TikTok video(s) from creator profile.`);
           }
         }
         
@@ -484,9 +488,11 @@ export class SyncService {
         if (latestVideos.length === 0) {
           for (const url of urlsToScan) {
             const ytDlpCmd = this.getYtDlpCmd();
-            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json --playlist-end 50 "${url}"`;
+            const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+            const cmd = `${ytDlpCmd} ${cookieArg} --dump-json --playlist-end 50 "${url}"`;
             try {
               this.logger.log(`Scanning URL via yt-dlp fallback: ${url}`);
+              await this.logsService.log('INFO', `Extracting videos via yt-dlp: ${url}...`);
               const { stdout, stderr } = await execPromise(cmd, {
                 maxBuffer: 1024 * 1024 * 50,
                 timeout: 3 * 60 * 1000 // 3 minutes timeout
@@ -501,6 +507,7 @@ export class SyncService {
                 }
                 if (latestVideos.length > 0) {
                   this.logger.log(`Found video(s) via yt-dlp. Count: ${latestVideos.length}`);
+                  await this.logsService.log('INFO', `Found ${latestVideos.length} video(s) via yt-dlp engine.`);
                   break;
                 }
               } else if (stderr) {
@@ -508,6 +515,7 @@ export class SyncService {
               }
             } catch (error) {
               this.logger.warn(`Failed to scan ${url} via yt-dlp: ${error.message}`);
+              await this.logsService.log('WARN', `yt-dlp scan warning: ${error.message}`);
             }
           }
         }
@@ -996,7 +1004,8 @@ export class SyncService {
          this.logsService.log('INFO', 'Attempting to extract HD TikTok MP4 stream using yt-dlp...');
          try {
             const ytDlpCmd = this.getYtDlpCmd();
-            const cmd = `${ytDlpCmd} --cookies cookies.txt --dump-json "${targetUrl}"`;
+            const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+            const cmd = `${ytDlpCmd} ${cookieArg} --dump-json "${targetUrl}"`;
             const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
             if (stdout && stdout.trim()) {
                const parsed = JSON.parse(stdout);
@@ -1181,7 +1190,8 @@ export class SyncService {
             if (err.response?.status === 403 || err.message.includes('403') || err.message.includes('status code 403')) {
                this.logsService.log('WARN', 'TikTok CDN returned 403 Forbidden. Falling back to yt-dlp direct download...');
                const ytDlpCmd = this.getYtDlpCmd();
-               const cmd = `${ytDlpCmd} --cookies cookies.txt -o "${tempPath}" "${targetUrl}"`;
+               const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+               const cmd = `${ytDlpCmd} ${cookieArg} -o "${tempPath}" "${targetUrl}"`;
                await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
             } else {
                throw err;
