@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import Parser from 'rss-parser';
 import { InstagramRelayClient } from './instagram-relay.client';
-import { getLatestTikTokVideos, downloadTikTokVideo } from './tiktok.scraper';
+import { getLatestTikTokVideos, downloadTikTokVideo, getYtDlpBinaryPath } from './tiktok.scraper';
 import { extractXiaohongshuVideos, downloadXiaohongshuVideo } from './xiaohongshu.scraper';
 import { MegaService } from './mega.service';
 
@@ -44,28 +44,8 @@ export class SyncService {
     private readonly megaService: MegaService,
   ) {}
 
-  private getYtDlpCmd(): string {
-    if (process.env.GITHUB_ACTIONS === 'true') {
-      return 'yt-dlp';
-    }
-    if (process.platform === 'win32') {
-      const winPath = path.join(process.cwd(), 'yt-dlp.exe');
-      if (fs.existsSync(winPath)) return `"${winPath}"`;
-      const winBackendPath = path.join(process.cwd(), 'backend', 'yt-dlp.exe');
-      if (fs.existsSync(winBackendPath)) return `"${winBackendPath}"`;
-      return 'yt-dlp.exe';
-    }
-    const linuxPath = path.join(process.cwd(), 'yt-dlp');
-    if (fs.existsSync(linuxPath)) {
-      try { fs.chmodSync(linuxPath, '755'); } catch (_) {}
-      return `"${linuxPath}"`;
-    }
-    const linuxBackendPath = path.join(process.cwd(), 'backend', 'yt-dlp');
-    if (fs.existsSync(linuxBackendPath)) {
-      try { fs.chmodSync(linuxBackendPath, '755'); } catch (_) {}
-      return `"${linuxBackendPath}"`;
-    }
-    return 'yt-dlp';
+  private async getYtDlpCmd(): Promise<string> {
+    return await getYtDlpBinaryPath();
   }
 
   public formatFacebookCaption(rawCaption?: string, platform?: string, url?: string): string {
@@ -479,7 +459,7 @@ export class SyncService {
         // Universal fallback for YouTube / TikTok if native extraction returned 0 videos
         if (latestVideos.length === 0) {
           for (const url of urlsToScan) {
-            const ytDlpCmd = this.getYtDlpCmd();
+            const ytDlpCmd = await this.getYtDlpCmd();
             const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
             const cmd = `${ytDlpCmd} ${cookieArg} --dump-json --playlist-end 100 "${url}"`;
             try {
@@ -1051,7 +1031,7 @@ export class SyncService {
       if (!videoUrl && targetUrl) {
          this.logsService.log('INFO', 'Attempting to extract HD TikTok MP4 stream using yt-dlp...');
          try {
-            const ytDlpCmd = this.getYtDlpCmd();
+            const ytDlpCmd = await this.getYtDlpCmd();
             const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
             const cmd = `${ytDlpCmd} ${cookieArg} --dump-json "${targetUrl}"`;
             const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
@@ -1255,7 +1235,7 @@ export class SyncService {
           } catch (err: any) {
             if (err.response?.status === 403 || err.message.includes('403') || err.message.includes('status code 403')) {
                this.logsService.log('WARN', 'TikTok CDN returned 403 Forbidden. Falling back to yt-dlp direct download...');
-               const ytDlpCmd = this.getYtDlpCmd();
+               const ytDlpCmd = await this.getYtDlpCmd();
                const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
                const cmd = `${ytDlpCmd} ${cookieArg} -o "${tempPath}" "${targetUrl}"`;
                await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });

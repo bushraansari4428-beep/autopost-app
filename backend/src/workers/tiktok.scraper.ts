@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { execPromise } from '../utils/exec.util';
 
 export interface TikTokVideoMetadata {
@@ -15,6 +16,52 @@ export interface TikTokVideoMetadata {
 }
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+export async function getYtDlpBinaryPath(): Promise<string> {
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    return 'yt-dlp';
+  }
+  
+  const isWin = process.platform === 'win32';
+  const binName = isWin ? 'yt-dlp.exe' : 'yt-dlp';
+  const tmpBin = path.join(os.tmpdir(), binName);
+
+  if (fs.existsSync(tmpBin) && fs.statSync(tmpBin).size > 1000000) {
+    if (!isWin) {
+      try { fs.chmodSync(tmpBin, '755'); } catch (_) {}
+    }
+    return `"${tmpBin}"`;
+  }
+
+  // Try checking if yt-dlp exists globally
+  try {
+    await execPromise('yt-dlp --version');
+    return 'yt-dlp';
+  } catch (_) {}
+
+  // Auto-download standalone official yt-dlp binary (only 3MB)
+  try {
+    console.log(`Downloading standalone yt-dlp binary to ${tmpBin}...`);
+    const downloadUrl = isWin
+      ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+      : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+    const res = await axios.get(downloadUrl, { responseType: 'stream', maxRedirects: 5, timeout: 30000 });
+    const writer = fs.createWriteStream(tmpBin);
+    res.data.pipe(writer);
+    await new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(true));
+      writer.on('error', reject);
+    });
+    if (!isWin) {
+      try { fs.chmodSync(tmpBin, '755'); } catch (_) {}
+    }
+    console.log(`yt-dlp ready at ${tmpBin}`);
+    return `"${tmpBin}"`;
+  } catch (err: any) {
+    console.error(`Failed to download yt-dlp: ${err.message}`);
+    return 'yt-dlp';
+  }
+}
 
 class TikTokSessionManager {
   private msToken: string = '';
@@ -92,7 +139,7 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
 
   // 1. Direct, ultra-fast yt-dlp extraction (No browser, no Playwright, unwatermarked HD streams)
   try {
-    const ytDlpCmd = process.env.GITHUB_ACTIONS === 'true' ? 'yt-dlp' : (process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+    const ytDlpCmd = await getYtDlpBinaryPath();
     const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
     const extractCmd = isVideoUrl
       ? `${ytDlpCmd} ${cookieArg} --dump-json "${cleanUrl}"`
