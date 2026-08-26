@@ -327,171 +327,148 @@ export class SyncService {
       }
 
       let latestVideos: any[] = [];
-      const workerUrl = process.env.CLOUDFLARE_WORKER_URL || '';
+      const cleanUrl = (source.url || '').toLowerCase();
+      const isYouTubeUrl = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be') || cleanUrl.includes('/channel/uc') || cleanUrl.startsWith('uc');
+      const isTikTokUrl = cleanUrl.includes('tiktok.com');
+      const isInstagramUrl = cleanUrl.includes('instagram.com');
+      const isXhsUrl = cleanUrl.includes('xiaohongshu.com') || cleanUrl.includes('xhslink') || cleanUrl.includes('rednote');
+      const isKuaishouUrl = cleanUrl.includes('kuaishou.com');
 
-      if (source.url.includes('/channel/UC') || source.url.startsWith('UC')) {
-        const channelId = source.url.startsWith('UC') ? source.url.trim() : source.url.split('/channel/')[1].split('/')[0].split('?')[0];
-        const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-        this.logger.log(`Cron: Trying RSS feed for channel: ${channelId}`);
-        try {
-          const rssRes = await fetch(rssUrl);
-          if (rssRes.ok) {
-            const xml = await rssRes.text();
-            const videoIdMatch = xml.match(/<yt:videoId>(.*?)<\/yt:videoId>/);
-            const titleMatch = xml.match(/<title>(.*?)<\/title>/g); // Second match is usually the first video
-            if (videoIdMatch && videoIdMatch[1]) {
-              latestVideos.push({
-                id: videoIdMatch[1],
-                title: titleMatch && titleMatch.length > 1 ? titleMatch[1].replace(/<[^>]+>/g, '') : 'New Video',
-                url: `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,
-                timestamp: Math.floor(Date.now() / 1000)
-              });
-            }
-          }
-        } catch(e) {
-          this.logger.warn(`Cron RSS feed failed: ${e.message}`);
+      // 1. YouTube Platform Extraction (All RSS entries + Full Channel metadata)
+      if (isYouTubeUrl || source.platform === 'YOUTUBE') {
+        let channelId = '';
+        if (source.url.startsWith('UC')) {
+          channelId = source.url.trim();
+        } else if (source.url.includes('/channel/')) {
+          channelId = source.url.split('/channel/')[1].split('/')[0].split('?')[0];
         }
-      }
 
-      if (latestVideos.length === 0) {
-        if (source.platform === 'INSTAGRAM') {
+        if (!channelId && source.url.includes('/@')) {
           try {
-            const username = source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
-            const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
-            
-            let foundVideo = null;
+            const handle = source.url.split('/@')[1].split('/')[0].split('?')[0];
+            const handleRes = await fetch(`https://www.youtube.com/@${handle}`);
+            if (handleRes.ok) {
+              const html = await handleRes.text();
+              const m = html.match(/"channelId":"(UC[a-zA-Z0-9_-]+)"/) || html.match(/itemprop="channelId" content="(UC[a-zA-Z0-9_-]+)"/);
+              if (m && m[1]) channelId = m[1];
+            }
+          } catch (_) {}
+        }
 
-            if (braveApiKey) {
-              this.logger.log(`Searching Brave API for latest Reel by ${username}...`);
-              const query = `site:instagram.com "${username}"`;
-              const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-              
-              const res = await fetch(searchUrl, {
-                headers: {
-                  'Accept': 'application/json',
-                  'X-Subscription-Token': braveApiKey
-                }
-              });
-              
-              if (res.ok) {
-                const data = await res.json();
-                const results = data.web?.results || [];
-                for (const result of results) {
-                  if (result.url && result.url.includes('instagram.com/')) {
-                    const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
-                    if (shortcodeMatch) {
-                      foundVideo = {
-                        id: shortcodeMatch[2],
-                        url: result.url,
-                        title: `Instagram Post`,
-                        timestamp: Math.floor(Date.now() / 1000)
-                      };
-                      this.logger.log(`Found post from Brave Search: ${result.url}`);
-                      break;
-                    }
-                  }
+        if (channelId) {
+          const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+          this.logger.log(`Cron: Fetching complete RSS feed for YouTube channel: ${channelId}`);
+          try {
+            const rssRes = await fetch(rssUrl);
+            if (rssRes.ok) {
+              const xml = await rssRes.text();
+              const entries = xml.split('<entry>').slice(1);
+              for (const entry of entries) {
+                const videoIdMatch = entry.match(/<yt:videoId>(.*?)<\/yt:videoId>/);
+                const titleMatch = entry.match(/<title>(.*?)<\/title>/);
+                const pubMatch = entry.match(/<published>(.*?)<\/published>/);
+                if (videoIdMatch && videoIdMatch[1]) {
+                  const pubDate = pubMatch && pubMatch[1] ? new Date(pubMatch[1]) : new Date();
+                  latestVideos.push({
+                    id: videoIdMatch[1],
+                    title: titleMatch && titleMatch[1] ? titleMatch[1].replace(/<[^>]+>/g, '') : 'YouTube Video',
+                    url: `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,
+                    publishedAt: pubDate,
+                    timestamp: Math.floor(pubDate.getTime() / 1000)
+                  });
                 }
               }
+              this.logger.log(`Extracted ${latestVideos.length} videos from YouTube channel RSS with exact published dates.`);
             }
-
-            if (!foundVideo) {
-              foundVideo = await this.pollInstagramProfile(username);
-            }
-            
-            if (foundVideo) {
-               latestVideos.push(foundVideo);
-            }
-          } catch (e) {
-            this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
+          } catch (e: any) {
+            this.logger.warn(`Cron RSS feed failed: ${e.message}`);
           }
+        }
+      }
 
-        } else if (source.platform === 'XIAOHONGSHU') {
-          this.logger.log(`Executing RedNote/Xiaohongshu multi-layer extraction for ${source.url}...`);
-          const xhsVideos = await extractXiaohongshuVideos(source.url, 30);
-          if (xhsVideos.length > 0) {
-             latestVideos.push(...xhsVideos);
-          }
-        } else if (source.platform === 'KUAISHOU') {
-          const urlParts = source.url.split('/').filter(Boolean);
-          const userId = urlParts[urlParts.length - 1];
-          
-          this.logger.log(`Scraping SSR HTML for latest ${source.platform} video for user ${userId}...`);
-          const ssrUrl = await this.scrapeLatestFromSSR(source.platform, source.url, userId);
-          if (ssrUrl) {
-             latestVideos.push({
-               id: 'ssr_' + Date.now(),
-               url: ssrUrl,
-               title: `${source.platform} Video`,
-               timestamp: Math.floor(Date.now() / 1000)
-             });
-          }
+      // 2. Instagram Extraction
+      if (latestVideos.length === 0 && (isInstagramUrl || source.platform === 'INSTAGRAM')) {
+        try {
+          const username = source.url.split('instagram.com/')[1]?.split('/')[0] || 'moromorotv';
+          const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+          let foundVideo = null;
 
-        } else if (source.platform === 'YOUTUBE' && workerUrl) {
-          this.logger.log(`Using Cloudflare Worker for YouTube metadata extraction: ${source.url}`);
-          const infoUrl = `${workerUrl}?url=${encodeURIComponent(source.url)}&action=info`;
-          const res = await fetch(infoUrl);
-          if (res.ok) {
-            const data = await res.json();
-            latestVideos.push({
-              id: data.id,
-              title: data.title,
-              url: `https://www.youtube.com/watch?v=${data.id}`,
-              timestamp: Math.floor(Date.now() / 1000)
+          if (braveApiKey) {
+            this.logger.log(`Searching Brave API for latest Reel by ${username}...`);
+            const query = `site:instagram.com "${username}"`;
+            const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`;
+            const res = await fetch(searchUrl, {
+              headers: { 'Accept': 'application/json', 'X-Subscription-Token': braveApiKey }
             });
-          }
-        }
-      }
-      
-      await this.logsService.log('INFO', `Scanning source ${source.name} (${source.platform})...`);
-
-      if (latestVideos.length === 0 && source.platform !== 'INSTAGRAM' && source.platform !== 'XIAOHONGSHU' && source.platform !== 'KUAISHOU') {
-        if (source.platform === 'TIKTOK') {
-          this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
-          await this.logsService.log('INFO', `Scanning TikTok source: ${source.url}`);
-          const tkVideos = await this.extractTikTokVideos(source.url, 100);
-          if (tkVideos.length > 0) {
-            latestVideos.push(...tkVideos);
-            this.logger.log(`Found TikTok video(s) via native scraper. Count: ${tkVideos.length}`);
-            await this.logsService.log('INFO', `Found ${tkVideos.length} TikTok video(s) from creator profile.`);
-          }
-        }
-        
-        // Universal fallback for YouTube / TikTok if native extraction returned 0 videos
-        if (latestVideos.length === 0) {
-          for (const url of urlsToScan) {
-            const ytDlpCmd = await this.getYtDlpCmd();
-            const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
-            const cmd = `${ytDlpCmd} ${cookieArg} --dump-json --playlist-end 100 "${url}"`;
-            try {
-              this.logger.log(`Scanning URL via yt-dlp fallback: ${url}`);
-              await this.logsService.log('INFO', `Extracting videos via yt-dlp: ${url}...`);
-              const { stdout, stderr } = await execPromise(cmd, {
-                maxBuffer: 1024 * 1024 * 50,
-                timeout: 3 * 60 * 1000 // 3 minutes timeout
-              });
-
-              if (stdout && stdout.trim()) {
-                const lines = stdout.trim().split('\n');
-                for (const line of lines) {
-                  if (line.trim()) {
-                    try { latestVideos.push(JSON.parse(line)); } catch(e) {}
+            if (res.ok) {
+              const data = await res.json();
+              const results = data.web?.results || [];
+              for (const result of results) {
+                if (result.url && result.url.includes('instagram.com/')) {
+                  const shortcodeMatch = result.url.match(/(reel|p)\/([^\/]+)/);
+                  if (shortcodeMatch) {
+                    foundVideo = {
+                      id: shortcodeMatch[2],
+                      url: result.url,
+                      title: `Instagram Post`,
+                      timestamp: Math.floor(Date.now() / 1000)
+                    };
+                    break;
                   }
                 }
-                if (latestVideos.length > 0) {
-                  this.logger.log(`Found video(s) via yt-dlp. Count: ${latestVideos.length}`);
-                  await this.logsService.log('INFO', `Found ${latestVideos.length} video(s) via yt-dlp engine.`);
-                  break;
-                }
-              } else if (stderr) {
-                this.logger.warn(`yt-dlp stderr for ${url}: ${stderr}`);
               }
-            } catch (error) {
-              this.logger.warn(`Failed to scan ${url} via yt-dlp: ${error.message}`);
-              await this.logsService.log('WARN', `yt-dlp scan warning: ${error.message}`);
             }
           }
+
+          if (!foundVideo) {
+            foundVideo = await this.pollInstagramProfile(username);
+          }
+          if (foundVideo) {
+            latestVideos.push(foundVideo);
+          }
+        } catch (e: any) {
+          this.logsService.log('ERROR', `Instagram polling failed: ${e.message}`);
         }
       }
+
+      // 3. Xiaohongshu / RedNote Extraction
+      if (latestVideos.length === 0 && (isXhsUrl || source.platform === 'XIAOHONGSHU')) {
+        this.logger.log(`Executing RedNote/Xiaohongshu multi-layer extraction for ${source.url}...`);
+        const xhsVideos = await extractXiaohongshuVideos(source.url, 30);
+        if (xhsVideos.length > 0) {
+          latestVideos.push(...xhsVideos);
+        }
+      }
+
+      // 4. Kuaishou Extraction
+      if (latestVideos.length === 0 && (isKuaishouUrl || source.platform === 'KUAISHOU')) {
+        const urlParts = source.url.split('/').filter(Boolean);
+        const userId = urlParts[urlParts.length - 1];
+        this.logger.log(`Scraping SSR HTML for latest ${source.platform} video for user ${userId}...`);
+        const ssrUrl = await this.scrapeLatestFromSSR(source.platform, source.url, userId);
+        if (ssrUrl) {
+          latestVideos.push({
+            id: 'ssr_' + Date.now(),
+            url: ssrUrl,
+            title: `${source.platform} Video`,
+            timestamp: Math.floor(Date.now() / 1000)
+          });
+        }
+      }
+
+      // 5. TikTok Native Extraction
+      if (latestVideos.length === 0 && (isTikTokUrl || source.platform === 'TIKTOK')) {
+        this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
+        await this.logsService.log('INFO', `Scanning TikTok source: ${source.url}`);
+        const tkVideos = await this.extractTikTokVideos(source.url, 100);
+        if (tkVideos.length > 0) {
+          latestVideos.push(...tkVideos);
+          this.logger.log(`Found TikTok video(s) via native scraper. Count: ${tkVideos.length}`);
+          await this.logsService.log('INFO', `Found ${tkVideos.length} TikTok video(s) from creator profile.`);
+        }
+      }
+
+      await this.logsService.log('INFO', `Discovered ${latestVideos.length} video(s) from source ${source.name}. Processing oldest unposted videos...`);
       
       // 1. Save all newly discovered videos into the Database with 100% exact publication timestamps
       for (const videoData of latestVideos) {
@@ -662,6 +639,7 @@ export class SyncService {
           this.logsService.log('INFO', `Auto-Poster: Queued oldest unposted video '${oldestUnpostedVideo.title}' (Published: ${oldestUnpostedVideo.publishedAt ? oldestUnpostedVideo.publishedAt.toISOString().split('T')[0] : 'Unknown'}) to Facebook Page!`);
         } else {
           this.logger.log(`All discovered videos for source ${source.name} have already been uploaded to page ${mapping.facebookPageId}.`);
+          await this.logsService.log('INFO', `All discovered videos for source ${source.name} have already been posted to your Facebook Page.`);
         }
       }
 
