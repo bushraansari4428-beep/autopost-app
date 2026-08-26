@@ -468,7 +468,7 @@ export class SyncService {
         if (source.platform === 'TIKTOK') {
           this.logger.log(`Scanning TikTok source & extracting original captions for: ${source.url}`);
           await this.logsService.log('INFO', `Scanning TikTok source: ${source.url}`);
-          const tkVideos = await this.extractTikTokVideos(source.url, 50);
+          const tkVideos = await this.extractTikTokVideos(source.url, 100);
           if (tkVideos.length > 0) {
             latestVideos.push(...tkVideos);
             this.logger.log(`Found TikTok video(s) via native scraper. Count: ${tkVideos.length}`);
@@ -481,7 +481,7 @@ export class SyncService {
           for (const url of urlsToScan) {
             const ytDlpCmd = this.getYtDlpCmd();
             const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
-            const cmd = `${ytDlpCmd} ${cookieArg} --dump-json --playlist-end 50 "${url}"`;
+            const cmd = `${ytDlpCmd} ${cookieArg} --dump-json --playlist-end 100 "${url}"`;
             try {
               this.logger.log(`Scanning URL via yt-dlp fallback: ${url}`);
               await this.logsService.log('INFO', `Extracting videos via yt-dlp: ${url}...`);
@@ -513,10 +513,10 @@ export class SyncService {
         }
       }
       
-      // 1. Save all newly discovered videos into the Database
+      // 1. Save all newly discovered videos into the Database with 100% exact publication timestamps
       for (const videoData of latestVideos) {
         try {
-          const platformVideoId = videoData.id;
+          const platformVideoId = String(videoData.id || '');
           if (!platformVideoId) continue;
           
           let videoRecord = await this.prisma.video.findFirst({
@@ -526,9 +526,32 @@ export class SyncService {
             }
           });
 
+          // Calculate genuine, exact publishedAt date
+          let publishedAt: Date | null = null;
+          if (source.platform === 'TIKTOK' && /^\d{15,22}$/.test(platformVideoId)) {
+            try {
+              const tsFromId = Number(BigInt(platformVideoId) >> 32n);
+              if (tsFromId > 1500000000 && tsFromId < 2000000000) {
+                publishedAt = new Date(tsFromId * 1000);
+              }
+            } catch (_) {}
+          }
+          
+          if (!publishedAt) {
+            let ts = videoData.timestamp || videoData.createTime;
+            if (!ts && videoData.upload_date && typeof videoData.upload_date === 'string' && videoData.upload_date.length === 8) {
+              const y = parseInt(videoData.upload_date.substring(0, 4), 10);
+              const m = parseInt(videoData.upload_date.substring(4, 6), 10) - 1;
+              const d = parseInt(videoData.upload_date.substring(6, 8), 10);
+              publishedAt = new Date(y, m, d);
+            } else if (ts) {
+              publishedAt = new Date(ts * 1000);
+            } else {
+              publishedAt = new Date();
+            }
+          }
+
           if (!videoRecord) {
-            const ts = videoData.timestamp || videoData.createTime;
-            const publishedAt = ts ? new Date(ts * 1000) : new Date();
             const formattedCaption = this.formatFacebookCaption(videoData.description || videoData.title || videoData.caption, source.platform, source.url);
             videoRecord = await this.prisma.video.create({
               data: {
@@ -541,6 +564,14 @@ export class SyncService {
               }
             });
             this.logsService.log('INFO', `Discovered video: ${videoData.title || videoData.caption} (Published: ${publishedAt.toISOString().split('T')[0]})`);
+          } else if (publishedAt) {
+            // Update existing video timestamp if it was previously inaccurate
+            if (Math.abs(videoRecord.publishedAt.getTime() - publishedAt.getTime()) > 86400000) {
+              await this.prisma.video.update({
+                where: { id: videoRecord.id },
+                data: { publishedAt: publishedAt }
+              });
+            }
           }
         } catch (e: any) {
           this.logger.error(`Error saving discovered video: ${e.message}`);
@@ -679,6 +710,31 @@ export class SyncService {
       });
       if (updated.count > 0) {
         this.logger.warn(`Self-healing: Reset ${updated.count} stuck records to FAILED.`);
+      }
+
+      // Repair existing TikTok videos in the DB that had placeholder publishedAt
+      const tiktokVideos = await this.prisma.video.findMany({
+        where: {
+          source: { platform: 'TIKTOK' }
+        },
+        select: { id: true, originalId: true, publishedAt: true }
+      });
+
+      for (const tv of tiktokVideos) {
+        if (tv.originalId && /^\d{15,22}$/.test(tv.originalId)) {
+          try {
+            const tsFromId = Number(BigInt(tv.originalId) >> 32n);
+            if (tsFromId > 1500000000 && tsFromId < 2000000000) {
+              const realDate = new Date(tsFromId * 1000);
+              if (Math.abs(tv.publishedAt.getTime() - realDate.getTime()) > 86400000) {
+                await this.prisma.video.update({
+                  where: { id: tv.id },
+                  data: { publishedAt: realDate }
+                });
+              }
+            }
+          } catch (_) {}
+        }
       }
     } catch (e) {
       this.logger.error(`Error in self-healing routine: ${e.message}`);

@@ -112,6 +112,23 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
         try {
           const parsed = JSON.parse(line);
           const bestUrl = parsed.url || (parsed.requested_downloads?.[0]?.url) || '';
+          
+          let createTime = parsed.timestamp;
+          if (!createTime && parsed.id && /^\d{15,22}$/.test(parsed.id)) {
+            try {
+              const tsFromId = Number(BigInt(parsed.id) >> 32n);
+              if (tsFromId > 1500000000 && tsFromId < 2000000000) {
+                createTime = tsFromId;
+              }
+            } catch (_) {}
+          }
+          if (!createTime && parsed.upload_date && typeof parsed.upload_date === 'string' && parsed.upload_date.length === 8) {
+            const y = parseInt(parsed.upload_date.substring(0, 4), 10);
+            const m = parseInt(parsed.upload_date.substring(4, 6), 10) - 1;
+            const d = parseInt(parsed.upload_date.substring(6, 8), 10);
+            createTime = Math.floor(new Date(y, m, d).getTime() / 1000);
+          }
+
           ytVideos.push({
             id: parsed.id,
             caption: parsed.title || parsed.description || `TikTok Video ${parsed.id}`,
@@ -119,13 +136,13 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
             playUrl: bestUrl,
             downloadUrl: bestUrl,
             author: parsed.uploader || uname || 'user',
-            createTime: parsed.timestamp || Math.floor(Date.now() / 1000),
+            createTime: createTime || Math.floor(Date.now() / 1000),
             url: parsed.webpage_url || `https://www.tiktok.com/@${uname}/video/${parsed.id}`
           });
         } catch (_) {}
       }
       if (ytVideos.length > 0) {
-        console.log(`Successfully extracted ${ytVideos.length} TikTok video(s) via yt-dlp.`);
+        console.log(`Successfully extracted ${ytVideos.length} TikTok video(s) via yt-dlp with exact timestamps.`);
         return ytVideos;
       }
     }
