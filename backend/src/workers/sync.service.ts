@@ -16,6 +16,7 @@ import { MegaService } from './mega.service';
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
   private isProcessing = false;
+  private activeTestMappings = new Set<string>();
   private parser = new Parser({
     customFields: {
       item: ['media:content', 'media:thumbnail']
@@ -106,34 +107,28 @@ export class SyncService {
     });
     if (!mapping) return { success: false, message: 'Mapping not found' };
 
+    // Single-Instance Lock: Prevent duplicate concurrent test executions
+    if (this.activeTestMappings.has(mappingId)) {
+      return { 
+        success: true, 
+        message: 'A test is already currently in progress for this mapping. Please wait a moment for it to complete.' 
+      };
+    }
+
+    this.activeTestMappings.add(mappingId);
     await this.logsService.log('INFO', `Starting test extraction for the selected page...`);
     await this.logsService.log('INFO', 'Test request initiated successfully.');
     
-    // Execute immediately in background on current server
-    this.executeTestMapping(mappingId).catch(err => {
-      this.logger.error(`Error in executeTestMapping: ${err.message}`);
-    });
+    // Execute strictly single background run on server
+    this.executeTestMapping(mappingId)
+      .catch(err => {
+        this.logger.error(`Error in executeTestMapping: ${err.message}`);
+      })
+      .finally(() => {
+        this.activeTestMappings.delete(mappingId);
+      });
 
-    const githubToken = process.env.GITHUB_TOKEN;
-    if (githubToken) {
-      try {
-        fetch('https://api.github.com/repos/bushraansari4428-beep/autopost-app/actions/workflows/auto-scraper.yml/dispatches', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/vnd.github.v3+json',
-            'Authorization': `token ${githubToken}`,
-            'User-Agent': 'AutoPost-App'
-          },
-          signal: AbortSignal.timeout(5000),
-          body: JSON.stringify({
-            ref: 'main',
-            inputs: { mappingId: mappingId }
-          })
-        }).catch(() => {});
-      } catch (_) {}
-    }
-
-    let successMessage = 'Test successfully started in the background! Please check your Facebook page in 2-3 minutes.';
+    let successMessage = 'Test successfully started in the background! 1 video is being uploaded to your Facebook page.';
     if (mapping.source.platform === 'MEGA_CLOUD') {
       successMessage = '1 video from Mega Cloud is being uploaded to your Facebook page...';
     }
