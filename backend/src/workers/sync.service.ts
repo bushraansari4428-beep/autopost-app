@@ -905,7 +905,13 @@ export class SyncService {
       const videos = await this.prisma.video.findMany({
         where: {
           source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
-          uploads: { none: { facebookPageId: page.id, status: 'COMPLETED' } }
+          uploads: {
+            none: {
+              facebookPageId: page.id,
+              status: 'COMPLETED',
+              facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' }
+            }
+          }
         }
       });
 
