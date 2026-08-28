@@ -306,22 +306,22 @@ export default function HistoryPage() {
 
       {/* History Table */}
       <div className="bg-gray-900/40 backdrop-blur-xl border border-gray-800 rounded-3xl overflow-hidden shadow-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-300">
-            <thead className="bg-gray-950/80 text-gray-400 uppercase text-xs font-bold tracking-wider border-b border-gray-800">
+        <div className="w-full">
+          <table className="w-full table-fixed text-left text-sm text-gray-300">
+            <thead className="bg-gray-950/80 text-gray-400 uppercase text-[11px] font-bold tracking-wider border-b border-gray-800">
               <tr>
-                <th className="px-6 py-4">Video Details</th>
-                <th className="px-6 py-4">Source Platform</th>
-                <th className="px-6 py-4">Destination Page</th>
-                <th className="px-6 py-4">Date & Time</th>
-                <th className="px-6 py-4">Status & Info</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-4 py-3.5 w-[28%]">Video Details</th>
+                <th className="px-4 py-3.5 w-[16%]">Source Platform</th>
+                <th className="px-4 py-3.5 w-[18%]">Destination Page</th>
+                <th className="px-4 py-3.5 w-[14%]">Date & Time</th>
+                <th className="px-4 py-3.5 w-[16%]">Status & Info</th>
+                <th className="px-4 py-3.5 w-[8%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/50">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
+                  <td colSpan={6} className="px-4 py-16 text-center text-gray-400">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
                       <p className="text-sm font-medium">Loading full upload history...</p>
@@ -330,7 +330,7 @@ export default function HistoryPage() {
                 </tr>
               ) : paginatedHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-16 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Video className="w-10 h-10 text-gray-600 mb-1" />
                       <p className="text-base font-semibold text-gray-300">No upload records found</p>
@@ -352,23 +352,21 @@ export default function HistoryPage() {
                   const formattedDate = new Date(item.createdAt).toLocaleString('en-US', {
                     month: 'short',
                     day: 'numeric',
-                    year: 'numeric',
                     hour: 'numeric',
                     minute: '2-digit',
-                    second: '2-digit',
                     hour12: true
                   });
 
                   return (
                     <tr key={item.id} className="hover:bg-gray-800/30 transition-colors group">
                       {/* Video Title */}
-                      <td className="px-6 py-4 max-w-xs">
-                        <div className="flex items-start gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-gray-800/80 border border-gray-700/60 flex items-center justify-center shrink-0 mt-0.5 text-gray-300">
-                            <Video className="w-4 h-4 text-blue-400" />
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-gray-800/80 border border-gray-700/60 flex items-center justify-center shrink-0 text-blue-400">
+                            <Video className="w-3.5 h-3.5" />
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-white truncate text-sm leading-tight" title={videoTitle}>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-white truncate text-xs leading-tight" title={videoTitle}>
                               {videoTitle}
                             </p>
                             {item.video?.url && (
@@ -376,9 +374,9 @@ export default function HistoryPage() {
                                 href={item.video.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-xs text-gray-500 hover:text-blue-400 truncate block mt-0.5 transition-colors"
+                                className="text-[11px] text-gray-500 hover:text-blue-400 truncate block mt-0.5 transition-colors"
                               >
-                                View Original Video ↗
+                                View Source Video ↗
                               </a>
                             )}
                           </div>
@@ -386,41 +384,41 @@ export default function HistoryPage() {
                       </td>
 
                       {/* Source Platform */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-0.5 min-w-0">
                           <div>{getPlatformBadge(platform)}</div>
-                          <span className="text-xs font-medium text-gray-400 truncate max-w-[140px]" title={sourceName}>
+                          <span className="text-[11px] font-medium text-gray-400 truncate" title={sourceName}>
                             {sourceName}
                           </span>
                         </div>
                       </td>
 
                       {/* Destination Facebook Page */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                            <Facebook className="w-4 h-4" />
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                            <Facebook className="w-3.5 h-3.5" />
                           </div>
-                          <div>
-                            <p className="font-semibold text-white text-sm">{pageName}</p>
-                            <p className="text-[11px] text-gray-500 font-mono">ID: {pageId ? `${pageId.slice(0, 8)}...` : 'N/A'}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-white text-xs truncate" title={pageName}>{pageName}</p>
+                            <p className="text-[10px] text-gray-500 font-mono truncate">ID: {pageId ? `${pageId.slice(0, 8)}...` : 'N/A'}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* Date & Time */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2 text-gray-300 text-xs">
-                          <Clock className="w-3.5 h-3.5 text-gray-500" />
-                          <span>{formattedDate}</span>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 text-gray-300 text-xs truncate">
+                          <Clock className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                          <span className="truncate">{formattedDate}</span>
                         </div>
                       </td>
 
                       {/* Status & Diagnostic Info */}
-                      <td className="px-6 py-4 max-w-sm">
-                        <div className="flex flex-col gap-1">
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-0.5 min-w-0">
                           <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold w-fit ${
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold w-fit ${
                               item.status === 'COMPLETED'
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                 : item.status === 'FAILED'
@@ -428,33 +426,31 @@ export default function HistoryPage() {
                                 : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse'
                             }`}
                           >
-                            {item.status === 'COMPLETED' && <CheckCircle2 className="w-3.5 h-3.5" />}
-                            {item.status === 'FAILED' && <XCircle className="w-3.5 h-3.5" />}
-                            {(item.status === 'PENDING' || item.status === 'PROCESSING') && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+                            {item.status === 'COMPLETED' && <CheckCircle2 className="w-3 h-3" />}
+                            {item.status === 'FAILED' && <XCircle className="w-3 h-3" />}
+                            {(item.status === 'PENDING' || item.status === 'PROCESSING') && <RotateCw className="w-3 h-3 animate-spin" />}
                             {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
                           </span>
 
                           {/* Error Message for Failed Uploads */}
                           {item.errorMessage && (
-                            <div className="bg-rose-950/40 border border-rose-900/40 rounded-lg p-2 mt-1">
-                              <p className="text-xs text-rose-300 line-clamp-2 leading-relaxed" title={item.errorMessage}>
-                                {item.errorMessage}
-                              </p>
-                            </div>
+                            <p className="text-[10px] text-rose-400 truncate mt-0.5" title={item.errorMessage}>
+                              {item.errorMessage}
+                            </p>
                           )}
                         </div>
                       </td>
 
                       {/* Actions */}
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <td className="px-4 py-3 text-right">
                         {item.status === 'FAILED' && (
                           <button
                             onClick={() => handleRetry(item.id)}
                             disabled={retryingId === item.id}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors cursor-pointer disabled:opacity-50"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors cursor-pointer disabled:opacity-50"
                           >
-                            <RotateCw className={`w-3.5 h-3.5 ${retryingId === item.id ? 'animate-spin' : ''}`} />
-                            {retryingId === item.id ? 'Retrying...' : 'Retry'}
+                            <RotateCw className={`w-3 h-3 ${retryingId === item.id ? 'animate-spin' : ''}`} />
+                            {retryingId === item.id ? '...' : 'Retry'}
                           </button>
                         )}
                         {item.status === 'COMPLETED' && (
@@ -466,10 +462,10 @@ export default function HistoryPage() {
                             }
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-800 border border-gray-700 transition-colors"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-800 border border-gray-700 transition-colors"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            View Post
+                            <ExternalLink className="w-3 h-3" />
+                            View
                           </a>
                         )}
                       </td>
