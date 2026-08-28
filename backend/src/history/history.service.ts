@@ -6,31 +6,9 @@ export class HistoryService {
   constructor(private prisma: PrismaService) {}
 
   findAll(user?: any) {
-    if (!user) {
+    if (!user || user.role === 'ADMIN') {
       return this.prisma.uploadHistory.findMany({
-        include: {
-          video: {
-            include: {
-              source: true
-            }
-          },
-          facebookPage: true
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-    }
-    if (user.role === 'ADMIN') {
-      return this.prisma.uploadHistory.findMany({
-        where: {
-          video: {
-            source: {
-              OR: [
-                { userId: user.id },
-                { userId: null }
-              ]
-            }
-          }
-        },
+        take: 300,
         include: {
           video: {
             include: {
@@ -44,12 +22,12 @@ export class HistoryService {
     }
     return this.prisma.uploadHistory.findMany({
       where: {
-        video: {
-          source: {
-            userId: user.id
-          }
-        }
+        OR: [
+          { video: { source: { userId: user.id } } },
+          { facebookPage: { userId: user.id } }
+        ]
       },
+      take: 300,
       include: {
         video: {
           include: {
