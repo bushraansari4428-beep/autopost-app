@@ -310,12 +310,12 @@ export default function HistoryPage() {
           <table className="w-full table-fixed text-left text-sm text-gray-300">
             <thead className="bg-gray-950/80 text-gray-400 uppercase text-[11px] font-bold tracking-wider border-b border-gray-800">
               <tr>
-                <th className="px-4 py-3.5 w-[28%]">Video Details</th>
-                <th className="px-4 py-3.5 w-[16%]">Source Platform</th>
-                <th className="px-4 py-3.5 w-[18%]">Destination Page</th>
-                <th className="px-4 py-3.5 w-[14%]">Date & Time</th>
-                <th className="px-4 py-3.5 w-[16%]">Status & Info</th>
-                <th className="px-4 py-3.5 w-[8%] text-right">Actions</th>
+                <th className="px-3.5 py-3.5 w-[18%]">Video Details</th>
+                <th className="px-3.5 py-3.5 w-[14%]">Source Platform</th>
+                <th className="px-3.5 py-3.5 w-[17%]">Destination Page</th>
+                <th className="px-3.5 py-3.5 w-[13%]">Date & Time</th>
+                <th className="px-3.5 py-3.5 w-[22%]">Status & Info</th>
+                <th className="px-3.5 py-3.5 pr-6 w-[16%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/50">
@@ -360,8 +360,8 @@ export default function HistoryPage() {
                   return (
                     <tr key={item.id} className="hover:bg-gray-800/30 transition-colors group">
                       {/* Video Title */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
+                      <td className="px-3.5 py-3">
+                        <div className="flex items-center gap-2 min-w-0">
                           <div className="w-7 h-7 rounded-lg bg-gray-800/80 border border-gray-700/60 flex items-center justify-center shrink-0 text-blue-400">
                             <Video className="w-3.5 h-3.5" />
                           </div>
@@ -374,9 +374,9 @@ export default function HistoryPage() {
                                 href={item.video.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-[11px] text-gray-500 hover:text-blue-400 truncate block mt-0.5 transition-colors"
+                                className="text-[10px] text-gray-500 hover:text-blue-400 truncate block mt-0.5 transition-colors"
                               >
-                                View Source Video ↗
+                                Source Video ↗
                               </a>
                             )}
                           </div>
@@ -384,7 +384,7 @@ export default function HistoryPage() {
                       </td>
 
                       {/* Source Platform */}
-                      <td className="px-4 py-3">
+                      <td className="px-3.5 py-3">
                         <div className="flex flex-col gap-0.5 min-w-0">
                           <div>{getPlatformBadge(platform)}</div>
                           <span className="text-[11px] font-medium text-gray-400 truncate" title={sourceName}>
@@ -394,7 +394,7 @@ export default function HistoryPage() {
                       </td>
 
                       {/* Destination Facebook Page */}
-                      <td className="px-4 py-3">
+                      <td className="px-3.5 py-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-6 h-6 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                             <Facebook className="w-3.5 h-3.5" />
@@ -407,15 +407,15 @@ export default function HistoryPage() {
                       </td>
 
                       {/* Date & Time */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 text-gray-300 text-xs truncate">
+                      <td className="px-3.5 py-3">
+                        <div className="flex items-center gap-1 text-gray-300 text-xs truncate">
                           <Clock className="w-3.5 h-3.5 text-gray-500 shrink-0" />
                           <span className="truncate">{formattedDate}</span>
                         </div>
                       </td>
 
                       {/* Status & Diagnostic Info */}
-                      <td className="px-4 py-3">
+                      <td className="px-3.5 py-3">
                         <div className="flex flex-col gap-0.5 min-w-0">
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold w-fit ${
@@ -442,15 +442,15 @@ export default function HistoryPage() {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3.5 py-3 pr-6 text-right">
                         {item.status === 'FAILED' && (
                           <button
                             onClick={() => handleRetry(item.id)}
                             disabled={retryingId === item.id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors cursor-pointer disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-400 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                           >
                             <RotateCw className={`w-3 h-3 ${retryingId === item.id ? 'animate-spin' : ''}`} />
-                            {retryingId === item.id ? '...' : 'Retry'}
+                            {retryingId === item.id ? 'Retrying...' : 'Retry'}
                           </button>
                         )}
                         {item.status === 'COMPLETED' && (
@@ -462,10 +462,10 @@ export default function HistoryPage() {
                             }
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-800 border border-gray-700 transition-colors"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all shadow-sm"
                           >
                             <ExternalLink className="w-3 h-3" />
-                            View
+                            View Post
                           </a>
                         )}
                       </td>
