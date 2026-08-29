@@ -11,6 +11,7 @@ export class UsersService {
       select: {
         id: true,
         email: true,
+        password: true,
         name: true,
         note: true,
         role: true,
@@ -99,7 +100,7 @@ export class UsersService {
     return { success: true, message: 'User deleted successfully' };
   }
 
-  async update(id: string, data: { name?: string; note?: string; expiresAt?: Date | null }) {
+  async update(id: string, data: { name?: string; note?: string; password?: string; expiresAt?: Date | null }) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -110,11 +111,13 @@ export class UsersService {
       data: {
         name: data.name !== undefined ? data.name : undefined,
         note: data.note !== undefined ? data.note : undefined,
+        password: data.password !== undefined ? data.password : undefined,
         expiresAt: data.expiresAt !== undefined ? (data.expiresAt ? new Date(data.expiresAt) : null) : undefined,
       },
       select: {
         id: true,
         email: true,
+        password: true,
         name: true,
         note: true,
         role: true,

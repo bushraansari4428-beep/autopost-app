@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import ToastContainer, { ToastMessage } from '@/components/Toast';
 import ConfirmModal from '@/components/ConfirmModal';
+import { Eye, EyeOff, Copy, Check, Key, Lock, Trash2, Edit3 } from 'lucide-react';
 
 interface User {
   id: string;
   email: string;
+  password?: string | null;
   name?: string | null;
   note?: string | null;
   expiresAt?: string | null;
@@ -23,6 +25,10 @@ export default function UsersPage() {
   const [error, setError] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteValue, setEditNoteValue] = useState('');
+  const [editingPasswordId, setEditingPasswordId] = useState<string | null>(null);
+  const [editPasswordValue, setEditPasswordValue] = useState('');
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -33,6 +39,24 @@ export default function UsersPage() {
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const togglePasswordVisibility = (id: string) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const handleCopyPassword = (id: string, pass?: string | null) => {
+    if (!pass) {
+      addToast('No password set for this user', 'info');
+      return;
+    }
+    navigator.clipboard.writeText(pass);
+    setCopiedId(id);
+    addToast('Password copied to clipboard!', 'success');
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const fetchUsers = async () => {
@@ -103,7 +127,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleUpdateUser = async (id: string, updates: { note?: string, expiresAt?: string | null }) => {
+  const handleUpdateUser = async (id: string, updates: { note?: string, password?: string, expiresAt?: string | null }) => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/users/${id}`, {
@@ -171,11 +195,11 @@ export default function UsersPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">User Management</h1>
-          <p className="text-gray-400 mt-1">Generate and manage standard customer access accounts.</p>
+          <p className="text-gray-400 mt-1">Generate and manage standard customer access accounts & passwords.</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/25 transition flex items-center gap-2"
+          className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/25 transition flex items-center gap-2 cursor-pointer"
         >
           <span className="text-xl">+</span> Create New User
         </button>
@@ -185,94 +209,189 @@ export default function UsersPage() {
         <table className="w-full text-left">
           <thead className="bg-gray-800/80 border-b border-gray-800">
             <tr>
-              <th className="p-4 font-semibold text-gray-400 w-1/3">User & Note</th>
-              <th className="p-4 font-semibold text-gray-400">Role</th>
-              <th className="p-4 font-semibold text-gray-400">Created At</th>
-              <th className="p-4 font-semibold text-gray-400">Auto Delete</th>
-              <th className="p-4 font-semibold text-gray-400 text-right">Actions</th>
+              <th className="p-4 font-semibold text-gray-400 w-[28%]">User & Note</th>
+              <th className="p-4 font-semibold text-gray-400 w-[24%]">Password</th>
+              <th className="p-4 font-semibold text-gray-400 w-[12%]">Role</th>
+              <th className="p-4 font-semibold text-gray-400 w-[12%]">Created At</th>
+              <th className="p-4 font-semibold text-gray-400 w-[12%]">Auto Delete</th>
+              <th className="p-4 font-semibold text-gray-400 w-[12%] text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {users.map(user => (
-              <tr key={user.id} className="border-b border-gray-800/60 hover:bg-gray-800/40 transition">
-                <td className="p-4">
-                  <div className="font-medium text-white mb-1.5">{user.email}</div>
-                  {editingNoteId === user.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={editNoteValue}
-                        onChange={(e) => setEditNoteValue(e.target.value)}
-                        className="px-2 py-1 bg-gray-950 border border-blue-500 rounded text-gray-300 text-xs focus:outline-none w-full"
-                        autoFocus
-                        placeholder="Note..."
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleUpdateUser(user.id, { note: editNoteValue });
-                            setEditingNoteId(null);
-                          } else if (e.key === 'Escape') {
-                            setEditingNoteId(null);
-                          }
-                        }}
-                      />
-                      <button onClick={() => {
-                        handleUpdateUser(user.id, { note: editNoteValue });
-                        setEditingNoteId(null);
-                      }} className="text-blue-400 text-xs font-bold px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 rounded transition">Save</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
-                      setEditingNoteId(user.id);
-                      setEditNoteValue(user.note || '');
-                    }}>
-                      <span className="text-gray-400 text-sm">{user.note || <span className="text-gray-600 italic text-xs">Add a note to remember this user...</span>}</span>
-                      <span className="text-gray-600 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition text-xs">✏️ Edit</span>
-                    </div>
-                  )}
-                </td>
-                <td className="p-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    user.role === 'ADMIN' ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-blue-500/20 border border-blue-500/30 text-blue-400'
-                  }`}>
-                    {user.role}
-                  </span>
-                </td>
-                <td className="p-4 text-gray-400 text-sm">
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </td>
-                <td className="p-4">
-                  <div className="flex flex-col gap-1">
-                    <select
-                      className="bg-gray-950 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500"
-                      onChange={(e) => handleAutoDeleteChange(user.id, e.target.value)}
-                      value={user.expiresAt ? 'custom' : 'never'} // Since we can't easily reverse engineer the exact dropdown option if it's already set to a date without being complex, we can just show 'Active' vs 'Never' or a generic approach.
-                      // A better approach is to reset the value to 'never' if no expiresAt, or let the user choose and we just display the remaining days below it.
-                    >
-                      <option value="never">Never</option>
-                      <option value="1day">1 Day</option>
-                      <option value="2days">2 Days</option>
-                      <option value="3days">3 Days</option>
-                      <option value="1week">1 Week</option>
-                      <option value="2weeks">2 Weeks</option>
-                      <option value="1month">1 Month</option>
-                    </select>
-                    {user.expiresAt && (
-                      <span className={`text-xs font-semibold ${new Date(user.expiresAt).getTime() < Date.now() ? 'text-red-400' : 'text-orange-400'}`}>
-                        {calculateRemainingDays(user.expiresAt)} left
-                      </span>
+            {users.map(user => {
+              const isRevealed = !!visiblePasswords[user.id];
+              const isCopied = copiedId === user.id;
+              const isEditingPassword = editingPasswordId === user.id;
+
+              return (
+                <tr key={user.id} className="border-b border-gray-800/60 hover:bg-gray-800/40 transition">
+                  {/* Email & Note */}
+                  <td className="p-4">
+                    <div className="font-medium text-white mb-1.5">{user.email}</div>
+                    {editingNoteId === user.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editNoteValue}
+                          onChange={(e) => setEditNoteValue(e.target.value)}
+                          className="px-2 py-1 bg-gray-950 border border-blue-500 rounded text-gray-300 text-xs focus:outline-none w-full"
+                          autoFocus
+                          placeholder="Note..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleUpdateUser(user.id, { note: editNoteValue });
+                              setEditingNoteId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingNoteId(null);
+                            }
+                          }}
+                        />
+                        <button onClick={() => {
+                          handleUpdateUser(user.id, { note: editNoteValue });
+                          setEditingNoteId(null);
+                        }} className="text-blue-400 text-xs font-bold px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 rounded transition">Save</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
+                        setEditingNoteId(user.id);
+                        setEditNoteValue(user.note || '');
+                      }}>
+                        <span className="text-gray-400 text-sm">{user.note || <span className="text-gray-600 italic text-xs">Add a note to remember this user...</span>}</span>
+                        <span className="text-gray-600 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition text-xs">✏️ Edit</span>
+                      </div>
                     )}
-                  </div>
-                </td>
-                <td className="p-4 text-right">
-                  <button
-                    onClick={() => setDeleteConfirmId(user.id)}
-                    className="text-red-400 hover:text-red-300 text-sm font-semibold px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+
+                  {/* Password Column */}
+                  <td className="p-4">
+                    {isEditingPassword ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editPasswordValue}
+                          onChange={(e) => setEditPasswordValue(e.target.value)}
+                          className="px-2 py-1 bg-gray-950 border border-blue-500 rounded text-white text-xs font-mono focus:outline-none w-full"
+                          autoFocus
+                          placeholder="New password..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && editPasswordValue.trim()) {
+                              handleUpdateUser(user.id, { password: editPasswordValue.trim() });
+                              setEditingPasswordId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingPasswordId(null);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            if (editPasswordValue.trim()) {
+                              handleUpdateUser(user.id, { password: editPasswordValue.trim() });
+                            }
+                            setEditingPasswordId(null);
+                          }}
+                          className="text-emerald-400 text-xs font-bold px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 rounded transition"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingPasswordId(null)}
+                          className="text-gray-400 text-xs px-1.5 py-1 hover:text-white"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="bg-gray-950/80 border border-gray-800 rounded-lg px-2.5 py-1.5 flex items-center gap-2 min-w-[130px] justify-between">
+                          <span className="font-mono text-xs text-blue-300 select-all">
+                            {user.password ? (isRevealed ? user.password : '••••••••') : <span className="text-gray-600 italic">No password</span>}
+                          </span>
+                          {user.password && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => togglePasswordVisibility(user.id)}
+                                title={isRevealed ? "Hide Password" : "Show Password"}
+                                className="text-gray-400 hover:text-white transition p-0.5 rounded cursor-pointer"
+                              >
+                                {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyPassword(user.id, user.password)}
+                                title="Copy Password"
+                                className="text-gray-400 hover:text-emerald-400 transition p-0.5 rounded cursor-pointer"
+                              >
+                                {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPasswordId(user.id);
+                            setEditPasswordValue(user.password || '');
+                          }}
+                          title="Change Password"
+                          className="text-gray-500 hover:text-blue-400 transition p-1 rounded"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Role */}
+                  <td className="p-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      user.role === 'ADMIN' ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-blue-500/20 border border-blue-500/30 text-blue-400'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </td>
+
+                  {/* Created At */}
+                  <td className="p-4 text-gray-400 text-sm">
+                    {new Date(user.createdAt).toLocaleDateString()}
+                  </td>
+
+                  {/* Auto Delete */}
+                  <td className="p-4">
+                    <div className="flex flex-col gap-1">
+                      <select
+                        className="bg-gray-950 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                        onChange={(e) => handleAutoDeleteChange(user.id, e.target.value)}
+                        value={user.expiresAt ? 'custom' : 'never'}
+                      >
+                        <option value="never">Never</option>
+                        <option value="1day">1 Day</option>
+                        <option value="2days">2 Days</option>
+                        <option value="3days">3 Days</option>
+                        <option value="1week">1 Week</option>
+                        <option value="2weeks">2 Weeks</option>
+                        <option value="1month">1 Month</option>
+                      </select>
+                      {user.expiresAt && (
+                        <span className={`text-xs font-semibold ${new Date(user.expiresAt).getTime() < Date.now() ? 'text-red-400' : 'text-orange-400'}`}>
+                          {calculateRemainingDays(user.expiresAt)} left
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Actions */}
+                  <td className="p-4 text-right">
+                    <button
+                      onClick={() => setDeleteConfirmId(user.id)}
+                      className="text-red-400 hover:text-red-300 text-sm font-semibold px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition cursor-pointer"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {users.length === 0 && (

@@ -34,7 +34,7 @@ export class UsersController {
 
   @Put(':id')
   @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() data: { name?: string; note?: string; expiresAt?: Date | null }) {
+  update(@Param('id') id: string, @Body() data: { name?: string; note?: string; password?: string; expiresAt?: Date | null }) {
     return this.usersService.update(id, data);
   }
 
