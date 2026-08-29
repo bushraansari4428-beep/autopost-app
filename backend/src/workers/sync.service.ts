@@ -1003,7 +1003,16 @@ export class SyncService {
     
     let videoUrl = null;
 
-    if (targetUrl.includes('tiktok.com')) {
+    if (targetUrl.includes('mega.nz') || targetUrl.includes('mega.io') || uploadHistory.video?.source?.platform === 'MEGA_CLOUD') {
+       this.logger.log(`Downloading video from Mega.nz: ${targetUrl}`);
+       const downloadedPath = await this.megaService.downloadFile(targetUrl);
+       if (downloadedPath && fs.existsSync(downloadedPath)) {
+          this.logsService.log('INFO', `Successfully downloaded video from Mega.nz to ${downloadedPath}`);
+          videoUrl = 'local://' + downloadedPath; // signal that it's already a local file
+       } else {
+          throw new Error(`Failed to download video from Mega.nz: ${targetUrl}`);
+       }
+    } else if (targetUrl.includes('tiktok.com')) {
       this.logger.log(`Extracting HD TikTok MP4 stream for upload: ${targetUrl}`);
       
       // Always use yt-dlp for HD TikTok downloads (unwatermarked)
@@ -1088,7 +1097,7 @@ export class SyncService {
       } else {
         throw new Error(`Failed to extract MP4 URL from Kuaishou HTML.`);
       }
-    } else if (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink') || targetUrl.includes('rednote') || targetUrl.includes('xhs')) {
+    } else if (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote.com') || /(^|[^a-zA-Z0-9])xhslink/i.test(targetUrl)) {
        this.logger.log(`Xiaohongshu / RedNote video stream extraction for URL: ${targetUrl}`);
        const xhsVideos = await extractXiaohongshuVideos(targetUrl, 1);
        const xhsRes = xhsVideos.length > 0 ? xhsVideos[0] : null;
@@ -1100,15 +1109,6 @@ export class SyncService {
            this.logsService.log('INFO', `Successfully extracted Xiaohongshu / RedNote MP4 video URL.`);
        } else {
            throw new Error(`Failed to extract MP4 video stream from RedNote / Xiaohongshu URL: ${targetUrl}`);
-       }
-    } else if (targetUrl.includes('mega.nz')) {
-       this.logger.log(`Downloading video from Mega.nz: ${targetUrl}`);
-       const downloadedPath = await this.megaService.downloadFile(targetUrl);
-       if (downloadedPath && fs.existsSync(downloadedPath)) {
-          this.logsService.log('INFO', `Successfully downloaded video from Mega.nz to ${downloadedPath}`);
-          videoUrl = 'local://' + downloadedPath; // signal that it's already a local file
-       } else {
-          throw new Error(`Failed to download video from Mega.nz: ${targetUrl}`);
        }
     } else {
       this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
@@ -1151,7 +1151,7 @@ export class SyncService {
 
     const isMegaLocal = videoUrl.startsWith('local://');
     const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
-    const isXhsOrRedNote = targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink') || targetUrl.includes('rednote') || videoUrl.includes('xhs') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu');
+    const isXhsOrRedNote = (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote.com') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu')) && !isMegaLocal;
 
     const sourcePlatform = uploadHistory.video?.source?.platform;
     const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl);
