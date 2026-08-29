@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards, Request } from '@nestjs/common';
 import { LogsService } from './logs.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -8,7 +8,7 @@ export class LogsController {
   constructor(private readonly logsService: LogsService) {}
 
   @Get()
-  getLogs() {
-    return this.logsService.getRecentLogs();
+  getLogs(@Request() req: any) {
+    return this.logsService.getRecentLogs(req.user);
   }
 }
