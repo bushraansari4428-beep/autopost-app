@@ -49,9 +49,15 @@ export class SyncService {
     return await getYtDlpBinaryPath();
   }
 
-  public formatFacebookCaption(rawCaption?: string, platform?: string, url?: string): string {
+  public formatFacebookCaption(rawCaption?: string, platform?: string, url?: string, customHashtags?: string): string {
     const plat = (platform || '').toUpperCase();
     const cleanUrl = (url || '').toLowerCase();
+
+    // Suffix hashtags: if customHashtags are provided, use them; otherwise fallback to #FBReels #Reels
+    let tags = (customHashtags || '').trim();
+    if (!tags) {
+      tags = '#FBReels #Reels';
+    }
 
     // Check if source is Chinese/Asian platform (Kuaishou or Xiaohongshu / RedNote)
     const isChinesePlatform = 
@@ -62,12 +68,12 @@ export class SyncService {
       cleanUrl.includes('xhslink') || 
       cleanUrl.includes('rednote');
 
-    // Rule 1: For KUAISHOU or XIAOHONGSHU (RedNote), ALWAYS delete entire original caption and output ONLY #FBReels #Reels
+    // Rule 1: For KUAISHOU or XIAOHONGSHU (RedNote), ALWAYS delete entire original caption and output tags
     if (isChinesePlatform) {
-      return '#FBReels #Reels';
+      return tags;
     }
 
-    // Rule 2 & 3: For TikTok, YouTube Shorts, Instagram
+    // Rule 2 & 3: For TikTok, YouTube Shorts, Instagram, Mega Cloud, Local
     let caption = (rawCaption || '').trim();
 
     // If caption is generic fallback (e.g. "TikTok Video 123456" or "Video 12345"), treat as empty
@@ -91,13 +97,13 @@ export class SyncService {
       const cleanText = firstLine.replace(/#\S+/g, '').replace(/\s+/g, ' ').trim();
 
       if (cleanText) {
-        // Output clean first line + #FBReels #Reels
-        return `${cleanText} #FBReels #Reels`;
+        // Output clean first line + custom hashtags
+        return `${cleanText} ${tags}`;
       }
     }
 
     // Rule 3: If no text caption (only hashtags or empty)
-    return '#FBReels #Reels';
+    return tags;
   }
 
   async testMapping(mappingId: string) {
@@ -1153,8 +1159,23 @@ export class SyncService {
     const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
     const isXhsOrRedNote = (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote.com') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu')) && !isMegaLocal;
 
+    let customHashtags: string | undefined = undefined;
+    if (uploadHistory.video?.sourceId && uploadHistory.facebookPageId) {
+      const mapping = await this.prisma.mapping.findUnique({
+        where: {
+          sourceId_facebookPageId: {
+            sourceId: uploadHistory.video.sourceId,
+            facebookPageId: uploadHistory.facebookPageId
+          }
+        }
+      });
+      if (mapping?.customHashtags) {
+        customHashtags = mapping.customHashtags;
+      }
+    }
+
     const sourcePlatform = uploadHistory.video?.source?.platform;
-    const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl);
+    const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl, customHashtags);
 
     if (isMegaLocal) {
       const localFilePath = videoUrl.replace('local://', '');

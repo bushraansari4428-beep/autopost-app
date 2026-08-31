@@ -131,6 +131,29 @@ export default function MappingsPage() {
     }
   };
 
+  const updateCustomHashtags = async (id: string, hashtags: string) => {
+    setMappings(prev => prev.map(m => m.id === id ? { ...m, customHashtags: hashtags } : m));
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/mappings/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ customHashtags: hashtags.trim() || null })
+      });
+      if (res.ok) {
+        addToast('Custom hashtags saved for this page!', 'success');
+      } else {
+        addToast('Failed to save custom hashtags', 'error');
+      }
+    } catch (err) {
+      console.error('Failed to update custom hashtags', err);
+      addToast('Failed to save custom hashtags', 'error');
+    }
+  };
+
   const handleAddMapping = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sourceId || !facebookPageId) return;
@@ -189,93 +212,140 @@ export default function MappingsPage() {
           </div>
         ) : (
           mappings.map(mapping => (
-            <div key={mapping.id} className="flex items-center justify-between p-4 bg-gray-800/40 border border-gray-700/50 rounded-2xl hover:bg-gray-800/60 transition-colors mb-4 last:mb-0">
-              <div className="flex items-center gap-6">
-                <div className="text-center w-32">
-                  <span className="block text-sm text-gray-400 mb-1">Source</span>
-                  <span className="font-bold text-white truncate block">{mapping.source?.name || 'Unknown'}</span>
-                  <span className="block text-xs text-gray-500 mt-1">{mapping.source?.platform}</span>
+            <div key={mapping.id} className="p-5 bg-gray-800/40 border border-gray-700/50 rounded-2xl hover:bg-gray-800/60 hover:border-gray-600/70 transition-all mb-4 last:mb-0 shadow-lg shadow-black/20">
+              {/* Top Row: Source -> Destination, Schedule, Quota, Actions */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-6">
+                  <div className="text-center w-32">
+                    <span className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Source</span>
+                    <span className="font-bold text-white truncate block text-sm">{mapping.source?.name || 'Unknown'}</span>
+                    <span className="block text-[11px] text-gray-500 mt-0.5">{mapping.source?.platform}</span>
+                  </div>
+                  <div className="text-purple-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  </div>
+                  <div className="text-center w-32">
+                    <span className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Destination</span>
+                    <span className="font-bold text-[#1877F2] truncate block text-sm">{mapping.facebookPage?.name || 'Unknown'}</span>
+                    <span className="block text-[11px] text-gray-500 mt-0.5">Facebook Page</span>
+                  </div>
                 </div>
-                <div className="text-gray-600 animate-pulse">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                </div>
-                <div className="text-center w-32">
-                  <span className="block text-sm text-gray-400 mb-1">Destination</span>
-                  <span className="font-bold text-[#1877F2] truncate block">{mapping.facebookPage?.name || 'Unknown'}</span>
-                  <span className="block text-xs text-gray-500 mt-1">Facebook Page</span>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-6">
-                <div className="flex flex-col items-center">
-                  <span className="text-xs text-gray-400 mb-1">Schedule (PKT)</span>
-                  <div className="flex flex-wrap items-center gap-1 max-w-[200px] justify-center">
-                    {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [] as string[]).map((t: string, idx: number) => (
-                      <div key={idx} className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1">
-                        <input 
-                          type="time"
-                          value={t.trim()}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              const times = mapping.scheduledTime.split(',');
-                              times[idx] = e.target.value;
-                              updateScheduleTime(mapping.id, times.join(','));
-                            }
-                          }}
-                          className="bg-transparent text-sm text-white focus:outline-none w-auto"
-                        />
-                        <button 
-                          onClick={() => {
-                            const times = mapping.scheduledTime.split(',').filter((_: any, i: number) => i !== idx);
-                            updateScheduleTime(mapping.id, times.length > 0 ? times.join(',') : '00:00');
-                          }}
-                          className="text-gray-500 hover:text-red-400 p-0.5 rounded transition"
-                          title="Remove this slot"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                        </button>
-                      </div>
-                    ))}
+                
+                <div className="flex items-center gap-6 flex-wrap">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs font-semibold text-gray-400 mb-1">Schedule (PKT)</span>
+                    <div className="flex flex-wrap items-center gap-1 max-w-[200px] justify-center">
+                      {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [] as string[]).map((t: string, idx: number) => (
+                        <div key={idx} className="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-lg px-2 py-1">
+                          <input 
+                            type="time"
+                            value={t.trim()}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                const times = mapping.scheduledTime.split(',');
+                                times[idx] = e.target.value;
+                                updateScheduleTime(mapping.id, times.join(','));
+                              }
+                            }}
+                            className="bg-transparent text-xs text-white focus:outline-none w-auto"
+                          />
+                          <button 
+                            onClick={() => {
+                              const times = mapping.scheduledTime.split(',').filter((_: any, i: number) => i !== idx);
+                              updateScheduleTime(mapping.id, times.length > 0 ? times.join(',') : '00:00');
+                            }}
+                            className="text-gray-500 hover:text-red-400 p-0.5 rounded transition cursor-pointer"
+                            title="Remove this slot"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          const times = mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [];
+                          times.push('12:00');
+                          updateScheduleTime(mapping.id, times.join(','));
+                        }}
+                        className="flex items-center gap-1 bg-gray-900 hover:bg-gray-750 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-400 hover:text-white transition cursor-pointer" 
+                        title="Add another time"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Slot</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={mapping.videosPerDay || 1}
+                      onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value) || 1)}
+                      className="bg-gray-900 border border-purple-500/30 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500 w-14 text-center font-bold"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      <span className="text-xs font-bold text-green-400">ACTIVE</span>
+                    </div>
                     <button 
-                      onClick={() => {
-                        const times = mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [];
-                        times.push('12:00');
-                        updateScheduleTime(mapping.id, times.join(','));
-                      }}
-                      className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-2 py-1 text-sm text-gray-400 transition" 
-                      title="Add another time"
+                      onClick={() => testMapping(mapping.id)} 
+                      disabled={testingId === mapping.id}
+                      className="text-blue-400 hover:text-blue-300 text-xs font-semibold px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                      Add
+                      {testingId === mapping.id ? 'Testing...' : 'Test'}
+                    </button>
+                    <button 
+                      onClick={() => setDeleteConfirmId(mapping.id)} 
+                      className="text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-all cursor-pointer"
+                    >
+                      Remove
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-col items-center">
-                  <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Slot</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={mapping.videosPerDay || 1}
-                    onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value) || 1)}
-                    className="bg-gray-800 border border-purple-500/30 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-500 w-16 text-center"
-                  />
-                </div>
-                
-                <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-xs font-bold text-green-400">ACTIVE</span>
-                </div>
-                <button 
-                  onClick={() => testMapping(mapping.id)} 
-                  disabled={testingId === mapping.id}
-                  className="text-blue-400 hover:text-blue-300 font-medium px-2 disabled:opacity-50"
-                >
-                  {testingId === mapping.id ? 'Testing...' : 'Test'}
-                </button>
-                <button onClick={() => setDeleteConfirmId(mapping.id)} className="text-red-400 hover:text-red-300">Remove</button>
               </div>
+
+              {/* Bottom Strip: Custom Hashtags per Page */}
+              <div className="border-t border-gray-700/50 mt-4 pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 shrink-0">
+                  <span className="w-5 h-5 rounded-md bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold text-xs">
+                    #
+                  </span>
+                  <span>Custom Hashtags:</span>
+                  <span className="text-[11px] text-gray-500 font-normal hidden md:inline">(Appended with video caption on Facebook)</span>
+                </div>
+                <div className="flex items-center gap-2 flex-1 max-w-xl">
+                  <input 
+                    type="text"
+                    defaultValue={mapping.customHashtags || ''}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        updateCustomHashtags(mapping.id, (e.target as HTMLInputElement).value);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      if (e.target.value !== (mapping.customHashtags || '')) {
+                        updateCustomHashtags(mapping.id, e.target.value);
+                      }
+                    }}
+                    placeholder="e.g. #animals #nature #viral #wildlife #fyp"
+                    className="bg-gray-950/80 border border-gray-700/70 focus:border-purple-500 text-xs text-purple-200 placeholder-gray-600 rounded-xl px-3 py-2 w-full focus:outline-none transition-colors font-medium tracking-wide"
+                  />
+                  <button 
+                    onClick={(e) => {
+                      const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                      if (input) updateCustomHashtags(mapping.id, input.value);
+                    }}
+                    className="px-3.5 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/30 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer shadow-sm shadow-purple-500/10"
+                  >
+                    Save
+                  </button>
+                </div>
               </div>
             </div>
           ))
