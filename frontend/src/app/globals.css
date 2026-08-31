@@ -26,7 +26,9 @@ body {
     radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
   color: var(--foreground);
-  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   min-height: 100vh;
   margin: 0;
   padding: 0;

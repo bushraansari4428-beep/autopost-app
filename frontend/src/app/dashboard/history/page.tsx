@@ -4,6 +4,7 @@ import {
   CheckCircle2, 
   XCircle, 
   Clock, 
+  Calendar,
   RotateCw, 
   Search, 
   ExternalLink, 
@@ -400,51 +401,52 @@ export default function HistoryPage() {
 
                       {/* Destination Facebook Page */}
                       <td className="px-3.5 py-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-6 h-6 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
                             <Facebook className="w-3.5 h-3.5" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-white text-xs truncate" title={pageName}>{pageName}</p>
-                            <p className="text-[10px] text-gray-500 font-mono truncate">ID: {pageId ? `${pageId.slice(0, 8)}...` : 'N/A'}</p>
+                            <p className="font-semibold text-slate-100 text-xs truncate leading-tight" title={pageName}>{pageName}</p>
+                            <p className="text-[10px] text-slate-400 font-medium tracking-tight mt-0.5 truncate">ID: {pageId ? `${pageId.slice(0, 8)}...` : 'N/A'}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* Date & Time */}
                       <td className="px-3.5 py-3">
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-semibold text-gray-200 truncate">
-                            {formattedDateOnly}
-                          </span>
-                          <span className="text-[11px] text-gray-400 font-mono flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                            <Clock className="w-3 h-3 text-blue-400 shrink-0" />
-                            {formattedTimeOnly}
-                          </span>
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-100 tracking-tight">
+                            <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                            <span>{formattedDateOnly}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 w-fit">
+                            <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
+                            <span>{formattedTimeOnly}</span>
+                          </div>
                         </div>
                       </td>
 
                       {/* Status & Diagnostic Info */}
                       <td className="px-3.5 py-3">
-                        <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex flex-col gap-1 min-w-0">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold w-fit ${
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold w-fit tracking-wide shadow-sm ${
                               item.status === 'COMPLETED'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-emerald-500/5'
                                 : item.status === 'FAILED'
-                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                                : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse'
+                                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30 shadow-rose-500/5'
+                                : 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 animate-pulse'
                             }`}
                           >
-                            {item.status === 'COMPLETED' && <CheckCircle2 className="w-3 h-3" />}
-                            {item.status === 'FAILED' && <XCircle className="w-3 h-3" />}
-                            {(item.status === 'PENDING' || item.status === 'PROCESSING') && <RotateCw className="w-3 h-3 animate-spin" />}
-                            {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
+                            {item.status === 'COMPLETED' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                            {item.status === 'FAILED' && <XCircle className="w-3.5 h-3.5" />}
+                            {(item.status === 'PENDING' || item.status === 'PROCESSING') && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+                            <span>{item.status === 'COMPLETED' ? 'SUCCESS' : item.status}</span>
                           </span>
 
                           {/* Error Message for Failed Uploads */}
                           {item.errorMessage && (
-                            <p className="text-[10px] text-rose-400 truncate mt-0.5" title={item.errorMessage}>
+                            <p className="text-[11px] font-medium text-rose-400 truncate mt-0.5 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20" title={item.errorMessage}>
                               {item.errorMessage}
                             </p>
                           )}
