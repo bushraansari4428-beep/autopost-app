@@ -320,18 +320,6 @@ export default function MappingsPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Videos / Slot (Auto-scheduled with 2 min gap)</label>
-                <input 
-                  type="number" 
-                  min="1"
-                  max="100"
-                  value={videosPerDay} 
-                  onChange={(e) => setVideosPerDay(parseInt(e.target.value) || 1)} 
-                  required 
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
-                />
-              </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button 
                   type="button" 
