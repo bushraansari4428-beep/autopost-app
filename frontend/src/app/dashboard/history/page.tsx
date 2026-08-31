@@ -311,11 +311,11 @@ export default function HistoryPage() {
             <thead className="bg-gray-950/80 text-gray-400 uppercase text-[11px] font-bold tracking-wider border-b border-gray-800">
               <tr>
                 <th className="px-3.5 py-3.5 w-[18%]">Video Details</th>
-                <th className="px-3.5 py-3.5 w-[14%]">Source Platform</th>
-                <th className="px-3.5 py-3.5 w-[17%]">Destination Page</th>
-                <th className="px-3.5 py-3.5 w-[13%]">Date & Time</th>
-                <th className="px-3.5 py-3.5 w-[22%]">Status & Info</th>
-                <th className="px-3.5 py-3.5 pr-6 w-[16%] text-right">Actions</th>
+                <th className="px-3.5 py-3.5 w-[13%]">Source Platform</th>
+                <th className="px-3.5 py-3.5 w-[16%]">Destination Page</th>
+                <th className="px-3.5 py-3.5 w-[19%]">Date & Time</th>
+                <th className="px-3.5 py-3.5 w-[20%]">Status & Info</th>
+                <th className="px-3.5 py-3.5 pr-6 w-[14%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/50">
@@ -349,11 +349,16 @@ export default function HistoryPage() {
                   const pageId = item.facebookPage?.pageId || item.facebookPageId;
                   const sourceName = item.video?.source?.name || 'Connected Source';
                   const platform = item.video?.source?.platform;
-                  const formattedDate = new Date(item.createdAt).toLocaleString('en-US', {
+                  const dateObj = new Date(item.createdAt);
+                  const formattedDateOnly = dateObj.toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
-                    hour: 'numeric',
+                    year: 'numeric'
+                  });
+                  const formattedTimeOnly = dateObj.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
                     minute: '2-digit',
+                    second: '2-digit',
                     hour12: true
                   });
 
@@ -408,9 +413,14 @@ export default function HistoryPage() {
 
                       {/* Date & Time */}
                       <td className="px-3.5 py-3">
-                        <div className="flex items-center gap-1 text-gray-300 text-xs truncate">
-                          <Clock className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                          <span className="truncate">{formattedDate}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-semibold text-gray-200 truncate">
+                            {formattedDateOnly}
+                          </span>
+                          <span className="text-[11px] text-gray-400 font-mono flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                            <Clock className="w-3 h-3 text-blue-400 shrink-0" />
+                            {formattedTimeOnly}
+                          </span>
                         </div>
                       </td>
 
