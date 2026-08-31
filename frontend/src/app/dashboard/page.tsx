@@ -177,27 +177,33 @@ export default function Dashboard() {
       </div>
 
       {lowQueuePages.length > 0 && (
-        <div className="mb-8 p-5 bg-red-900/20 border border-red-500/30 rounded-2xl flex items-start gap-4">
-          <div className="p-2 bg-red-500/20 rounded-full mt-1">
-            <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-bold text-red-400">Low Cloud Queue Warning</h3>
-            <p className="text-red-300 text-sm mt-1 mb-3">
-              The following pages are running out of videos in their cloud queue. Please upload new videos to avoid missing scheduled posts.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {lowQueuePages.map(page => (
-                <div key={page.id} className="bg-red-950/40 border border-red-900/50 rounded-xl p-3 flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-200 truncate pr-2">{page.name}</span>
-                  <span className="text-xs font-bold px-2 py-1 bg-red-500/20 text-red-400 rounded-md whitespace-nowrap">
-                    {page.cloudQueueCount} left
-                  </span>
-                </div>
-              ))}
+        <div className="mb-6 px-4 py-3 bg-red-950/30 border border-red-500/30 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg shadow-red-950/20">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-1.5 bg-red-500/20 rounded-lg shrink-0 text-red-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
             </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider">Low Cloud Queue Warning</h3>
+                <span className="hidden sm:inline text-gray-500 text-xs">•</span>
+                <p className="hidden sm:inline text-red-300/80 text-xs truncate">
+                  Upload new videos to avoid missing scheduled posts.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {lowQueuePages.map(page => (
+              <div key={page.id} className="bg-red-900/30 border border-red-500/30 rounded-lg px-2.5 py-1 flex items-center gap-2 text-xs">
+                <span className="font-semibold text-slate-200 truncate max-w-[150px]">{page.name}</span>
+                <span className="font-bold px-1.5 py-0.5 bg-red-500/25 text-red-400 rounded text-[10px] whitespace-nowrap">
+                  {page.cloudQueueCount} left
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
