@@ -213,14 +213,14 @@ export default function MappingsPage() {
           </div>
         ) : (
           mappings.map(mapping => (
-            <div key={mapping.id} className="p-5 bg-gray-800/40 border border-gray-700/50 rounded-2xl hover:bg-gray-800/60 hover:border-gray-600/70 transition-all mb-4 last:mb-0 shadow-lg shadow-black/20">
-              {/* Top Row: Structured 4-Zone Header in Perfect Sequence */}
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                
-                {/* Zone 1: Route Pipeline (Source -> Destination) */}
+            <div key={mapping.id} className="p-5 bg-gray-800/40 border border-gray-700/50 rounded-2xl hover:bg-gray-800/60 hover:border-gray-600/70 transition-all mb-4 last:mb-0 shadow-lg shadow-black/20 flex flex-col gap-4">
+              
+              {/* Tier 1: Header (Source -> Destination & Actions) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Route Pipeline */}
                 <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                  <div className="w-36 min-w-[135px]">
-                    <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Source</span>
+                  <div className="min-w-[130px]">
+                    <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Source</span>
                     <span className="font-bold text-white truncate block text-sm leading-tight" title={mapping.source?.name}>{mapping.source?.name || 'Unknown'}</span>
                     <span className="inline-block text-[10px] font-medium text-slate-400 bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-700/60 mt-1 uppercase tracking-wide">{mapping.source?.platform}</span>
                   </div>
@@ -229,76 +229,15 @@ export default function MappingsPage() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                   </div>
                   
-                  <div className="w-36 min-w-[135px]">
-                    <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Destination</span>
+                  <div className="min-w-[130px]">
+                    <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Destination</span>
                     <span className="font-bold text-[#1877F2] truncate block text-sm leading-tight" title={mapping.facebookPage?.name}>{mapping.facebookPage?.name || 'Unknown'}</span>
                     <span className="inline-block text-[10px] font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 mt-1">Facebook Page</span>
                   </div>
                 </div>
 
-                {/* Zone 2: Schedule Timers in Sequence */}
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Schedule (PKT)</span>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [] as string[]).map((t: string, idx: number) => (
-                      <div key={idx} className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 hover:border-slate-600 rounded-xl px-2.5 py-1.5 shadow-sm">
-                        <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                        <input 
-                          type="time"
-                          value={t.trim()}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              const times = mapping.scheduledTime.split(',');
-                              times[idx] = e.target.value;
-                              updateScheduleTime(mapping.id, times.join(','));
-                            }
-                          }}
-                          className="bg-transparent text-xs font-semibold text-slate-100 focus:outline-none cursor-pointer"
-                        />
-                        <button 
-                          onClick={() => {
-                            const times = mapping.scheduledTime.split(',').filter((_: any, i: number) => i !== idx);
-                            updateScheduleTime(mapping.id, times.length > 0 ? times.join(',') : '00:00');
-                          }}
-                          className="text-slate-500 hover:text-rose-400 p-0.5 rounded transition-colors cursor-pointer"
-                          title="Remove this slot"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                        </button>
-                      </div>
-                    ))}
-                    <button 
-                      onClick={() => {
-                        const times = mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [];
-                        times.push('12:00');
-                        updateScheduleTime(mapping.id, times.join(','));
-                      }}
-                      className="flex items-center gap-1 bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700 hover:border-slate-600 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white transition cursor-pointer shadow-sm" 
-                      title="Add another time"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                      <span>Add</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Zone 3: Videos / Slot Quota */}
-                <div className="flex flex-col items-start shrink-0">
-                  <span className="text-[11px] font-semibold text-purple-400 uppercase tracking-wider mb-1.5">Videos / Slot</span>
-                  <div>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={mapping.videosPerDay || 1}
-                      onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value) || 1)}
-                      className="bg-slate-900/90 border border-purple-500/30 focus:border-purple-500 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none w-16 text-center font-bold shadow-sm"
-                    />
-                  </div>
-                </div>
-                
-                {/* Zone 4: Status & Actions (Aligned on the Right) */}
-                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 self-start lg:self-center">
+                {/* Status & Actions */}
+                <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl shadow-sm shadow-emerald-500/5">
                     <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
                     <span className="text-xs font-bold text-emerald-400 tracking-wider">ACTIVE</span>
@@ -326,7 +265,70 @@ export default function MappingsPage() {
                     Remove
                   </button>
                 </div>
+              </div>
 
+              {/* Tier 2: Schedule & Videos/Slot Toolbar */}
+              <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-inner">
+                {/* Schedule Timers (Inline sequence) */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mr-1">
+                    <Clock className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Schedule (PKT):</span>
+                  </span>
+                  
+                  {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [] as string[]).map((t: string, idx: number) => (
+                    <div key={idx} className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1 shadow-sm">
+                      <input 
+                        type="time"
+                        value={t.trim()}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const times = mapping.scheduledTime.split(',');
+                            times[idx] = e.target.value;
+                            updateScheduleTime(mapping.id, times.join(','));
+                          }
+                        }}
+                        className="bg-transparent text-xs font-semibold text-slate-100 focus:outline-none cursor-pointer"
+                      />
+                      <button 
+                        onClick={() => {
+                          const times = mapping.scheduledTime.split(',').filter((_: any, i: number) => i !== idx);
+                          updateScheduleTime(mapping.id, times.length > 0 ? times.join(',') : '00:00');
+                        }}
+                        className="text-slate-400 hover:text-rose-400 p-0.5 rounded transition-colors cursor-pointer"
+                        title="Remove this slot"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <button 
+                    onClick={() => {
+                      const times = mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [];
+                      times.push('12:00');
+                      updateScheduleTime(mapping.id, times.join(','));
+                    }}
+                    className="flex items-center gap-1 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-white transition cursor-pointer shadow-sm" 
+                    title="Add another time"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    <span>Add</span>
+                  </button>
+                </div>
+
+                {/* Videos / Slot Quota (Cleanly integrated on the right) */}
+                <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 md:border-l border-slate-700/60 pt-2.5 md:pt-0 md:pl-4">
+                  <span className="text-xs font-semibold text-purple-300 whitespace-nowrap">Videos / Slot:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={mapping.videosPerDay || 1}
+                    onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value) || 1)}
+                    className="bg-slate-950 border border-purple-500/40 focus:border-purple-400 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none w-14 text-center font-bold shadow-sm"
+                  />
+                </div>
               </div>
 
               {/* Bottom Strip: Custom Hashtags per Page */}
