@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { Clock, RotateCw } from 'lucide-react';
 import ToastContainer, { ToastMessage } from '@/components/Toast';
 import ConfirmModal from '@/components/ConfirmModal';
 
@@ -213,101 +214,119 @@ export default function MappingsPage() {
         ) : (
           mappings.map(mapping => (
             <div key={mapping.id} className="p-5 bg-gray-800/40 border border-gray-700/50 rounded-2xl hover:bg-gray-800/60 hover:border-gray-600/70 transition-all mb-4 last:mb-0 shadow-lg shadow-black/20">
-              {/* Top Row: Source -> Destination, Schedule, Quota, Actions */}
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-6">
-                  <div className="text-center w-32">
-                    <span className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Source</span>
-                    <span className="font-bold text-white truncate block text-sm">{mapping.source?.name || 'Unknown'}</span>
-                    <span className="block text-[11px] text-gray-500 mt-0.5">{mapping.source?.platform}</span>
+              {/* Top Row: Structured 4-Zone Header in Perfect Sequence */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                
+                {/* Zone 1: Route Pipeline (Source -> Destination) */}
+                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                  <div className="w-36 min-w-[135px]">
+                    <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Source</span>
+                    <span className="font-bold text-white truncate block text-sm leading-tight" title={mapping.source?.name}>{mapping.source?.name || 'Unknown'}</span>
+                    <span className="inline-block text-[10px] font-medium text-slate-400 bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-700/60 mt-1 uppercase tracking-wide">{mapping.source?.platform}</span>
                   </div>
-                  <div className="text-purple-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  
+                  <div className="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                   </div>
-                  <div className="text-center w-32">
-                    <span className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Destination</span>
-                    <span className="font-bold text-[#1877F2] truncate block text-sm">{mapping.facebookPage?.name || 'Unknown'}</span>
-                    <span className="block text-[11px] text-gray-500 mt-0.5">Facebook Page</span>
+                  
+                  <div className="w-36 min-w-[135px]">
+                    <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Destination</span>
+                    <span className="font-bold text-[#1877F2] truncate block text-sm leading-tight" title={mapping.facebookPage?.name}>{mapping.facebookPage?.name || 'Unknown'}</span>
+                    <span className="inline-block text-[10px] font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 mt-1">Facebook Page</span>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-6 flex-wrap">
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs font-semibold text-gray-400 mb-1">Schedule (PKT)</span>
-                    <div className="flex flex-wrap items-center gap-1 max-w-[200px] justify-center">
-                      {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [] as string[]).map((t: string, idx: number) => (
-                        <div key={idx} className="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-lg px-2 py-1">
-                          <input 
-                            type="time"
-                            value={t.trim()}
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                const times = mapping.scheduledTime.split(',');
-                                times[idx] = e.target.value;
-                                updateScheduleTime(mapping.id, times.join(','));
-                              }
-                            }}
-                            className="bg-transparent text-xs text-white focus:outline-none w-auto"
-                          />
-                          <button 
-                            onClick={() => {
-                              const times = mapping.scheduledTime.split(',').filter((_: any, i: number) => i !== idx);
-                              updateScheduleTime(mapping.id, times.length > 0 ? times.join(',') : '00:00');
-                            }}
-                            className="text-gray-500 hover:text-red-400 p-0.5 rounded transition cursor-pointer"
-                            title="Remove this slot"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                          </button>
-                        </div>
-                      ))}
-                      <button 
-                        onClick={() => {
-                          const times = mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [];
-                          times.push('12:00');
-                          updateScheduleTime(mapping.id, times.join(','));
-                        }}
-                        className="flex items-center gap-1 bg-gray-900 hover:bg-gray-750 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-400 hover:text-white transition cursor-pointer" 
-                        title="Add another time"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                        Add
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-purple-400 mb-1 font-semibold">Videos / Slot</span>
+                {/* Zone 2: Schedule Timers in Sequence */}
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Schedule (PKT)</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [] as string[]).map((t: string, idx: number) => (
+                      <div key={idx} className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 hover:border-slate-600 rounded-xl px-2.5 py-1.5 shadow-sm">
+                        <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <input 
+                          type="time"
+                          value={t.trim()}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const times = mapping.scheduledTime.split(',');
+                              times[idx] = e.target.value;
+                              updateScheduleTime(mapping.id, times.join(','));
+                            }
+                          }}
+                          className="bg-transparent text-xs font-semibold text-slate-100 focus:outline-none cursor-pointer"
+                        />
+                        <button 
+                          onClick={() => {
+                            const times = mapping.scheduledTime.split(',').filter((_: any, i: number) => i !== idx);
+                            updateScheduleTime(mapping.id, times.length > 0 ? times.join(',') : '00:00');
+                          }}
+                          className="text-slate-500 hover:text-rose-400 p-0.5 rounded transition-colors cursor-pointer"
+                          title="Remove this slot"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      onClick={() => {
+                        const times = mapping.scheduledTime && mapping.scheduledTime !== '00:00' ? mapping.scheduledTime.split(',') : [];
+                        times.push('12:00');
+                        updateScheduleTime(mapping.id, times.join(','));
+                      }}
+                      className="flex items-center gap-1 bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700 hover:border-slate-600 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white transition cursor-pointer shadow-sm" 
+                      title="Add another time"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                      <span>Add</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Zone 3: Videos / Slot Quota */}
+                <div className="flex flex-col items-start shrink-0">
+                  <span className="text-[11px] font-semibold text-purple-400 uppercase tracking-wider mb-1.5">Videos / Slot</span>
+                  <div>
                     <input
                       type="number"
                       min="1"
                       max="100"
                       value={mapping.videosPerDay || 1}
                       onChange={(e) => updateVideosPerDay(mapping.id, parseInt(e.target.value) || 1)}
-                      className="bg-gray-900 border border-purple-500/30 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500 w-14 text-center font-bold"
+                      className="bg-slate-900/90 border border-purple-500/30 focus:border-purple-500 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none w-16 text-center font-bold shadow-sm"
                     />
                   </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
-                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                      <span className="text-xs font-bold text-green-400">ACTIVE</span>
-                    </div>
-                    <button 
-                      onClick={() => testMapping(mapping.id)} 
-                      disabled={testingId === mapping.id}
-                      className="text-blue-400 hover:text-blue-300 text-xs font-semibold px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {testingId === mapping.id ? 'Testing...' : 'Test'}
-                    </button>
-                    <button 
-                      onClick={() => setDeleteConfirmId(mapping.id)} 
-                      className="text-red-400 hover:text-red-300 text-xs font-semibold px-2 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-all cursor-pointer"
-                    >
-                      Remove
-                    </button>
-                  </div>
                 </div>
+                
+                {/* Zone 4: Status & Actions (Aligned on the Right) */}
+                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 self-start lg:self-center">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl shadow-sm shadow-emerald-500/5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                    <span className="text-xs font-bold text-emerald-400 tracking-wider">ACTIVE</span>
+                  </div>
+                  
+                  <button 
+                    onClick={() => testMapping(mapping.id)} 
+                    disabled={testingId === mapping.id}
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded-xl text-xs font-semibold transition-all shadow-sm shadow-blue-500/5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {testingId === mapping.id ? (
+                      <>
+                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Testing...</span>
+                      </>
+                    ) : (
+                      <span>Test</span>
+                    )}
+                  </button>
+                  
+                  <button 
+                    onClick={() => setDeleteConfirmId(mapping.id)} 
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-rose-600/15 hover:bg-rose-600/25 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all shadow-sm shadow-rose-500/5 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+
               </div>
 
               {/* Bottom Strip: Custom Hashtags per Page */}
