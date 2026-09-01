@@ -814,10 +814,15 @@ export class SyncService {
         cloudSource = await this.prisma.source.create({
           data: {
             platform: 'MEGA_CLOUD',
-            name: `Cloud Upload`,
+            name: `Cloud Upload (${page.name})`,
             url: `cloud://${page.pageId}`,
             userId: page.userId,
           }
+        });
+      } else if (cloudSource.name === 'Cloud Upload') {
+        cloudSource = await this.prisma.source.update({
+          where: { id: cloudSource.id },
+          data: { name: `Cloud Upload (${page.name})` }
         });
       }
 

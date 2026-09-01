@@ -6,8 +6,15 @@ export class HistoryService {
   constructor(private prisma: PrismaService) {}
 
   findAll(user?: any) {
+    const notCloudQueue = {
+      NOT: {
+        facebookPostId: 'MEGA_CLOUD_UPLOAD'
+      }
+    };
+
     if (!user || user.role === 'ADMIN') {
       return this.prisma.uploadHistory.findMany({
+        where: notCloudQueue,
         take: 300,
         include: {
           video: {
@@ -22,9 +29,14 @@ export class HistoryService {
     }
     return this.prisma.uploadHistory.findMany({
       where: {
-        OR: [
-          { video: { source: { userId: user.id } } },
-          { facebookPage: { userId: user.id } }
+        AND: [
+          notCloudQueue,
+          {
+            OR: [
+              { video: { source: { userId: user.id } } },
+              { facebookPage: { userId: user.id } }
+            ]
+          }
         ]
       },
       take: 300,
