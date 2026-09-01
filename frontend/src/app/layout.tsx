@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -9,10 +9,10 @@ const plusJakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-const inter = Inter({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-inter",
+  variable: "--font-jetbrains-mono",
   display: "swap",
 });
 
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`h-full antialiased ${plusJakarta.className} ${inter.variable}`}>
+    <html lang="en" className={`h-full antialiased ${plusJakarta.variable} ${jetbrainsMono.variable} font-sans`}>
       <body className="min-h-full flex flex-col bg-[#080C14] text-slate-100 font-sans tracking-normal">{children}</body>
     </html>
   );

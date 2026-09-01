@@ -84,13 +84,13 @@ export default function DashboardLayout({
       {/* Ultra-Modern HD Sidebar */}
       <aside className="w-64 bg-slate-900/95 backdrop-blur-2xl border-r border-slate-800/80 flex flex-col justify-between overflow-hidden shrink-0 shadow-2xl z-20">
         <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Logo Container */}
-          <div className="w-full h-24 mb-2 border-b border-slate-800/80 flex items-center justify-center bg-slate-950/80 px-4 overflow-hidden shrink-0">
+          {/* Logo Container (Enlarged to fit perfectly) */}
+          <div className="w-full h-28 mb-2 border-b border-slate-800/80 flex items-center justify-center bg-slate-950/90 px-3 overflow-hidden shrink-0">
             <Link href="/dashboard" className="w-full h-full flex items-center justify-center focus:outline-none">
               <img 
                 src="/logo.png" 
                 alt="AutoPost by NOOR Ali" 
-                className="w-full h-full max-w-[220px] object-contain transform scale-[1.35] drop-shadow-md transition-transform duration-200 hover:scale-[1.4]" 
+                className="w-full h-full max-w-[245px] object-contain transform scale-[1.65] drop-shadow-lg transition-transform duration-200 hover:scale-[1.7]" 
               />
             </Link>
           </div>

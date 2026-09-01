@@ -1,5 +1,18 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { 
+  Activity, 
+  Layers, 
+  Globe, 
+  CheckCircle2, 
+  AlertCircle, 
+  Clock, 
+  ExternalLink, 
+  RotateCw, 
+  Trash2, 
+  Terminal, 
+  AlertTriangle 
+} from 'lucide-react';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -150,45 +163,44 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex justify-between items-center mb-8">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Dashboard Overview</h1>
-          <p className="text-gray-400 mt-1">Live metrics and real-time activity across all connected channels.</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Dashboard Overview</h1>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">Live metrics, real-time activity and automation pipelines.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-2.5">
           <button 
             onClick={handleClearFailed}
             disabled={isClearing}
-            className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-800/50 rounded-xl text-sm font-medium text-red-300 hover:text-red-200 transition-all flex items-center gap-2"
+            className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            {isClearing ? 'Clearing...' : 'Clear Failed Logs'}
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{isClearing ? 'Clearing...' : 'Clear Failed Logs'}</span>
           </button>
           <button 
             onClick={() => { setLoading(true); fetchDashboardData(); }}
-            className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700 rounded-xl text-sm font-medium text-gray-300 hover:text-white transition-all flex items-center gap-2"
+            className="px-3.5 py-2 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
           >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh Stats
+            <RotateCw className={`w-3.5 h-3.5 text-blue-400 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Stats</span>
           </button>
         </div>
       </div>
 
+      {/* Low Cloud Queue Warning Banner */}
       {lowQueuePages.length > 0 && (
-        <div className="mb-6 px-4 py-3 bg-red-950/30 border border-red-500/30 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg shadow-red-950/20">
+        <div className="px-4 py-3 bg-gradient-to-r from-rose-950/40 via-red-950/30 to-rose-950/40 border border-rose-500/30 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg shadow-rose-950/20">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-1.5 bg-red-500/20 rounded-lg shrink-0 text-red-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+            <div className="p-1.5 bg-rose-500/20 rounded-lg shrink-0 text-rose-400">
+              <AlertTriangle className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider">Low Cloud Queue Warning</h3>
-                <span className="hidden sm:inline text-gray-500 text-xs">•</span>
-                <p className="hidden sm:inline text-red-300/80 text-xs truncate">
+                <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Low Cloud Queue Warning</h3>
+                <span className="hidden sm:inline text-slate-500 text-xs">•</span>
+                <p className="hidden sm:inline text-rose-300/80 text-xs truncate">
                   Upload new videos to avoid missing scheduled posts.
                 </p>
               </div>
@@ -197,9 +209,9 @@ export default function Dashboard() {
           
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {lowQueuePages.map(page => (
-              <div key={page.id} className="bg-red-900/30 border border-red-500/30 rounded-lg px-2.5 py-1 flex items-center gap-2 text-xs">
+              <div key={page.id} className="bg-rose-900/30 border border-rose-500/30 rounded-xl px-2.5 py-1 flex items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-200 truncate max-w-[150px]">{page.name}</span>
-                <span className="font-bold px-1.5 py-0.5 bg-red-500/25 text-red-400 rounded text-[10px] whitespace-nowrap">
+                <span className="font-mono font-bold px-1.5 py-0.5 bg-rose-500/25 text-rose-400 rounded-md text-[10px] whitespace-nowrap">
                   {page.cloudQueueCount} left
                 </span>
               </div>
@@ -208,119 +220,147 @@ export default function Dashboard() {
         </div>
       )}
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
-          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-blue-500/10 blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
-          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
-            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-            Total Sources
-          </p>
-          <p className="text-4xl font-black text-white mt-3 tracking-tight">
+      {/* 4 Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Card 1: Total Sources */}
+        <div className="relative overflow-hidden p-5 bg-slate-900/60 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-xl hover:border-slate-700 transition-all group">
+          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 rounded-full bg-slate-500/10 blur-2xl group-hover:bg-slate-500/20 transition-all"></div>
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Sources</span>
+            <div className="p-2 bg-slate-800/80 rounded-xl text-slate-400 group-hover:text-white transition-colors">
+              <Layers className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-3xl sm:text-4xl font-extrabold text-white mt-3 font-mono tracking-tight">
             {loading ? <span className="animate-pulse opacity-50">...</span> : stats.totalSources}
           </p>
         </div>
 
-        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
-          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-blue-500/10 blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
-          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
-            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-            Connected FB Pages
-          </p>
-          <p className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-300 mt-3 tracking-tight">
+        {/* Card 2: Connected FB Pages */}
+        <div className="relative overflow-hidden p-5 bg-slate-900/60 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-xl hover:border-blue-500/40 transition-all group">
+          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 rounded-full bg-blue-500/15 blur-2xl group-hover:bg-blue-500/25 transition-all"></div>
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Connected FB Pages</span>
+            <div className="p-2 bg-blue-500/15 rounded-xl text-blue-400 group-hover:text-blue-300 transition-colors">
+              <Globe className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-300 mt-3 font-mono tracking-tight">
             {loading ? <span className="animate-pulse opacity-50 text-blue-400">...</span> : stats.connectedPages}
           </p>
         </div>
 
-        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
-          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-green-500/10 blur-3xl group-hover:bg-green-500/20 transition-all"></div>
-          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
-            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            Successful Uploads
-          </p>
-          <p className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-300 mt-3 tracking-tight">
-            {loading ? <span className="animate-pulse opacity-50 text-green-400">...</span> : stats.successfulUploads}
+        {/* Card 3: Successful Uploads */}
+        <div className="relative overflow-hidden p-5 bg-slate-900/60 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-xl hover:border-emerald-500/40 transition-all group">
+          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 rounded-full bg-emerald-500/15 blur-2xl group-hover:bg-emerald-500/25 transition-all"></div>
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Successful Uploads</span>
+            <div className="p-2 bg-emerald-500/15 rounded-xl text-emerald-400 group-hover:text-emerald-300 transition-colors">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 mt-3 font-mono tracking-tight">
+            {loading ? <span className="animate-pulse opacity-50 text-emerald-400">...</span> : stats.successfulUploads}
           </p>
         </div>
 
-        <div className="relative overflow-hidden p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-3xl shadow-2xl hover:border-gray-700 transition-all group">
-          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-red-500/10 blur-3xl group-hover:bg-red-500/20 transition-all"></div>
-          <p className="text-gray-400 text-sm font-medium flex items-center gap-2">
-            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            Failed Uploads
-          </p>
-          <p className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-red-400 to-rose-400 mt-3 tracking-tight">
-            {loading ? <span className="animate-pulse opacity-50 text-red-400">...</span> : stats.failedUploads}
+        {/* Card 4: Failed Uploads */}
+        <div className="relative overflow-hidden p-5 bg-slate-900/60 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-xl hover:border-rose-500/40 transition-all group">
+          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 rounded-full bg-rose-500/15 blur-2xl group-hover:bg-rose-500/25 transition-all"></div>
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Failed Uploads</span>
+            <div className="p-2 bg-rose-500/15 rounded-xl text-rose-400 group-hover:text-rose-300 transition-colors">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-red-400 mt-3 font-mono tracking-tight">
+            {loading ? <span className="animate-pulse opacity-50 text-rose-400">...</span> : stats.failedUploads}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-gray-900/60 backdrop-blur-xl border border-gray-800 rounded-2xl p-6 shadow-xl flex flex-col h-full">
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center justify-between">
-            <span>Recent Uploads</span>
-            <span className="text-xs font-normal px-2.5 py-1 bg-gray-800 rounded-full text-gray-400">Latest 5</span>
-          </h2>
+      {/* Grid: Recent Uploads & System Logs */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
+        {/* Recent Uploads Card */}
+        <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col h-full">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/70">
+            <div className="flex items-center gap-2.5">
+              <Activity className="w-4 h-4 text-blue-400" />
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">Recent Uploads</h2>
+            </div>
+            <span className="text-[11px] font-mono font-medium px-2 py-0.5 bg-slate-800/80 border border-slate-700/60 rounded-md text-slate-400">
+              Latest 5
+            </span>
+          </div>
+
           {loading ? (
-            <div className="text-center py-12 text-gray-500 animate-pulse flex-1 flex items-center justify-center">Loading recent activity...</div>
+            <div className="text-center py-16 text-slate-500 animate-pulse flex-1 flex items-center justify-center font-medium text-xs">
+              Loading recent activity...
+            </div>
           ) : recentUploads.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 border border-dashed border-gray-800 rounded-xl flex-1 flex items-center justify-center">
-              No uploads yet.
+            <div className="text-center py-16 text-slate-500 border border-dashed border-slate-800 rounded-2xl flex-1 flex items-center justify-center text-xs">
+              No uploads recorded yet.
             </div>
           ) : (
-            <div className="space-y-3.5 mt-2 flex-1">
+            <div className="space-y-3 flex-1">
               {recentUploads.map(item => (
-                <div key={item.id} className="flex flex-col p-3.5 bg-gray-800/40 hover:bg-gray-800/70 rounded-xl border border-gray-700/50 transition-all">
-                  <div className="flex items-start justify-between w-full">
-                    <div className="min-w-0 flex-1 mr-4">
-                      <p className="font-semibold text-white text-sm truncate">
+                <div key={item.id} className="p-3.5 bg-slate-800/40 hover:bg-slate-800/70 rounded-2xl border border-slate-700/50 transition-all shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-slate-100 text-sm truncate leading-snug">
                         {item.video?.title || 'Unknown Video'}
                       </p>
-                      <div className="flex flex-col text-xs mt-1.5 space-y-1">
-                        <div className="flex items-center">
-                          <span className="text-gray-400">Action:</span>
-                          <span className={`font-semibold ml-1.5 ${item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'text-purple-400' : 'text-green-400'}`}>
-                            {item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'Uploaded to Cloud' : 'Posted to Facebook'}
-                          </span>
-                          <span className="text-gray-600 mx-2">&bull;</span>
-                          <span className="text-gray-400">{item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'Queue:' : 'Page:'}</span>
-                          <span className="font-semibold text-blue-400 ml-1.5 truncate max-w-[150px]">{item.facebookPage?.name || 'Unknown'}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <span className="text-gray-400">Source:</span>
-                          <span className="font-medium text-gray-300 ml-1.5 truncate max-w-[200px]">
-                            {item.video?.source?.platform === 'MEGA_CLOUD' ? 'Cloud Queue' : item.video?.source?.platform}
-                            {item.video?.source?.name ? ` (${item.video.source.name})` : ''}
-                          </span>
-                        </div>
+                      
+                      <div className="flex items-center gap-2 flex-wrap mt-2">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                          item.facebookPostId === 'MEGA_CLOUD_UPLOAD' 
+                            ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' 
+                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        }`}>
+                          {item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? '☁️ Cloud Queue' : 'Posted to Facebook'}
+                        </span>
+                        
+                        <span className="text-[11px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md truncate max-w-[140px]">
+                          📘 {item.facebookPage?.name || 'Unknown'}
+                        </span>
+
+                        <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-500" />
+                          {new Date(item.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        {new Date(item.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                      </p>
                     </div>
-                    <div className="flex flex-col items-end space-y-2">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap uppercase tracking-wider ${
+
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <div className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold whitespace-nowrap uppercase tracking-wider flex items-center gap-1.5 ${
                         item.status === 'COMPLETED' || item.status === 'SUCCESS'
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
                           : item.status === 'FAILED' || item.status === 'ERROR'
-                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
                       }`}>
-                        {item.status === 'COMPLETED' ? 'SUCCESS' : item.status}
-                      </span>
+                        <div className={`w-1.5 h-1.5 rounded-full ${
+                          item.status === 'COMPLETED' || item.status === 'SUCCESS' ? 'bg-emerald-400' : 'bg-rose-400'
+                        }`} />
+                        <span>{item.status === 'COMPLETED' ? 'SUCCESS' : item.status}</span>
+                      </div>
+
                       {(item.status === 'COMPLETED' || item.status === 'SUCCESS') && item.facebookPostId && item.facebookPostId !== 'MEGA_CLOUD_UPLOAD' && (
                         <a 
                           href={`https://facebook.com/${item.facebookPostId}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20"
+                          className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-lg border border-blue-500/20 shadow-sm"
                         >
-                          View Post <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          <span>View Post</span>
+                          <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
                     </div>
                   </div>
+
                   {(item.status === 'FAILED' || item.status === 'ERROR') && item.errorMessage && (
-                    <div className="mt-2 text-xs text-red-400/90 bg-red-500/10 p-2 rounded-lg border border-red-500/10 line-clamp-2">
+                    <div className="mt-2.5 text-xs text-rose-300 font-mono bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20 line-clamp-2">
                       Error: {item.errorMessage}
                     </div>
                   )}
@@ -330,40 +370,55 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl overflow-hidden shadow-xl flex flex-col font-mono text-sm h-[400px]">
-          <div className="bg-gray-900/80 px-4 py-3 border-b border-gray-800 flex gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <div className="ml-auto flex items-center gap-2">
+        {/* macOS Terminal-Style System Logs */}
+        <div className="bg-[#07090E] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[440px]">
+          {/* Terminal Window Header */}
+          <div className="bg-slate-900/90 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-rose-500/80 border border-rose-600"></div>
+              <div className="w-3 h-3 rounded-full bg-amber-500/80 border border-amber-600"></div>
+              <div className="w-3 h-3 rounded-full bg-emerald-500/80 border border-emerald-600"></div>
+              <div className="flex items-center gap-1.5 ml-3 text-xs font-mono font-bold text-slate-400">
+                <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                <span>stdout / stream</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="text-xs text-green-500 font-bold">SYSTEM LOGS</span>
+              <span className="text-[11px] text-emerald-400 font-mono font-bold tracking-wider">LIVE LOGS</span>
             </div>
           </div>
-          <div className="p-4 flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+
+          {/* Terminal Content Area */}
+          <div className="p-4 flex-1 overflow-y-auto space-y-2 font-mono text-[12px] leading-relaxed custom-scrollbar">
             {loading && logs.length === 0 ? (
-              <div className="text-gray-500 text-center py-10">Loading live logs...</div>
+              <div className="text-slate-500 text-center py-12">Loading live logs...</div>
             ) : logs.length === 0 ? (
-              <div className="text-gray-500 text-center py-10">No system logs recorded yet.</div>
+              <div className="text-slate-500 text-center py-12">No system logs recorded yet.</div>
             ) : (
               logs.map((log: any) => (
-                <div key={log.id} className="flex gap-3 text-xs">
-                  <span className="text-gray-600 shrink-0">[{new Date(log.createdAt).toLocaleTimeString()}]</span>
-                  <span className={`shrink-0 font-bold ${
-                    log.level === 'INFO' ? 'text-blue-400' :
-                    log.level === 'WARN' ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
-                    [{log.level}]
+                <div key={log.id} className="flex gap-2.5 items-start">
+                  <span className="text-slate-500 shrink-0 font-mono text-[11px]">
+                    [{new Date(log.createdAt).toLocaleTimeString()}]
                   </span>
-                  <span className="text-gray-300 break-words">{log.message}</span>
+                  <span className={`shrink-0 font-bold font-mono text-[10px] px-1.5 py-0.2 rounded border ${
+                    log.level === 'INFO' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                    log.level === 'WARN' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 
+                    'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {log.level}
+                  </span>
+                  <span className="text-slate-200 break-words font-mono text-[12px]">{log.message}</span>
                 </div>
               ))
             )}
-            <div className="flex gap-4 animate-pulse mt-4 text-xs">
-              <span className="text-gray-600">[Waiting for new events...]</span>
+            <div className="flex items-center gap-2 text-slate-500 mt-3 pt-2 border-t border-slate-900 text-[11px] font-mono">
+              <span className="inline-block w-2 h-4 bg-emerald-400 animate-pulse"></span>
+              <span>listening to backend worker events...</span>
             </div>
           </div>
         </div>
