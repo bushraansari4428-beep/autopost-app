@@ -302,36 +302,16 @@ export default function Dashboard() {
               No uploads recorded yet.
             </div>
           ) : (
-            <div className="space-y-3 flex-1">
+            <div className="space-y-3.5 flex-1">
               {recentUploads.map(item => (
-                <div key={item.id} className="p-3.5 bg-slate-800/40 hover:bg-slate-800/70 rounded-2xl border border-slate-700/50 transition-all shadow-sm">
+                <div key={item.id} className="p-4 bg-slate-800/40 hover:bg-slate-800/70 rounded-2xl border border-slate-700/50 transition-all shadow-sm flex flex-col gap-2.5">
+                  {/* Top: Video Title & Status / View Post */}
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-slate-100 text-sm truncate leading-snug">
-                        {item.video?.title || 'Unknown Video'}
-                      </p>
-                      
-                      <div className="flex items-center gap-2 flex-wrap mt-2">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
-                          item.facebookPostId === 'MEGA_CLOUD_UPLOAD' 
-                            ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' 
-                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        }`}>
-                          {item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? '☁️ Cloud Queue' : 'Posted to Facebook'}
-                        </span>
-                        
-                        <span className="text-[11px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md truncate max-w-[140px]">
-                          📘 {item.facebookPage?.name || 'Unknown'}
-                        </span>
-
-                        <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-500" />
-                          {new Date(item.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-2 shrink-0">
+                    <p className="font-bold text-slate-100 text-sm leading-snug break-words flex-1">
+                      {item.video?.title || 'Unknown Video'}
+                    </p>
+                    
+                    <div className="flex items-center gap-2 shrink-0">
                       <div className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold whitespace-nowrap uppercase tracking-wider flex items-center gap-1.5 ${
                         item.status === 'COMPLETED' || item.status === 'SUCCESS'
                           ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
@@ -359,8 +339,39 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {/* Middle: Complete Details (Action, Destination Page, Source Origin) */}
+                  <div className="flex flex-col text-xs space-y-1.5 bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/40">
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                      <span className="text-slate-400 font-medium">Action:</span>
+                      <span className={`font-semibold ${item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'text-purple-400' : 'text-emerald-400'}`}>
+                        {item.facebookPostId === 'MEGA_CLOUD_UPLOAD' ? 'Uploaded to Cloud' : 'Posted to Facebook'}
+                      </span>
+                      <span className="text-slate-600 hidden sm:inline">&bull;</span>
+                      <span className="text-slate-400 font-medium">Page:</span>
+                      <span className="font-semibold text-blue-400">
+                        {item.facebookPage?.name || 'Unknown'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                      <span className="text-slate-400 font-medium">Source:</span>
+                      <span className="font-semibold text-slate-200">
+                        {item.video?.source?.platform === 'MEGA_CLOUD' ? 'Cloud Queue' : item.video?.source?.platform}
+                        {item.video?.source?.name ? ` (${item.video.source.name})` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bottom: Date & Time */}
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{new Date(item.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                    </div>
+                  </div>
+
                   {(item.status === 'FAILED' || item.status === 'ERROR') && item.errorMessage && (
-                    <div className="mt-2.5 text-xs text-rose-300 font-mono bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20 line-clamp-2">
+                    <div className="mt-1 text-xs text-rose-300 font-mono bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20 line-clamp-2">
                       Error: {item.errorMessage}
                     </div>
                   )}
@@ -378,10 +389,6 @@ export default function Dashboard() {
               <div className="w-3 h-3 rounded-full bg-rose-500/80 border border-rose-600"></div>
               <div className="w-3 h-3 rounded-full bg-amber-500/80 border border-amber-600"></div>
               <div className="w-3 h-3 rounded-full bg-emerald-500/80 border border-emerald-600"></div>
-              <div className="flex items-center gap-1.5 ml-3 text-xs font-mono font-bold text-slate-400">
-                <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                <span>stdout / stream</span>
-              </div>
             </div>
             
             <div className="flex items-center gap-2">
