@@ -2,6 +2,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { 
+  LayoutDashboard, 
+  Layers, 
+  Globe, 
+  Workflow, 
+  CloudUpload, 
+  History, 
+  Users, 
+  Settings, 
+  User, 
+  LogOut,
+  Sparkles
+} from 'lucide-react';
 
 export default function DashboardLayout({
   children,
@@ -53,69 +66,81 @@ export default function DashboardLayout({
   }, []);
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Sources', href: '/dashboard/sources' },
-    { name: 'Facebook Pages', href: '/dashboard/pages' },
-    { name: 'Mappings', href: '/dashboard/mappings' },
-    { name: 'Upload to Cloud', href: '/dashboard/upload' },
-    { name: 'Upload History', href: '/dashboard/history' },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Sources', href: '/dashboard/sources', icon: Layers },
+    { name: 'Facebook Pages', href: '/dashboard/pages', icon: Globe },
+    { name: 'Mappings', href: '/dashboard/mappings', icon: Workflow },
+    { name: 'Upload to Cloud', href: '/dashboard/upload', icon: CloudUpload },
+    { name: 'Upload History', href: '/dashboard/history', icon: History },
   ];
 
   const adminItems = [
-    { name: 'Users', href: '/dashboard/users' },
-    { name: 'Settings', href: '/dashboard/settings' },
+    { name: 'Users', href: '/dashboard/users', icon: Users },
+    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100 font-sans overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col justify-between overflow-hidden shrink-0 shadow-lg z-20">
+    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+      {/* Ultra-Modern HD Sidebar */}
+      <aside className="w-64 bg-slate-900/95 backdrop-blur-2xl border-r border-slate-800/80 flex flex-col justify-between overflow-hidden shrink-0 shadow-2xl z-20">
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Logo Container */}
-          <div className="w-full h-28 mb-3 border-b border-gray-800 flex items-center justify-center bg-[#05070c] px-4 overflow-hidden shrink-0">
+          <div className="w-full h-24 mb-2 border-b border-slate-800/80 flex items-center justify-center bg-slate-950/80 px-4 overflow-hidden shrink-0">
             <Link href="/dashboard" className="w-full h-full flex items-center justify-center focus:outline-none">
               <img 
                 src="/logo.png" 
                 alt="AutoPost by NOOR Ali" 
-                className="w-full h-full max-w-[240px] object-contain transform scale-[1.5] drop-shadow-lg transition-transform duration-200 hover:scale-[1.55]" 
+                className="w-full h-full max-w-[220px] object-contain transform scale-[1.35] drop-shadow-md transition-transform duration-200 hover:scale-[1.4]" 
               />
             </Link>
           </div>
 
           {/* Navigation Links */}
-          <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 custom-scrollbar">
+          <nav className="flex-1 overflow-y-auto px-3.5 py-2 space-y-1 custom-scrollbar">
             {navItems.map((item) => {
+              const Icon = item.icon;
               const isActive = pathname === item.href;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`block px-4 py-2.5 rounded-xl font-bold tracking-wide transition-colors duration-150 ${
+                  className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-sm tracking-wide transition-all duration-200 ${
                     isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                      : 'text-gray-300 hover:text-white hover:bg-gray-800/80'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 border border-blue-400/25'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
                   }`}
                 >
-                  {item.name}
+                  <Icon className={`w-4.5 h-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-400'
+                  }`} />
+                  <span>{item.name}</span>
                 </Link>
               );
             })}
 
             {role === 'ADMIN' && (
-              <div className="pt-3 mt-3 border-t border-gray-800/80 space-y-1.5">
+              <div className="pt-3 mt-3 border-t border-slate-800/80 space-y-1">
+                <div className="px-3 pb-1 flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Admin Controls</span>
+                </div>
                 {adminItems.map((item) => {
+                  const Icon = item.icon;
                   const isActive = pathname === item.href;
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`block px-4 py-2.5 rounded-xl font-bold tracking-wide transition-colors duration-150 ${
+                      className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-sm tracking-wide transition-all duration-200 ${
                         isActive
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                          : 'text-gray-300 hover:text-white hover:bg-gray-800/80'
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 border border-blue-400/25'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
                       }`}
                     >
-                      {item.name}
+                      <Icon className={`w-4.5 h-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                        isActive ? 'text-white' : 'text-slate-400 group-hover:text-amber-400'
+                      }`} />
+                      <span>{item.name}</span>
                     </Link>
                   );
                 })}
@@ -125,29 +150,39 @@ export default function DashboardLayout({
         </div>
 
         {/* Profile and Logout Section */}
-        <div className="p-4 border-t border-gray-800 shrink-0 space-y-2">
+        <div className="p-3 border-t border-slate-800/80 shrink-0 space-y-1 bg-slate-950/40">
           <Link 
             href="/dashboard/profile"
-            className={`block w-full px-4 py-2.5 rounded-xl font-bold tracking-wide transition-colors text-left ${
+            className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-sm tracking-wide transition-all duration-200 ${
               pathname === '/dashboard/profile'
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20'
-                : 'text-gray-300 hover:text-white hover:bg-gray-800/80'
+                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
             }`}
           >
-            My Cloud Profile
+            <div className="flex items-center gap-3">
+              <User className={`w-4.5 h-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                pathname === '/dashboard/profile' ? 'text-blue-400' : 'text-slate-400 group-hover:text-blue-400'
+              }`} />
+              <span>My Cloud Profile</span>
+            </div>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 uppercase tracking-wide border border-slate-700/60">
+              {role}
+            </span>
           </Link>
+
           <Link 
             href="/" 
             onClick={() => localStorage.removeItem('token')}
-            className="block w-full px-4 py-2.5 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 font-bold tracking-wide transition-colors text-left"
+            className="group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-semibold text-sm tracking-wide transition-all duration-200"
           >
-            Logout
+            <LogOut className="w-4.5 h-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110 text-rose-400" />
+            <span>Logout</span>
           </Link>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-10 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 custom-scrollbar">
+      <main className="flex-1 overflow-y-auto p-8 sm:p-10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 custom-scrollbar">
         {children}
       </main>
     </div>
