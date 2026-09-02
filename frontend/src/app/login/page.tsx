@@ -55,11 +55,11 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-950 to-black flex items-center justify-center p-4">
       <div className="max-w-md w-full animate-in fade-in zoom-in-95 duration-500">
         <div className="bg-[#000000] border-2 border-gray-800/80 p-8 rounded-3xl shadow-2xl shadow-blue-500/10">
-          <div className="text-center mb-8 flex flex-col items-center justify-center overflow-hidden py-2 bg-[#000000]">
+          <div className="text-center mb-6 flex flex-col items-center justify-center overflow-hidden py-4 bg-[#000000]">
             <img 
               src="/logo.png" 
               alt="AutoPost by NOOR Ali" 
-              className="w-80 h-28 object-contain transform scale-[1.4] my-2 mix-blend-lighten drop-shadow-2xl hover:scale-[1.45] transition-transform" 
+              className="w-full max-w-[340px] h-36 object-contain transform scale-[1.95] mix-blend-lighten drop-shadow-2xl hover:scale-[2.0] transition-transform duration-200" 
             />
           </div>
 
