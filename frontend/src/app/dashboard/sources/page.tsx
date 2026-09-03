@@ -95,23 +95,44 @@ export default function SourcesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (platform === 'TIKTOK' && url && !url.toLowerCase().includes('tiktok.com')) {
-      setErrorMsg('Invalid URL for TikTok. Please enter a valid TikTok profile URL.');
-      return;
+    const lowerUrl = (url || '').toLowerCase();
+    
+    // Cross-platform mismatch prevention
+    if (platform === 'TIKTOK') {
+      if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || lowerUrl.includes('instagram.com')) {
+        setErrorMsg('Mismatched Platform: You selected TikTok, but entered a link from YouTube/Instagram.');
+        return;
+      }
+      if (!lowerUrl.includes('tiktok.com') && !lowerUrl.startsWith('@')) {
+        setErrorMsg('Invalid URL for TikTok. Please enter a valid TikTok profile URL (e.g. https://www.tiktok.com/@username).');
+        return;
+      }
     }
-    if (platform === 'INSTAGRAM' && url && !url.toLowerCase().includes('instagram.com')) {
-      setErrorMsg('Invalid URL for Instagram. Please enter a valid Instagram profile URL.');
-      return;
+    if (platform === 'YOUTUBE') {
+      if (lowerUrl.includes('tiktok.com') || lowerUrl.includes('instagram.com') || lowerUrl.includes('xiaohongshu.com')) {
+        setErrorMsg('Mismatched Platform: You selected YouTube, but entered a link from TikTok/Instagram.');
+        return;
+      }
+      if (!(lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || url.startsWith('UC'))) {
+        setErrorMsg('Invalid URL for YouTube. Please enter a valid YouTube channel URL or ID.');
+        return;
+      }
     }
-    if (platform === 'YOUTUBE' && url && !(url.toLowerCase().includes('youtube.com') || url.startsWith('UC'))) {
-      setErrorMsg('Invalid URL for YouTube. Please enter a valid YouTube channel URL or ID.');
-      return;
+    if (platform === 'INSTAGRAM') {
+      if (lowerUrl.includes('tiktok.com') || lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+        setErrorMsg('Mismatched Platform: You selected Instagram, but entered a link from TikTok/YouTube.');
+        return;
+      }
+      if (!lowerUrl.includes('instagram.com')) {
+        setErrorMsg('Invalid URL for Instagram. Please enter a valid Instagram profile URL.');
+        return;
+      }
     }
-    if (platform === 'XIAOHONGSHU' && url && !(url.toLowerCase().includes('xiaohongshu.com') || url.toLowerCase().includes('xhslink.com') || url.toLowerCase().includes('xhslink.cn'))) {
+    if (platform === 'XIAOHONGSHU' && url && !(lowerUrl.includes('xiaohongshu.com') || lowerUrl.includes('xhslink.com') || lowerUrl.includes('xhslink.cn'))) {
       setErrorMsg('Invalid URL for Xiaohongshu. Please enter a valid Xiaohongshu profile URL.');
       return;
     }
-    if (platform === 'KUAISHOU' && url && !url.toLowerCase().includes('kuaishou.com')) {
+    if (platform === 'KUAISHOU' && url && !lowerUrl.includes('kuaishou.com')) {
       setErrorMsg('Invalid URL for Kuaishou. Please enter a valid Kuaishou profile URL.');
       return;
     }
@@ -139,16 +160,38 @@ export default function SourcesPage() {
         setPlatform('YOUTUBE');
         setEditingSource(null);
         await fetchSources();
+        addToast(`Source "${name}" saved successfully`, 'success');
       } else {
-        const errText = await res.text();
-        console.error('Failed response:', errText);
-        setErrorMsg('Error: ' + errText);
+        let errMessage = 'Failed to save source';
+        try {
+          const errJson = await res.json();
+          errMessage = errJson.message || errMessage;
+        } catch (_) {
+          errMessage = await res.text();
+        }
+        setErrorMsg(errMessage);
       }
     } catch (err: any) {
       console.error('Failed to save source', err);
       setErrorMsg('Network error: ' + err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUrlChange = (newUrl: string) => {
+    setUrl(newUrl);
+    const lower = newUrl.toLowerCase().trim();
+    if (lower.includes('tiktok.com')) {
+      setPlatform('TIKTOK');
+    } else if (lower.includes('youtube.com') || lower.includes('youtu.be') || newUrl.startsWith('UC')) {
+      setPlatform('YOUTUBE');
+    } else if (lower.includes('instagram.com')) {
+      setPlatform('INSTAGRAM');
+    } else if (lower.includes('xiaohongshu.com') || lower.includes('xhslink.com') || lower.includes('xhslink.cn')) {
+      setPlatform('XIAOHONGSHU');
+    } else if (lower.includes('kuaishou.com')) {
+      setPlatform('KUAISHOU');
     }
   };
 
@@ -266,7 +309,7 @@ export default function SourcesPage() {
                   onChange={(e) => { 
                     setPlatform(e.target.value); 
                     if (e.target.value === 'LOCAL_FOLDER') setUrl('local://folder'); 
-                    else setUrl(''); 
+                    else if (url === 'local://folder') setUrl(''); 
                   }} 
                   className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 >
@@ -284,7 +327,7 @@ export default function SourcesPage() {
                   <input 
                     type="text" 
                     value={url} 
-                    onChange={(e) => setUrl(e.target.value)} 
+                    onChange={(e) => handleUrlChange(e.target.value)} 
                     required 
                     className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
                     placeholder={
