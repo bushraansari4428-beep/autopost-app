@@ -5,10 +5,29 @@ import { PrismaService } from '../prisma/prisma.service';
 export class PagesService {
   constructor(private prisma: PrismaService) {}
 
-  create(createPageDto: any) {
-    return this.prisma.facebookPage.create({
+  async create(createPageDto: any) {
+    const page = await this.prisma.facebookPage.create({
       data: createPageDto,
     });
+
+    // Auto-heal: If a Cloud Source already exists for this page, automatically reconnect the mapping!
+    try {
+      const existingCloudSource = await this.prisma.source.findFirst({
+        where: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` }
+      });
+      if (existingCloudSource) {
+        await this.prisma.mapping.create({
+          data: {
+            sourceId: existingCloudSource.id,
+            facebookPageId: page.id,
+            scheduledTime: '04:30,19:00',
+            videosPerDay: 1
+          }
+        });
+      }
+    } catch (_) {}
+
+    return page;
   }
 
   getLocalFolderMappings(user: any) {
