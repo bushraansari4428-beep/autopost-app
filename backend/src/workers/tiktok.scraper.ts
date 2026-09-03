@@ -18,6 +18,17 @@ export interface TikTokVideoMetadata {
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 export async function getYtDlpBinaryPath(): Promise<string> {
+  // 1. Check if python -m yt_dlp or python3 -m yt_dlp is available (supports curl-cffi impersonation)
+  try {
+    await execPromise('python -m yt_dlp --version');
+    return 'python -m yt_dlp';
+  } catch (_) {}
+
+  try {
+    await execPromise('python3 -m yt_dlp --version');
+    return 'python3 -m yt_dlp';
+  } catch (_) {}
+
   if (process.env.GITHUB_ACTIONS === 'true') {
     return 'yt-dlp';
   }
@@ -141,15 +152,39 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
   try {
     const ytDlpCmd = await getYtDlpBinaryPath();
     const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+    const impersonateArg = '--impersonate chrome';
+    const ignoreErrorsArg = '-i';
     const extractCmd = isVideoUrl
-      ? `${ytDlpCmd} ${cookieArg} --dump-json "${cleanUrl}"`
-      : `${ytDlpCmd} ${cookieArg} --dump-json --playlist-end ${limit} "${cleanUrl}"`;
+      ? `${ytDlpCmd} ${impersonateArg} ${ignoreErrorsArg} ${cookieArg} --dump-json "${cleanUrl}"`
+      : `${ytDlpCmd} ${impersonateArg} ${ignoreErrorsArg} ${cookieArg} --dump-json --playlist-end ${limit} "${cleanUrl}"`;
     
     console.log(`Executing yt-dlp TikTok extraction: ${extractCmd}`);
-    const { stdout } = await execPromise(extractCmd, {
-      maxBuffer: 1024 * 1024 * 50,
-      timeout: 2 * 60 * 1000
-    });
+    let stdout = '';
+    try {
+      const res = await execPromise(extractCmd, {
+        maxBuffer: 1024 * 1024 * 50,
+        timeout: 2 * 60 * 1000
+      });
+      stdout = res.stdout;
+    } catch (cmdErr: any) {
+      stdout = cmdErr.stdout || '';
+    }
+
+    // Fallback without impersonate if stdout is empty
+    if (!stdout || !stdout.trim()) {
+      const fallbackCmd = isVideoUrl
+        ? `${ytDlpCmd} ${ignoreErrorsArg} ${cookieArg} --dump-json "${cleanUrl}"`
+        : `${ytDlpCmd} ${ignoreErrorsArg} ${cookieArg} --dump-json --playlist-end ${limit} "${cleanUrl}"`;
+      try {
+        const res = await execPromise(fallbackCmd, {
+          maxBuffer: 1024 * 1024 * 50,
+          timeout: 2 * 60 * 1000
+        });
+        stdout = res.stdout;
+      } catch (cmdErr: any) {
+        stdout = cmdErr.stdout || '';
+      }
+    }
 
     if (stdout && stdout.trim()) {
       const lines = stdout.trim().split('\n');
