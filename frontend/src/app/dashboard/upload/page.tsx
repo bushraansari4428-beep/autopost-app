@@ -20,7 +20,7 @@ export default function CloudUploadPage() {
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pages`, {
+      const res = await fetch(`/api/pages`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -78,7 +78,7 @@ export default function CloudUploadPage() {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pages/${selectedPageId}/cloud-queue`, {
+      const res = await fetch(`/api/pages/${selectedPageId}/cloud-queue`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -120,7 +120,7 @@ export default function CloudUploadPage() {
       formData.append('video', file);
 
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pages/${selectedPageId}/cloud-upload`, {
+        const res = await fetch(`/api/pages/${selectedPageId}/cloud-upload`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`
