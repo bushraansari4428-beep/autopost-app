@@ -106,6 +106,52 @@ export class SyncService {
     return tags;
   }
 
+  /**
+   * Cleans and normalizes a title/caption string for cross-platform comparison
+   */
+  public cleanTitleForComparison(text?: string | null): string {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .replace(/#[\w\u0590-\u05ff]+/g, '') // remove hashtags (#FBReels, #reels, #fyp, etc.)
+      .replace(/https?:\/\/\S+/g, '')      // remove URLs
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E0}-\u{1F1FF}]/gu, '') // remove emojis
+      .replace(/[^\w\s\u4e00-\u9fa5]/g, '') // remove punctuation
+      .replace(/\s+/g, ' ')               // collapse whitespace
+      .trim();
+  }
+
+  /**
+   * Checks if two titles are cross-platform duplicates
+   */
+  public isDuplicateTitle(titleA?: string | null, titleB?: string | null): boolean {
+    const cleanA = this.cleanTitleForComparison(titleA);
+    const cleanB = this.cleanTitleForComparison(titleB);
+    if (!cleanA || !cleanB) return false;
+
+    // 1. Exact clean match
+    if (cleanA === cleanB) return true;
+
+    // 2. Substring containment for titles with meaningful length (>= 12 characters)
+    if (cleanA.length >= 12 && cleanB.length >= 12) {
+      if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
+    }
+
+    // 3. High word overlap (Dice coefficient on words)
+    const wordsA = new Set(cleanA.split(' ').filter(w => w.length > 2));
+    const wordsB = new Set(cleanB.split(' ').filter(w => w.length > 2));
+    if (wordsA.size >= 2 && wordsB.size >= 2) {
+      let intersection = 0;
+      for (const w of wordsA) {
+        if (wordsB.has(w)) intersection++;
+      }
+      const overlap = (2 * intersection) / (wordsA.size + wordsB.size);
+      if (overlap >= 0.75) return true;
+    }
+
+    return false;
+  }
+
   async testMapping(mappingId: string) {
     const mapping = await this.prisma.mapping.findUnique({
       where: { id: mappingId },
@@ -608,8 +654,21 @@ export class SyncService {
           }
         }
 
-        // Fetch the OLDEST unposted video for this mapping from this source
-        const oldestUnpostedVideo = await this.prisma.video.findFirst({
+        // 1. Fetch all past uploads to this Facebook Page across ALL sources to prevent cross-platform duplicates
+        const pastUploads = await this.prisma.uploadHistory.findMany({
+          where: {
+            facebookPageId: mapping.facebookPageId,
+            status: { in: ['COMPLETED', 'PROCESSING', 'PENDING'] }
+          },
+          select: {
+            video: {
+              select: { id: true, title: true, description: true }
+            }
+          }
+        });
+
+        // 2. Fetch candidate unposted videos for this mapping from this source, ordered OLDEST to NEWEST
+        const candidateVideos = await this.prisma.video.findMany({
           where: {
             sourceId: source.id,
             uploads: {
@@ -626,8 +685,42 @@ export class SyncService {
           orderBy: [
             { publishedAt: 'asc' },
             { createdAt: 'asc' }
-          ]
+          ],
+          take: 100
         });
+
+        let oldestUnpostedVideo: any = null;
+
+        for (const candidate of candidateVideos) {
+          // Check if candidate video matches ANY previously posted video on this Facebook Page
+          const duplicateMatch = pastUploads.find(u => 
+            u.video && (
+              this.isDuplicateTitle(candidate.title, u.video.title) ||
+              this.isDuplicateTitle(candidate.description, u.video.title) ||
+              this.isDuplicateTitle(candidate.title, u.video.description)
+            )
+          );
+
+          if (duplicateMatch && duplicateMatch.video) {
+            // Auto-mark duplicate candidate as COMPLETED so it is permanently skipped and never repeated!
+            this.logger.log(`Cross-Platform Deduplication: Skipping duplicate video '${candidate.title}' (already posted as '${duplicateMatch.video.title}')`);
+            await this.logsService.log('INFO', `Deduplication: Skipped duplicate video '${candidate.title}' (already posted on this page).`);
+            
+            await this.prisma.uploadHistory.create({
+              data: {
+                videoId: candidate.id,
+                facebookPageId: mapping.facebookPageId,
+                status: 'COMPLETED',
+                errorMessage: `Cross-platform duplicate of '${duplicateMatch.video.title}'`
+              }
+            });
+            continue; // Continue to next candidate
+          }
+
+          // Found a genuinely unique unposted video!
+          oldestUnpostedVideo = candidate;
+          break;
+        }
 
         if (oldestUnpostedVideo) {
           await this.prisma.uploadHistory.create({
@@ -639,7 +732,7 @@ export class SyncService {
           });
           this.logsService.log('INFO', `Auto-Poster: Queued oldest unposted video '${oldestUnpostedVideo.title}' (Published: ${oldestUnpostedVideo.publishedAt ? oldestUnpostedVideo.publishedAt.toISOString().split('T')[0] : 'Unknown'}) to Facebook Page!`);
         } else {
-          this.logger.log(`All discovered videos for source ${source.name} have already been uploaded to page ${mapping.facebookPageId}.`);
+          this.logger.log(`All discovered videos for source ${source.name} have already been uploaded (or deduplicated) to page ${mapping.facebookPageId}.`);
           await this.logsService.log('INFO', `All discovered videos for source ${source.name} have already been posted to your Facebook Page.`);
         }
       }
