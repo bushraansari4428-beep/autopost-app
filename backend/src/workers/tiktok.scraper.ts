@@ -195,6 +195,21 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
           const parsed = JSON.parse(line);
           const bestUrl = parsed.url || (parsed.requested_downloads?.[0]?.url) || '';
           
+          // STRICT FILTER: Discard photo carousels, image slideshows, and non-video posts!
+          const isPhotoOrSlideshow = 
+            parsed._type === 'image' ||
+            parsed.vcodec === 'none' ||
+            parsed.is_slideshow === true ||
+            parsed.images ||
+            (!parsed.duration && !bestUrl) ||
+            (parsed.formats && parsed.formats.length > 0 && !parsed.formats.some((f: any) => f.vcodec && f.vcodec !== 'none')) ||
+            (bestUrl && /\.(jpe?g|png|webp|gif)(\?.*)?$/i.test(bestUrl));
+
+          if (isPhotoOrSlideshow || !bestUrl) {
+            console.log(`[TikTok Scraper] Skipping photo slideshow / non-video post: [${parsed.id}] "${parsed.title || ''}"`);
+            continue;
+          }
+          
           let createTime = parsed.timestamp;
           if (!createTime && parsed.id && /^\d{15,22}$/.test(parsed.id)) {
             try {
@@ -245,8 +260,13 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
         }
       });
       if (res.data && res.data.data && Array.isArray(res.data.data.videos) && res.data.data.videos.length > 0) {
-        console.log(`Successfully extracted ${res.data.data.videos.length} videos from TikWM API.`);
-        return res.data.data.videos.slice(0, limit).map((v: any) => ({
+        const validVideos = res.data.data.videos.filter((v: any) => {
+          if (v.images && Array.isArray(v.images) && v.images.length > 0) return false;
+          if (!v.hdplay && !v.play) return false;
+          return true;
+        });
+        console.log(`Successfully extracted ${validVideos.length} valid video(s) from TikWM API.`);
+        return validVideos.slice(0, limit).map((v: any) => ({
           id: v.video_id,
           caption: v.title || `TikTok Video ${v.video_id}`,
           hashtags: [],

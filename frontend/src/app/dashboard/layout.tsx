@@ -13,8 +13,10 @@ import {
   Settings, 
   User, 
   LogOut,
-  Sparkles
+  Sparkles,
+  Bell
 } from 'lucide-react';
+import NotificationDrawer, { AlertItem } from '@/components/NotificationDrawer';
 
 export default function DashboardLayout({
   children,
@@ -22,6 +24,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [role, setRole] = useState('USER');
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -64,6 +68,57 @@ export default function DashboardLayout({
       window.location.replace('/login');
     }
   }, []);
+
+  const fetchAlerts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch('/api/notifications', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAlerts(data.alerts || []);
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleDismiss = async (alertId: string) => {
+    setAlerts(prev => prev.filter(a => a.id !== alertId));
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('/api/notifications/dismiss', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ alertId })
+      });
+    } catch (_) {}
+  };
+
+  const handleDismissAll = async () => {
+    const ids = alerts.map(a => a.id);
+    setAlerts([]);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('/api/notifications/dismiss', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ alertIds: ids })
+      });
+    } catch (_) {}
+  };
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -117,6 +172,28 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
+
+            {/* Emergency Alerts & Mishaps Button */}
+            <button
+              onClick={() => setIsDrawerOpen(true)}
+              className={`w-full group flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-sm tracking-wide transition-all duration-200 text-left ${
+                alerts.length > 0
+                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Bell className={`w-4.5 h-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                  alerts.length > 0 ? 'text-red-400 animate-bounce' : 'text-slate-400 group-hover:text-red-400'
+                }`} />
+                <span>Alerts & Issues</span>
+              </div>
+              {alerts.length > 0 && (
+                <span className="px-2 py-0.5 text-xs font-black bg-red-500 text-white rounded-full animate-pulse shadow-md shadow-red-500/40">
+                  {alerts.length}
+                </span>
+              )}
+            </button>
 
             {role === 'ADMIN' && (
               <div className="pt-3 mt-3 border-t border-slate-800/80 space-y-1">
@@ -185,6 +262,15 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-y-auto p-8 sm:p-10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 custom-scrollbar">
         {children}
       </main>
+
+      {/* Emergency Notifications Drawer */}
+      <NotificationDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        alerts={alerts}
+        onDismiss={handleDismiss}
+        onDismissAll={handleDismissAll}
+      />
     </div>
   );
 }

@@ -15,6 +15,8 @@ import { FacebookModule } from './facebook/facebook.module';
 import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
 
+import { NotificationsModule } from './notifications/notifications.module';
+
 @Module({
   imports: [
     PrismaModule, 
@@ -28,6 +30,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     LogsModule,
     WorkersModule,
+    NotificationsModule,
   ],
   controllers: [AppController, WebhooksController],
   providers: [AppService],
