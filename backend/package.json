@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "npx prisma generate && export PRISMA_DB_URL=$(echo $DATABASE_URL | sed 's/6543/5432/g') && DATABASE_URL=$PRISMA_DB_URL npx prisma db push --accept-data-loss && nest build",
+    "build": "(pip3 install --break-system-packages \"yt-dlp[default,curl-cffi]\" || true) && npx prisma generate && export PRISMA_DB_URL=$(echo $DATABASE_URL | sed 's/6543/5432/g') && DATABASE_URL=$PRISMA_DB_URL npx prisma db push --accept-data-loss && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

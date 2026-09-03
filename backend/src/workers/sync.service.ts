@@ -1125,8 +1125,25 @@ export class SyncService {
          try {
             const ytDlpCmd = await this.getYtDlpCmd();
             const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
-            const cmd = `${ytDlpCmd} ${cookieArg} --dump-json "${targetUrl}"`;
-            const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
+            const cmd = `${ytDlpCmd} --impersonate chrome -i ${cookieArg} --dump-json "${targetUrl}"`;
+            let stdout = '';
+            try {
+              const res = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
+              stdout = res.stdout;
+            } catch (err: any) {
+              stdout = err.stdout || '';
+            }
+
+            if (!stdout || !stdout.trim()) {
+              try {
+                const fallbackCmd = `${ytDlpCmd} -i ${cookieArg} --dump-json "${targetUrl}"`;
+                const res = await execPromise(fallbackCmd, { maxBuffer: 1024 * 1024 * 50, timeout: 2 * 60 * 1000 });
+                stdout = res.stdout;
+              } catch (err: any) {
+                stdout = err.stdout || '';
+              }
+            }
+
             if (stdout && stdout.trim()) {
                const parsed = JSON.parse(stdout);
                const extractedUrl = parsed.url || (parsed.requested_downloads && parsed.requested_downloads[0] ? parsed.requested_downloads[0].url : null);
@@ -1335,7 +1352,7 @@ export class SyncService {
                this.logsService.log('WARN', 'TikTok CDN returned 403 Forbidden. Falling back to yt-dlp direct download...');
                const ytDlpCmd = await this.getYtDlpCmd();
                const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
-               const cmd = `${ytDlpCmd} ${cookieArg} -o "${tempPath}" "${targetUrl}"`;
+               const cmd = `${ytDlpCmd} --impersonate chrome -i ${cookieArg} -o "${tempPath}" "${targetUrl}"`;
                await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
             } else {
                throw err;
