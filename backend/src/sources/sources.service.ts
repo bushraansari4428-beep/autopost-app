@@ -93,23 +93,38 @@ export class SourcesService {
     });
   }
 
-  findAll(user?: any) {
-    if (!user) {
-      return this.prisma.source.findMany();
+  async findAll(user?: any) {
+    if (!user || user.role === 'SUPER_ADMIN') {
+      return this.prisma.source.findMany({ orderBy: { createdAt: 'desc' } });
     }
+
+    // Include MEGA_CLOUD sources for any facebook page owned by this user
+    const userPages = await this.prisma.facebookPage.findMany({
+      where: user.role === 'ADMIN' ? {} : { userId: user.id },
+      select: { pageId: true }
+    });
+    const cloudUrls = userPages.map(p => `cloud://${p.pageId}`);
+
     if (user.role === 'ADMIN') {
       return this.prisma.source.findMany({
         where: {
           OR: [
             { userId: user.id },
-            { userId: null }
+            { userId: null },
+            { platform: 'MEGA_CLOUD', url: { in: cloudUrls } }
           ]
         },
         orderBy: { createdAt: 'desc' }
       });
     }
+
     return this.prisma.source.findMany({
-      where: { userId: user.id },
+      where: {
+        OR: [
+          { userId: user.id },
+          { platform: 'MEGA_CLOUD', url: { in: cloudUrls } }
+        ]
+      },
       orderBy: { createdAt: 'desc' }
     });
   }

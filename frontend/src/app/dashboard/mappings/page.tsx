@@ -222,7 +222,13 @@ export default function MappingsPage() {
                   <div className="min-w-[130px]">
                     <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Source</span>
                     <span className="font-bold text-white truncate block text-sm leading-tight" title={mapping.source?.name}>{mapping.source?.name || 'Unknown'}</span>
-                    <span className="inline-block text-[10px] font-medium text-slate-400 bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-700/60 mt-1 uppercase tracking-wide">{mapping.source?.platform}</span>
+                    <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md border mt-1 uppercase tracking-wide ${
+                      mapping.source?.platform === 'MEGA_CLOUD'
+                        ? 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                        : 'text-slate-400 bg-slate-800/90 border-slate-700/60'
+                    }`}>
+                      {mapping.source?.platform === 'MEGA_CLOUD' ? 'CLOUD QUEUE' : mapping.source?.platform}
+                    </span>
                   </div>
                   
                   <div className="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
@@ -392,8 +398,10 @@ export default function MappingsPage() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
                 >
                   <option value="" disabled>Select a source...</option>
-                  {sources.filter(s => s.platform !== 'MEGA_CLOUD').map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.platform})</option>
+                  {sources.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.platform === 'MEGA_CLOUD' ? 'Cloud Queue' : s.platform})
+                    </option>
                   ))}
                 </select>
               </div>

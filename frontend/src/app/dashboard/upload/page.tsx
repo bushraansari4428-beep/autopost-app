@@ -444,10 +444,15 @@ export default function CloudUploadPage() {
                   {totalQueueCount} video(s) remaining
                 </span>
                 {queueMeta?.scheduledTime && (
-                  <span className="text-gray-400 bg-gray-800/80 px-2.5 py-1 rounded-md border border-gray-700 flex items-center space-x-1">
-                    <Clock className="w-3 h-3 text-gray-400" />
-                    <span>{queueMeta.scheduledTime} UTC ({queueMeta.videosPerDay}/day)</span>
-                  </span>
+                  <a
+                    href="/dashboard/mappings"
+                    className="text-xs text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 flex items-center space-x-1 transition-colors"
+                    title="Configure scheduled posting time in Mappings tab"
+                  >
+                    <Clock className="w-3 h-3 text-blue-400" />
+                    <span>Schedule: {queueMeta.scheduledTime} UTC ({queueMeta.videosPerDay}/day)</span>
+                    <span className="text-[11px] underline ml-1 font-semibold">Edit in Mappings →</span>
+                  </a>
                 )}
               </div>
             )}

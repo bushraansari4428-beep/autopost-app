@@ -10,17 +10,39 @@ export class PagesService {
       data: createPageDto,
     });
 
-    // Auto-heal: If a Cloud Source already exists for this page, automatically reconnect the mapping!
+    // Auto-create / ensure Cloud Source and Mapping for this page immediately
     try {
-      const existingCloudSource = await this.prisma.source.findFirst({
+      let cloudSource = await this.prisma.source.findFirst({
         where: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` }
       });
-      if (existingCloudSource) {
+      if (!cloudSource) {
+        cloudSource = await this.prisma.source.create({
+          data: {
+            platform: 'MEGA_CLOUD',
+            name: `Cloud Upload (${page.name})`,
+            url: `cloud://${page.pageId}`,
+            userId: page.userId,
+          }
+        });
+      } else {
+        await this.prisma.source.update({
+          where: { id: cloudSource.id },
+          data: {
+            name: `Cloud Upload (${page.name})`,
+            userId: page.userId || cloudSource.userId
+          }
+        });
+      }
+
+      const existingMapping = await this.prisma.mapping.findFirst({
+        where: { sourceId: cloudSource.id, facebookPageId: page.id }
+      });
+      if (!existingMapping) {
         await this.prisma.mapping.create({
           data: {
-            sourceId: existingCloudSource.id,
+            sourceId: cloudSource.id,
             facebookPageId: page.id,
-            scheduledTime: '04:30,19:00',
+            scheduledTime: '12:00',
             videosPerDay: 1
           }
         });
@@ -65,8 +87,43 @@ export class PagesService {
       });
     }
 
-    // Attach cloud queue count for each page
+    // Ensure cloud source & mapping exist for each page, and attach cloud queue count
     return Promise.all(pages.map(async (page: any) => {
+      try {
+        let cloudSource = await this.prisma.source.findFirst({
+          where: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` }
+        });
+        if (!cloudSource) {
+          cloudSource = await this.prisma.source.create({
+            data: {
+              platform: 'MEGA_CLOUD',
+              name: `Cloud Upload (${page.name})`,
+              url: `cloud://${page.pageId}`,
+              userId: page.userId,
+            }
+          });
+        } else if (page.userId && cloudSource.userId !== page.userId) {
+          await this.prisma.source.update({
+            where: { id: cloudSource.id },
+            data: { userId: page.userId }
+          });
+        }
+
+        const mapping = await this.prisma.mapping.findFirst({
+          where: { sourceId: cloudSource.id, facebookPageId: page.id }
+        });
+        if (!mapping) {
+          await this.prisma.mapping.create({
+            data: {
+              sourceId: cloudSource.id,
+              facebookPageId: page.id,
+              scheduledTime: '12:00',
+              videosPerDay: 1
+            }
+          });
+        }
+      } catch (_) {}
+
       const cloudQueueCount = await this.prisma.video.count({
         where: {
           source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },

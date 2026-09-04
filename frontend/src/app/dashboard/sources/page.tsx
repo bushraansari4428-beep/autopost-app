@@ -226,7 +226,7 @@ export default function SourcesPage() {
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Loading sources...</td>
               </tr>
-            ) : sources.filter(s => s.platform !== 'MEGA_CLOUD').length === 0 ? (
+            ) : sources.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                   <p className="text-lg mb-2">No sources found.</p>
@@ -234,7 +234,7 @@ export default function SourcesPage() {
                 </td>
               </tr>
             ) : (
-              sources.filter(s => s.platform !== 'MEGA_CLOUD').map(source => (
+              sources.map(source => (
                 <tr key={source.id} className="hover:bg-gray-800/30 transition-colors">
                   <td className="px-6 py-5 font-medium text-white">{source.name}</td>
                   <td className="px-6 py-5">
@@ -244,9 +244,10 @@ export default function SourcesPage() {
                       source.platform === 'XIAOHONGSHU' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 
                       source.platform === 'KUAISHOU' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' : 
                       source.platform === 'LOCAL_FOLDER' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                      source.platform === 'MEGA_CLOUD' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 
                       'bg-black text-white border border-gray-700'
                     }`}>
-                      {source.platform}
+                      {source.platform === 'MEGA_CLOUD' ? 'CLOUD QUEUE' : source.platform}
                     </span>
                   </td>
                   <td className="px-6 py-5">

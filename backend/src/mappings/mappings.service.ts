@@ -32,7 +32,7 @@ export class MappingsService {
   }
 
   findAll(user?: any) {
-    if (!user) {
+    if (!user || user.role === 'SUPER_ADMIN') {
       return this.prisma.mapping.findMany({
         include: {
           source: true,
@@ -40,27 +40,17 @@ export class MappingsService {
         }
       });
     }
-    if (user.role === 'ADMIN') {
-      return this.prisma.mapping.findMany({
-        where: {
-          source: {
-            OR: [
-              { userId: user.id },
-              { userId: null }
-            ]
-          }
-        },
-        include: {
-          source: true,
-          facebookPage: true,
-        }
-      });
-    }
+
+    const userCondition = user.role === 'ADMIN'
+      ? [{ userId: user.id }, { userId: null }]
+      : [{ userId: user.id }];
+
     return this.prisma.mapping.findMany({
       where: {
-        source: {
-          userId: user.id
-        }
+        OR: [
+          { source: { OR: userCondition } },
+          { facebookPage: { OR: userCondition } }
+        ]
       },
       include: {
         source: true,
