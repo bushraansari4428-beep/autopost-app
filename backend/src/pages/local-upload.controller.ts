@@ -1,4 +1,4 @@
-import { Controller, Post, Delete, Param, UseInterceptors, UploadedFile, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Request, UseInterceptors, UploadedFile, UseGuards, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { SyncService } from '../workers/sync.service';
@@ -75,11 +75,42 @@ export class LocalUploadController {
     }
   }
 
+  @Get(':id/cloud-queue')
+  @UseGuards(AuthGuard('jwt'))
+  async getCloudQueue(
+    @Param('id') pageId: string,
+    @Request() req: any,
+  ) {
+    try {
+      return await this.syncService.getCloudQueue(pageId, req.user);
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Delete(':id/cloud-queue/:videoId')
+  @UseGuards(AuthGuard('jwt'))
+  async deleteCloudQueueVideo(
+    @Param('id') pageId: string,
+    @Param('videoId') videoId: string,
+    @Request() req: any,
+  ) {
+    try {
+      return await this.syncService.deleteCloudQueueVideo(pageId, videoId, req.user);
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
   @Delete(':id/cloud-queue')
   @UseGuards(AuthGuard('jwt'))
-  async deleteCloudQueue(@Param('id') pageId: string) {
+  async deleteCloudQueue(
+    @Param('id') pageId: string,
+    @Body() body: { videoIds?: string[] },
+    @Request() req: any,
+  ) {
     try {
-      return await this.syncService.deleteCloudQueue(pageId);
+      return await this.syncService.deleteCloudQueue(pageId, body?.videoIds, req.user);
     } catch (error: any) {
       throw new BadRequestException(error.message);
     }

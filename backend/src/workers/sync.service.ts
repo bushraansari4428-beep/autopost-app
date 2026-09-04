@@ -983,7 +983,7 @@ export class SyncService {
     }
   }
 
-  async deleteCloudQueue(facebookPageId: string) {
+  async getCloudQueue(facebookPageId: string, user?: any) {
     try {
       const page = await this.prisma.facebookPage.findUnique({
         where: { id: facebookPageId }
@@ -991,6 +991,98 @@ export class SyncService {
 
       if (!page) {
         throw new Error('Facebook page not found');
+      }
+
+      if (user && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+        if (page.userId && page.userId !== user.id) {
+          throw new Error('Unauthorized to access this page queue');
+        }
+      }
+
+      // Check cloud source and mapping for schedule info
+      const cloudSource = await this.prisma.source.findFirst({
+        where: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` }
+      });
+
+      let mapping = null;
+      if (cloudSource) {
+        mapping = await this.prisma.mapping.findFirst({
+          where: { sourceId: cloudSource.id, facebookPageId: page.id }
+        });
+      }
+
+      const videos = await this.prisma.video.findMany({
+        where: {
+          source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
+          uploads: {
+            none: {
+              facebookPageId: page.id,
+              status: 'COMPLETED',
+              facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' }
+            }
+          }
+        },
+        include: {
+          uploads: {
+            where: { facebookPageId: page.id },
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      const queue = videos.map((v, index) => {
+        const latestUpload = v.uploads && v.uploads[0];
+        let status = 'QUEUED';
+        if (latestUpload) {
+          if (latestUpload.status === 'PENDING' || latestUpload.status === 'PROCESSING') {
+            status = 'POSTING';
+          } else if (latestUpload.status === 'FAILED') {
+            status = 'FAILED';
+          }
+        }
+
+        return {
+          id: v.id,
+          title: v.title,
+          description: v.description,
+          url: v.url,
+          originalId: v.originalId,
+          createdAt: v.createdAt,
+          queuePosition: index + 1,
+          status
+        };
+      });
+
+      return {
+        pageId: page.id,
+        pageName: page.name,
+        totalCount: queue.length,
+        scheduledTime: mapping?.scheduledTime || null,
+        videosPerDay: mapping?.videosPerDay || 1,
+        videos: queue
+      };
+    } catch (e: any) {
+      this.logger.error(`Error in getCloudQueue: ${e.message}`, e.stack);
+      throw e;
+    }
+  }
+
+  async deleteCloudQueueVideo(facebookPageId: string, videoId: string, user?: any) {
+    try {
+      const page = await this.prisma.facebookPage.findUnique({
+        where: { id: facebookPageId }
+      });
+
+      if (!page) {
+        throw new Error('Facebook page not found');
+      }
+
+      if (user && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+        if (page.userId && page.userId !== user.id) {
+          throw new Error('Unauthorized to delete from this page queue');
+        }
       }
 
       let megaEmail, megaPassword;
@@ -1005,18 +1097,84 @@ export class SyncService {
         }
       }
 
-      // Find videos in cloud queue
-      const videos = await this.prisma.video.findMany({
+      // Verify video belongs to this page's cloud queue
+      const video = await this.prisma.video.findFirst({
         where: {
-          source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
-          uploads: {
-            none: {
-              facebookPageId: page.id,
-              status: 'COMPLETED',
-              facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' }
-            }
+          id: videoId,
+          source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` }
+        }
+      });
+
+      if (!video) {
+        throw new Error('Video not found in cloud queue');
+      }
+
+      if (video.url) {
+        try {
+          await this.megaService.deleteFile(video.url, megaEmail || undefined, megaPassword || undefined);
+        } catch (err: any) {
+          this.logger.warn(`Failed to delete file from Mega for video ${video.id}: ${err.message}`);
+        }
+      }
+
+      await this.prisma.uploadHistory.deleteMany({ where: { videoId: video.id } });
+      await this.prisma.video.delete({ where: { id: video.id } });
+
+      this.logsService.log('INFO', `Successfully deleted queued video "${video.title}" from Mega Cloud for page ${page.name}`);
+      return { success: true, message: `Successfully deleted "${video.title}" from cloud queue.` };
+    } catch (e: any) {
+      this.logger.error(`Error in deleteCloudQueueVideo: ${e.message}`, e.stack);
+      this.logsService.log('ERROR', `Failed to delete cloud queue video: ${e.message}`);
+      throw e;
+    }
+  }
+
+  async deleteCloudQueue(facebookPageId: string, videoIds?: string[], user?: any) {
+    try {
+      const page = await this.prisma.facebookPage.findUnique({
+        where: { id: facebookPageId }
+      });
+
+      if (!page) {
+        throw new Error('Facebook page not found');
+      }
+
+      if (user && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+        if (page.userId && page.userId !== user.id) {
+          throw new Error('Unauthorized to delete from this page queue');
+        }
+      }
+
+      let megaEmail, megaPassword;
+      if (page.userId) {
+        const pageUser = await this.prisma.user.findUnique({ where: { id: page.userId } });
+        if (pageUser) {
+          if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
+            throw new Error('Mega Cloud credentials are not configured.');
+          }
+          megaEmail = pageUser.megaEmail;
+          megaPassword = pageUser.megaPassword;
+        }
+      }
+
+      const whereClause: any = {
+        source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
+        uploads: {
+          none: {
+            facebookPageId: page.id,
+            status: 'COMPLETED',
+            facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' }
           }
         }
+      };
+
+      if (videoIds && Array.isArray(videoIds) && videoIds.length > 0) {
+        whereClause.id = { in: videoIds };
+      }
+
+      // Find videos in cloud queue
+      const videos = await this.prisma.video.findMany({
+        where: whereClause
       });
 
       if (videos.length === 0) {
