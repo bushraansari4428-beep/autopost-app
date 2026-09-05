@@ -64,6 +64,10 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
         }
 
         for (const mapping of source.mappings) {
+          if (mapping.status === 'PAUSED') {
+            // Mapping is turned OFF by user - skip automated processing!
+            continue;
+          }
           if (source.platform === 'MEGA_CLOUD') {
             if (!mapping.scheduledTime || mapping.scheduledTime === '00:00') {
               // Schedule OFF means mapping is DISABLED for Cloud uploads. Wait for user to set a schedule.

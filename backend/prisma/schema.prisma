@@ -93,6 +93,7 @@ model Mapping {
   scheduledTime    String?
   lastScheduledRun DateTime?
   customHashtags   String?
+  status           Status       @default(ACTIVE)
   source           Source       @relation(fields: [sourceId], references: [id])
   facebookPage     FacebookPage @relation(fields: [facebookPageId], references: [id])
   videosPerDay     Int          @default(1)

@@ -30,6 +30,43 @@ export default function MappingsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+
+  const toggleMappingStatus = async (id: string, currentStatus?: string) => {
+    const newStatus = currentStatus === 'PAUSED' ? 'ACTIVE' : 'PAUSED';
+    setUpdatingStatusId(id);
+    
+    // Optimistic update
+    setMappings(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
+
+    try {
+      const res = await fetch(`/api/mappings/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        addToast(
+          newStatus === 'ACTIVE' 
+            ? 'Mapping turned ON (Active) - low video warnings enabled' 
+            : 'Mapping turned OFF (Paused) - warnings & automation disabled', 
+          'success'
+        );
+      } else {
+        // Revert on error
+        setMappings(prev => prev.map(m => m.id === id ? { ...m, status: currentStatus } : m));
+        addToast('Failed to update mapping status', 'error');
+      }
+    } catch (err) {
+      setMappings(prev => prev.map(m => m.id === id ? { ...m, status: currentStatus } : m));
+      addToast('Failed to update mapping status', 'error');
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
 
   const fetchMappings = async () => {
     try {
@@ -244,10 +281,25 @@ export default function MappingsPage() {
 
                 {/* Status & Actions */}
                 <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl shadow-sm shadow-emerald-500/5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-                    <span className="text-xs font-bold text-emerald-400 tracking-wider">ACTIVE</span>
-                  </div>
+                  {/* Interactive ON / OFF Status Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => toggleMappingStatus(mapping.id, mapping.status || 'ACTIVE')}
+                    disabled={updatingStatusId === mapping.id}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer select-none ${
+                      mapping.status === 'PAUSED'
+                        ? 'bg-slate-800/90 hover:bg-slate-750 text-slate-400 hover:text-slate-200 border-slate-700 hover:border-slate-600'
+                        : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 hover:text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50 shadow-emerald-500/10'
+                    }`}
+                    title={mapping.status === 'PAUSED' ? 'Click to Turn ON (Enable Automation & Low Video Warnings)' : 'Click to Turn OFF (Pause Automation & Disable Warnings)'}
+                  >
+                    <div className={`w-2 h-2 rounded-full transition-all ${
+                      mapping.status === 'PAUSED' 
+                        ? 'bg-slate-500' 
+                        : 'bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50'
+                    }`}></div>
+                    <span>{mapping.status === 'PAUSED' ? 'OFF (PAUSED)' : 'ON (ACTIVE)'}</span>
+                  </button>
                   
                   <button 
                     onClick={() => testMapping(mapping.id)} 

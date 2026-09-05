@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   Activity, 
   Layers, 
@@ -11,7 +12,8 @@ import {
   RotateCw, 
   Trash2, 
   Terminal, 
-  AlertTriangle 
+  AlertTriangle,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -88,7 +90,10 @@ export default function Dashboard() {
           if (Array.isArray(pagesList)) {
             const cloudMappingPageIds = new Set(
               mappings
-                .filter(m => m.source?.platform === 'MEGA_CLOUD' || m.source?.platform === 'LOCAL_FOLDER')
+                .filter(m => 
+                  (m.source?.platform === 'MEGA_CLOUD' || m.source?.platform === 'LOCAL_FOLDER') &&
+                  m.status !== 'PAUSED'
+                )
                 .map(m => m.facebookPageId)
             );
             
@@ -99,8 +104,8 @@ export default function Dashboard() {
             );
           }
 
-          // Filter mappings that have a scheduledTime
-          const scheduled = mappings.filter(m => m.scheduledTime && m.source?.platform === 'MEGA_CLOUD');
+          // Filter mappings that have a scheduledTime and are ACTIVE
+          const scheduled = mappings.filter(m => m.scheduledTime && m.source?.platform === 'MEGA_CLOUD' && m.status !== 'PAUSED');
           // Parse "HH:mm" strings, convert to actual upcoming Dates, and sort them
           const now = new Date();
           upcoming = scheduled.map(m => {
@@ -189,33 +194,69 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Low Cloud Queue Warning Banner */}
+      {/* Enterprise-Grade Low Video Inventory Alert */}
       {lowQueuePages.length > 0 && (
-        <div className="px-4 py-3 bg-gradient-to-r from-rose-950/40 via-red-950/30 to-rose-950/40 border border-rose-500/30 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg shadow-rose-950/20">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-1.5 bg-rose-500/20 rounded-lg shrink-0 text-rose-400">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Low Cloud Queue Warning</h3>
-                <span className="hidden sm:inline text-slate-500 text-xs">•</span>
-                <p className="hidden sm:inline text-rose-300/80 text-xs truncate">
-                  Upload new videos to avoid missing scheduled posts.
+        <div className="relative overflow-hidden bg-gradient-to-br from-rose-950/40 via-slate-900/90 to-slate-950 border border-rose-500/30 rounded-2xl shadow-xl shadow-rose-950/20 p-4 sm:p-5 transition-all">
+          {/* Header Row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-rose-500/20">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 bg-rose-500/15 border border-rose-500/30 rounded-xl shrink-0 text-rose-400 shadow-sm shadow-rose-500/10">
+                <ShieldAlert className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h3 className="text-sm font-bold text-white tracking-wide">
+                    Low Video Inventory Alert
+                  </h3>
+                  <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-rose-500/20 border border-rose-500/30 text-rose-300 rounded-full shrink-0">
+                    {lowQueuePages.length} {lowQueuePages.length === 1 ? 'Page Needs' : 'Pages Need'} Attention
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Active connected pages with 2 or fewer videos in cloud storage. Upload more videos to prevent missed posting schedules.
                 </p>
               </div>
             </div>
+
+            <Link
+              href="/dashboard/upload"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all transform hover:scale-[1.02] active:scale-[0.98] shrink-0"
+            >
+              <span>Upload to Cloud</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </Link>
           </div>
-          
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {lowQueuePages.map(page => (
-              <div key={page.id} className="bg-rose-900/30 border border-rose-500/30 rounded-xl px-2.5 py-1 flex items-center gap-2 text-xs">
-                <span className="font-semibold text-slate-200 truncate max-w-[150px]">{page.name}</span>
-                <span className="font-mono font-bold px-1.5 py-0.5 bg-rose-500/25 text-rose-400 rounded-md text-[10px] whitespace-nowrap">
-                  {page.cloudQueueCount} left
-                </span>
-              </div>
-            ))}
+
+          {/* Structured Responsive Grid of Page Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 pt-3.5">
+            {lowQueuePages.map(page => {
+              const isEmpty = page.cloudQueueCount === 0;
+              return (
+                <div 
+                  key={page.id} 
+                  className={`flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl border transition-all ${
+                    isEmpty
+                      ? 'bg-rose-950/40 border-rose-500/40 hover:border-rose-500/60 shadow-sm shadow-rose-950/20'
+                      : 'bg-amber-950/30 border-amber-500/30 hover:border-amber-500/50'
+                  }`}
+                >
+                  <div className="min-w-0 flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${isEmpty ? 'bg-rose-500 animate-ping' : 'bg-amber-400'}`} />
+                    <span className="font-semibold text-xs text-slate-200 truncate" title={page.name}>
+                      {page.name}
+                    </span>
+                  </div>
+                  
+                  <span className={`font-mono font-bold px-2 py-0.5 rounded-md text-[10px] whitespace-nowrap shrink-0 ${
+                    isEmpty 
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    {isEmpty ? '0 left (Empty)' : `${page.cloudQueueCount} left`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
