@@ -921,7 +921,7 @@ export class SyncService {
 
       // Ensure a mapping exists so the user can set a schedule for it
       let mapping = await this.prisma.mapping.findFirst({
-        where: { sourceId: cloudSource.id, facebookPageId: page.id }
+        where: { facebookPageId: page.id }
       });
 
       if (!mapping) {

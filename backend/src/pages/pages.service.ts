@@ -35,7 +35,7 @@ export class PagesService {
       }
 
       const existingMapping = await this.prisma.mapping.findFirst({
-        where: { sourceId: cloudSource.id, facebookPageId: page.id }
+        where: { facebookPageId: page.id }
       });
       if (!existingMapping) {
         await this.prisma.mapping.create({
@@ -110,7 +110,7 @@ export class PagesService {
         }
 
         const mapping = await this.prisma.mapping.findFirst({
-          where: { sourceId: cloudSource.id, facebookPageId: page.id }
+          where: { facebookPageId: page.id }
         });
         if (!mapping) {
           await this.prisma.mapping.create({

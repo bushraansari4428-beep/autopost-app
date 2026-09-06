@@ -450,11 +450,14 @@ export default function MappingsPage() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
                 >
                   <option value="" disabled>Select a source...</option>
-                  {sources.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.platform === 'MEGA_CLOUD' ? 'Cloud Queue' : s.platform})
-                    </option>
-                  ))}
+                  {sources.map(s => {
+                    const isAlreadyMapped = mappings.some(m => m.sourceId === s.id);
+                    return (
+                      <option key={s.id} value={s.id} disabled={isAlreadyMapped}>
+                        {s.name} ({s.platform === 'MEGA_CLOUD' ? 'Cloud Queue' : s.platform}) {isAlreadyMapped ? '— (Already Mapped)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
               <div>
@@ -466,9 +469,14 @@ export default function MappingsPage() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
                 >
                   <option value="" disabled>Select a page...</option>
-                  {pages.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
+                  {pages.map(p => {
+                    const isAlreadyMapped = mappings.some(m => m.facebookPageId === p.id);
+                    return (
+                      <option key={p.id} value={p.id} disabled={isAlreadyMapped}>
+                        {p.name} {isAlreadyMapped ? '— (Already Connected)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
               <div className="flex justify-end gap-3 mt-6">

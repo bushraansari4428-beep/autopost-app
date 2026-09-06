@@ -89,7 +89,7 @@ enum Status {
 model Mapping {
   id               String       @id @default(uuid())
   sourceId         String
-  facebookPageId   String
+  facebookPageId   String       @unique
   scheduledTime    String?
   lastScheduledRun DateTime?
   customHashtags   String?
