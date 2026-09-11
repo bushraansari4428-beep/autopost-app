@@ -812,8 +812,8 @@ export class SyncService {
          const curl = spawn('curl', [
             '-s', '-m', '300', '-X', 'POST',
             `https://graph-video.facebook.com/v19.0/${page.pageId}/videos`,
-            '-F', `access_token=${page.accessToken}`,
-            '-F', `description=${finalDescription}`,
+            '--form-string', `access_token=${page.accessToken}`,
+            '--form-string', `description=${finalDescription}`,
             '-F', `source=@${filePath}`
          ]);
          
@@ -1458,8 +1458,8 @@ export class SyncService {
          const curl = spawn('curl', [
             '-s', '-m', '300', '-X', 'POST',
             `https://graph-video.facebook.com/v19.0/${pageId}/videos`,
-            '-F', `access_token=${accessToken}`,
-            '-F', `description=${finalDescription}`,
+            '--form-string', `access_token=${accessToken}`,
+            '--form-string', `description=${finalDescription}`,
             '-F', `source=@${localFilePath}`
          ]);
          
@@ -1554,8 +1554,8 @@ export class SyncService {
               '-m', '300',
               '-X', 'POST',
               `https://graph-video.facebook.com/v19.0/${pageId}/videos`,
-              '-F', `access_token=${accessToken}`,
-              '-F', `description=${finalDescription}`,
+              '--form-string', `access_token=${accessToken}`,
+              '--form-string', `description=${finalDescription}`,
               '-F', `source=@${tempPath}`
            ]);
            
