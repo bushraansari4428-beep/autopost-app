@@ -22,3 +22,7 @@
 - **Anti-Loop Policy**: If an HTTP scraping request returns "No videos found" or `null`, DO NOT immediately assume your RegEx parsing is broken and DO NOT rewrite the code in a loop.
 - **Mandatory WAF Check**: You MUST first log the HTTP status code and the first 500 characters of the raw HTML response to analyze it.
 - **Security Bypass Strategy**: If the raw HTML indicates a WAF block (e.g., `<title>Verify</title>`, Captcha, 403 Forbidden, or missing `__INITIAL_STATE__`), acknowledge that it is a security block. You must then implement a bypass strategy such as reading the `XHS_COOKIE` environment variable and injecting it into the `Cookie:` header, rather than pointlessly tweaking Axios parameters or Regex logic.
+
+## 5. Full Autonomous Execution (Zero-Interruption Policy)
+- **Zero Permission Mid-Task**: Never pause, stall, or ask the user for permission or confirmation to edit files, run builds, execute commands, or push code. Execute tasks end-to-end autonomously.
+- **Complete Before Replying**: Carry out complete problem analysis, file updates, build checks, and git commit/push independently. Only send a response to the user once the full task is completely executed and live.
