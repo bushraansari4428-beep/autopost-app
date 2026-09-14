@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Clock, RotateCw } from 'lucide-react';
 import ToastContainer, { ToastMessage } from '@/components/Toast';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -15,8 +15,12 @@ export default function MappingsPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const addToast = (message: string, type: 'success' | 'error' | 'info') => {
-    const id = Date.now().toString() + Math.random().toString();
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts(prev => {
+      // Prevent duplicate toasts with the exact same message appearing concurrently
+      if (prev.some(t => t.message === message)) return prev;
+      const id = Date.now().toString() + Math.random().toString();
+      return [...prev, { id, message, type }];
+    });
   };
 
   const removeToast = (id: string) => {
@@ -169,8 +173,16 @@ export default function MappingsPage() {
     }
   };
 
+  const savingHashtagsRef = useRef<{ [id: string]: boolean }>({});
+  const lastSavedHashtagRef = useRef<{ [id: string]: string }>({});
+
   const updateCustomHashtags = async (id: string, hashtags: string) => {
-    setMappings(prev => prev.map(m => m.id === id ? { ...m, customHashtags: hashtags } : m));
+    const trimmed = hashtags.trim();
+    if (savingHashtagsRef.current[id]) return;
+    if (lastSavedHashtagRef.current[id] === trimmed) return;
+
+    savingHashtagsRef.current[id] = true;
+    setMappings(prev => prev.map(m => m.id === id ? { ...m, customHashtags: trimmed || null } : m));
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/mappings/${id}`, {
@@ -179,9 +191,10 @@ export default function MappingsPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ customHashtags: hashtags.trim() || null })
+        body: JSON.stringify({ customHashtags: trimmed || null })
       });
       if (res.ok) {
+        lastSavedHashtagRef.current[id] = trimmed;
         addToast('Custom hashtags saved for this page!', 'success');
       } else {
         addToast('Failed to save custom hashtags', 'error');
@@ -189,6 +202,8 @@ export default function MappingsPage() {
     } catch (err) {
       console.error('Failed to update custom hashtags', err);
       addToast('Failed to save custom hashtags', 'error');
+    } finally {
+      savingHashtagsRef.current[id] = false;
     }
   };
 
@@ -404,21 +419,24 @@ export default function MappingsPage() {
                     defaultValue={mapping.customHashtags || ''}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        updateCustomHashtags(mapping.id, (e.target as HTMLInputElement).value);
+                        (e.target as HTMLInputElement).blur();
                       }
                     }}
                     onBlur={(e) => {
-                      if (e.target.value !== (mapping.customHashtags || '')) {
-                        updateCustomHashtags(mapping.id, e.target.value);
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val !== (mapping.customHashtags || '').trim()) {
+                        updateCustomHashtags(mapping.id, val);
                       }
                     }}
                     placeholder="e.g. #animals #nature #viral #wildlife #fyp"
                     className="bg-gray-950/80 border border-gray-700/70 focus:border-purple-500 text-xs text-purple-200 placeholder-gray-600 rounded-xl px-3 py-2 w-full focus:outline-none transition-colors font-medium tracking-wide"
                   />
                   <button 
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => {
                       const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-                      if (input) updateCustomHashtags(mapping.id, input.value);
+                      if (input) updateCustomHashtags(mapping.id, input.value.trim());
                     }}
                     className="px-3.5 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 hover:text-white border border-purple-500/30 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer shadow-sm shadow-purple-500/10"
                   >
