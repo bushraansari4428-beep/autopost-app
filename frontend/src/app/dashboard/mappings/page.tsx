@@ -470,10 +470,26 @@ export default function MappingsPage() {
                 >
                   <option value="" disabled>Select a page...</option>
                   {pages.map(p => {
-                    const isAlreadyMapped = mappings.some(m => m.facebookPageId === p.id);
+                    const existingMap = mappings.find(m => m.facebookPageId === p.id);
+                    // Smart Logic: A page is genuinely busy/connected if:
+                    // 1. It is mapped to an external scraper platform (TikTok, Instagram, YouTube, etc.) or Local Folder
+                    // 2. OR it is mapped to Cloud Queue AND actually has videos in queue (p.cloudQueueCount > 0)
+                    const isBusy = existingMap && (
+                      existingMap.source?.platform !== 'MEGA_CLOUD' || 
+                      (p.cloudQueueCount && p.cloudQueueCount > 0)
+                    );
+                    
+                    let statusLabel = '— (Available)';
+                    if (isBusy && existingMap) {
+                      const platform = existingMap.source?.platform === 'MEGA_CLOUD' ? 'Cloud Queue' : existingMap.source?.platform;
+                      statusLabel = `— (Connected: ${platform} - ${existingMap.source?.name || ''})`;
+                    } else if (existingMap && existingMap.source?.platform === 'MEGA_CLOUD') {
+                      statusLabel = `— (Available / Unused Cloud)`;
+                    }
+
                     return (
-                      <option key={p.id} value={p.id} disabled={isAlreadyMapped}>
-                        {p.name} {isAlreadyMapped ? '— (Already Connected)' : ''}
+                      <option key={p.id} value={p.id} disabled={Boolean(isBusy)}>
+                        {p.name} {statusLabel}
                       </option>
                     );
                   })}

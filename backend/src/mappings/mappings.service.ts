@@ -19,11 +19,35 @@ export class MappingsService {
     }
 
     const existingPage = await this.prisma.mapping.findFirst({
-      where: { facebookPageId: createMappingDto.facebookPageId }
+      where: { facebookPageId: createMappingDto.facebookPageId },
+      include: { source: true }
     });
 
     if (existingPage) {
-      throw new BadRequestException('This Facebook page is already connected to a source. A page can only have one active mapping at a time.');
+      // Smart Logic: Check if the existing mapping is only an empty MEGA_CLOUD placeholder
+      const isCloudSource = existingPage.source?.platform === 'MEGA_CLOUD';
+      let hasVideos = false;
+      if (isCloudSource) {
+        const videoCount = await this.prisma.video.count({
+          where: {
+            sourceId: existingPage.sourceId,
+            uploads: { some: { facebookPageId: createMappingDto.facebookPageId } }
+          }
+        });
+        const cloudVideos = await this.prisma.video.count({
+          where: { sourceId: existingPage.sourceId }
+        });
+        hasVideos = (videoCount > 0 || cloudVideos > 0);
+      }
+
+      if (isCloudSource && !hasVideos) {
+        // Unused dummy cloud placeholder - delete it cleanly to allow the new mapping
+        await this.prisma.mapping.delete({
+          where: { id: existingPage.id }
+        });
+      } else {
+        throw new BadRequestException('This Facebook page is already connected to an active source. A page can only have one active mapping at a time.');
+      }
     }
 
     return this.prisma.mapping.create({
