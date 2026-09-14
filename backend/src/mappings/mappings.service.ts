@@ -37,7 +37,17 @@ export class MappingsService {
         const cloudVideos = await this.prisma.video.count({
           where: { sourceId: existingPage.sourceId }
         });
-        hasVideos = (videoCount > 0 || cloudVideos > 0);
+        const totalUploads = await this.prisma.uploadHistory.count({
+          where: { facebookPageId: createMappingDto.facebookPageId }
+        });
+        hasVideos = (
+          videoCount > 0 || 
+          cloudVideos > 0 || 
+          totalUploads > 0 || 
+          !!existingPage.lastScheduledRun || 
+          (existingPage.scheduledTime && existingPage.scheduledTime !== '12:00' && existingPage.scheduledTime !== '00:00') ||
+          !!existingPage.customHashtags
+        );
       }
 
       if (isCloudSource && !hasVideos) {
