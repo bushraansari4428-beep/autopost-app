@@ -253,7 +253,7 @@ model WhatsAppConfig {
   userId       String?   @unique
   user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   phoneNumber  String
-  apiKey       String
+  apiKey       String?
   enabled      Boolean   @default(true)
   reportTime   String    @default("09:00") // Time in PKT e.g. "09:00"
   lastSentDate String?   // "YYYY-MM-DD" in PKT

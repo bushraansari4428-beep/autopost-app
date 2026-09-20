@@ -20,13 +20,13 @@ export class WhatsappController {
 
   @Post('config')
   async saveConfig(@Body() body: any, @Request() req: any) {
-    if (!body.phoneNumber || !body.apiKey) {
-      throw new BadRequestException('Phone number and API Key are required.');
+    if (!body.phoneNumber) {
+      throw new BadRequestException('Phone number is required.');
     }
 
     return this.whatsappService.saveConfig({
       phoneNumber: body.phoneNumber,
-      apiKey: body.apiKey,
+      apiKey: body.apiKey || undefined,
       reportTime: body.reportTime || '09:00',
       enabled: body.enabled !== undefined ? body.enabled : true,
       userId: req.user?.id,
@@ -38,13 +38,13 @@ export class WhatsappController {
     const phone = body.phoneNumber;
     const apiKey = body.apiKey;
 
-    if (!phone || !apiKey) {
-      throw new BadRequestException('Phone number and API key are required to test.');
+    if (!phone) {
+      throw new BadRequestException('Phone number is required to test.');
     }
 
-    const result = await this.whatsappService.sendTestReport(phone, apiKey, req.user?.id);
+    const result = await this.whatsappService.sendTestReport(phone, apiKey || undefined, req.user?.id);
     if (!result.success) {
-      throw new BadRequestException(result.message || 'Failed to send WhatsApp test message. Please verify your phone number and CallMeBot API key.');
+      throw new BadRequestException(result.message || 'Failed to send WhatsApp test message.');
     }
 
     return { success: true, message: result.message };

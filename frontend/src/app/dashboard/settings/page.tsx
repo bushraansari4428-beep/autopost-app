@@ -8,12 +8,12 @@ import {
   HelpCircle, 
   ChevronDown, 
   ChevronUp, 
-  CheckCircle, 
   Clock, 
   Phone, 
   Key, 
+  RefreshCw,
   Sparkles,
-  RefreshCw
+  ShieldCheck
 } from 'lucide-react';
 import ToastContainer, { ToastMessage } from '@/components/Toast';
 
@@ -32,7 +32,7 @@ export default function SettingsPage() {
   const [loadingWhatsapp, setLoadingWhatsapp] = useState(true);
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
   const [testingWhatsapp, setTestingWhatsapp] = useState(false);
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [showAdvancedGateway, setShowAdvancedGateway] = useState(false);
 
   const addToast = (message: string, type: 'success' | 'error' | 'info') => {
     const id = Date.now().toString() + Math.random().toString();
@@ -88,8 +88,8 @@ export default function SettingsPage() {
 
   const handleSaveWhatsapp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!whatsappForm.phoneNumber || !whatsappForm.apiKey) {
-      addToast('Phone number and CallMeBot API key are required.', 'error');
+    if (!whatsappForm.phoneNumber) {
+      addToast('Please enter your WhatsApp phone number.', 'error');
       return;
     }
 
@@ -102,7 +102,7 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        addToast('WhatsApp daily report settings saved successfully!', 'success');
+        addToast('WhatsApp report settings saved successfully!', 'success');
       } else {
         addToast(`Failed to save: ${data.message || 'Unknown error'}`, 'error');
       }
@@ -114,8 +114,8 @@ export default function SettingsPage() {
   };
 
   const handleSendTestReport = async () => {
-    if (!whatsappForm.phoneNumber || !whatsappForm.apiKey) {
-      addToast('Please enter your Phone number and API key first.', 'error');
+    if (!whatsappForm.phoneNumber) {
+      addToast('Please enter your WhatsApp phone number first.', 'error');
       return;
     }
 
@@ -128,14 +128,14 @@ export default function SettingsPage() {
         headers: getHeaders(),
         body: JSON.stringify({
           phoneNumber: whatsappForm.phoneNumber,
-          apiKey: whatsappForm.apiKey,
+          apiKey: whatsappForm.apiKey || undefined,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         addToast('Test report sent! Check your WhatsApp.', 'success');
       } else {
-        addToast(`Delivery failed: ${data.message || 'Check credentials'}`, 'error');
+        addToast(`Delivery status: ${data.message || 'Check number format'}`, 'error');
       }
     } catch (err: any) {
       addToast(`Test error: ${err.message}`, 'error');
@@ -177,11 +177,11 @@ export default function SettingsPage() {
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   <span>WhatsApp Daily Morning Report</span>
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
-                    100% Free (CallMeBot)
+                    Direct Phone Alerts
                   </span>
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Get automated daily reports on Facebook Page followers, uploads, and YouTube Shorts delivered to your WhatsApp.
+                  Enter your mobile number to get daily reports on Facebook Page followers, upload status, and YouTube Shorts.
                 </p>
               </div>
             </div>
@@ -204,9 +204,9 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Form */}
+          {/* Clean "Sirf Number" Form */}
           <form onSubmit={handleSaveWhatsapp} className="mt-6 space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-emerald-400" />
@@ -217,32 +217,16 @@ export default function SettingsPage() {
                   required
                   value={whatsappForm.phoneNumber}
                   onChange={(e) => setWhatsappForm({ ...whatsappForm, phoneNumber: e.target.value })}
-                  placeholder="+923001234567"
+                  placeholder="03001234567 or +923001234567"
                   className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
                 />
-                <span className="text-[11px] text-gray-500">Include country code (e.g. +92 or 92)</span>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>CallMeBot API Key *</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={whatsappForm.apiKey}
-                  onChange={(e) => setWhatsappForm({ ...whatsappForm, apiKey: e.target.value })}
-                  placeholder="e.g. 1234567"
-                  className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
-                />
-                <span className="text-[11px] text-gray-500">Received via WhatsApp from CallMeBot</span>
+                <span className="text-[11px] text-gray-500">Apna WhatsApp mobile number yahan enter karein</span>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Delivery Time (PKT) *</span>
+                  <span>Daily Delivery Time (PKT) *</span>
                 </label>
                 <input
                   type="text"
@@ -252,45 +236,41 @@ export default function SettingsPage() {
                   placeholder="09:00"
                   className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
                 />
-                <span className="text-[11px] text-gray-500">24-hour format (Default: 09:00 AM)</span>
+                <span className="text-[11px] text-gray-500">Roz subah kis waqt report chahiye (e.g. 09:00 AM)</span>
               </div>
             </div>
 
-            {/* Quick 3-Step Setup Instructions Card */}
-            <div className="bg-gray-950/70 border border-gray-800 rounded-2xl overflow-hidden">
+            {/* Optional Advanced Settings Toggle */}
+            <div className="border border-gray-800/80 rounded-2xl overflow-hidden bg-gray-950/40">
               <button
                 type="button"
-                onClick={() => setShowSetupGuide(!showSetupGuide)}
-                className="w-full px-4 py-3 flex items-center justify-between text-xs text-gray-300 hover:text-white transition-colors"
+                onClick={() => setShowAdvancedGateway(!showAdvancedGateway)}
+                className="w-full px-4 py-2.5 flex items-center justify-between text-xs text-gray-400 hover:text-white transition-colors"
               >
-                <span className="font-semibold flex items-center gap-1.5 text-emerald-400">
-                  <HelpCircle className="w-4 h-4" />
-                  <span>How to get your free CallMeBot API Key (30 Seconds Setup)</span>
+                <span className="flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Optional: Custom CallMeBot API Key (Sirf agar aapke paas ho)</span>
                 </span>
-                {showSetupGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {showAdvancedGateway ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
 
-              {showSetupGuide && (
-                <div className="p-4 pt-1 text-xs text-gray-400 space-y-2 border-t border-gray-800/80 bg-gray-950/90">
-                  <p>
-                    <strong className="text-white">Step 1:</strong> Apne mobile WhatsApp mein CallMeBot number ko save karein:{' '}
-                    <code className="text-emerald-400 font-mono select-all">+34 644 44 48 57</code> ya{' '}
-                    <code className="text-emerald-400 font-mono select-all">+34 644 65 67 10</code>.
+              {showAdvancedGateway && (
+                <div className="p-4 pt-1 text-xs text-gray-400 space-y-2 border-t border-gray-800/80 bg-gray-950/80">
+                  <p className="text-[11px] text-gray-400">
+                    Agar aap CallMeBot key use karna chahte hain to yahan paste kar sakte hain, warna is box ko khaali chor dein.
                   </p>
-                  <p>
-                    <strong className="text-white">Step 2:</strong> Us number par ye message bhejein:{' '}
-                    <code className="bg-gray-800 px-2 py-0.5 rounded text-emerald-300 font-mono select-all">
-                      I allow callmebot to send me messages
-                    </code>
-                  </p>
-                  <p>
-                    <strong className="text-white">Step 3:</strong> CallMeBot aapko foran reply mein aapki <strong>API Key</strong> bhej dega (e.g. <code className="text-white">apikey: 1234567</code>). Wo key yahan paste karein aur Save kar lein!
-                  </p>
+                  <input
+                    type="text"
+                    value={whatsappForm.apiKey}
+                    onChange={(e) => setWhatsappForm({ ...whatsappForm, apiKey: e.target.value })}
+                    placeholder="Optional: CallMeBot API key paste karein"
+                    className="w-full px-4 py-2 bg-gray-900 border border-gray-800 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                  />
                 </div>
               )}
             </div>
 
-            {/* Buttons */}
+            {/* Action Buttons */}
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
               <button
                 type="button"

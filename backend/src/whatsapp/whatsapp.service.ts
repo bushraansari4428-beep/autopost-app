@@ -20,24 +20,93 @@ export class WhatsappService implements OnModuleInit {
   }
 
   /**
+   * Unified WhatsApp message dispatcher supporting:
+   * 1. Green-API Master Gateway (Instance + Token in server env)
+   * 2. UltraMsg Gateway (Instance + Token in server env)
+   * 3. CallMeBot Gateway (if personal API Key is supplied)
+   */
+  async dispatchWhatsAppMessage(phoneNumber: string, message: string, personalApiKey?: string): Promise<{ success: boolean; message: string }> {
+    if (!phoneNumber) {
+      return { success: false, message: 'WhatsApp phone number is required.' };
+    }
+
+    // Clean phone number: e.g. "0300 1234567" -> "923001234567"
+    let cleanDigits = phoneNumber.replace(/\D/g, '');
+    if (cleanDigits.startsWith('00')) cleanDigits = cleanDigits.substring(2);
+    if (cleanDigits.startsWith('03') && cleanDigits.length === 11) {
+      cleanDigits = '92' + cleanDigits.substring(1);
+    }
+
+    // Option A: Green-API Gateway (Zero-config for user)
+    const greenInstance = process.env.GREEN_API_INSTANCE_ID;
+    const greenToken = process.env.GREEN_API_TOKEN;
+    if (greenInstance && greenToken) {
+      try {
+        this.logger.log(`Dispatching WhatsApp via Green-API Gateway to ${cleanDigits}...`);
+        const url = `https://api.green-api.com/waInstance${greenInstance.trim()}/sendMessage/${greenToken.trim()}`;
+        const res = await axios.post(
+          url,
+          {
+            chatId: `${cleanDigits}@c.us`,
+            message: message,
+          },
+          { timeout: 25000 }
+        );
+
+        if (res.data && res.data.idMessage) {
+          return { success: true, message: 'WhatsApp report delivered via Green-API Gateway!' };
+        }
+      } catch (err: any) {
+        this.logger.error('Green-API dispatch failed:', err.response?.data || err.message);
+      }
+    }
+
+    // Option B: UltraMsg Gateway (Zero-config for user)
+    const ultraInstance = process.env.ULTRAMSG_INSTANCE_ID;
+    const ultraToken = process.env.ULTRAMSG_TOKEN;
+    if (ultraInstance && ultraToken) {
+      try {
+        this.logger.log(`Dispatching WhatsApp via UltraMsg Gateway to ${cleanDigits}...`);
+        const url = `https://api.ultramsg.com/${ultraInstance.trim()}/messages/chat`;
+        const res = await axios.post(
+          url,
+          new URLSearchParams({
+            token: ultraToken.trim(),
+            to: cleanDigits,
+            body: message,
+          }),
+          { timeout: 25000 }
+        );
+
+        if (res.data && (res.data.sent === 'true' || res.data.id)) {
+          return { success: true, message: 'WhatsApp report delivered via UltraMsg Gateway!' };
+        }
+      } catch (err: any) {
+        this.logger.error('UltraMsg dispatch failed:', err.response?.data || err.message);
+      }
+    }
+
+    // Option C: CallMeBot Gateway
+    if (personalApiKey && personalApiKey.trim()) {
+      return this.sendCallMeBotMessage(cleanDigits, personalApiKey.trim(), message);
+    }
+
+    return {
+      success: false,
+      message: 'Server WhatsApp Gateway not yet connected. Please add GREEN_API_INSTANCE_ID and GREEN_API_TOKEN in Render environment variables or provide CallMeBot key.',
+    };
+  }
+
+  /**
    * Dispatches text message through CallMeBot WhatsApp Gateway
    */
-  async sendCallMeBotMessage(phoneNumber: string, apiKey: string, message: string): Promise<{ success: boolean; message: string }> {
+  async sendCallMeBotMessage(cleanPhone: string, apiKey: string, message: string): Promise<{ success: boolean; message: string }> {
     try {
-      if (!phoneNumber || !apiKey) {
-        return { success: false, message: 'Phone number and API Key are required.' };
-      }
-
-      // Format phone number: remove any spaces, dashes, or non-digits except optional leading plus
-      let cleanPhone = phoneNumber.replace(/[\s\-\(\)]/g, '');
-      if (cleanPhone.startsWith('00')) {
-        cleanPhone = '+' + cleanPhone.substring(2);
-      }
-
+      const formattedPhone = cleanPhone.startsWith('+') ? cleanPhone : '+' + cleanPhone;
       const encodedText = encodeURIComponent(message);
-      const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodedText}&apikey=${apiKey.trim()}`;
+      const url = `https://api.callmebot.com/whatsapp.php?phone=${formattedPhone}&text=${encodedText}&apikey=${apiKey.trim()}`;
 
-      this.logger.log(`Sending WhatsApp report via CallMeBot to ${cleanPhone}...`);
+      this.logger.log(`Sending WhatsApp report via CallMeBot to ${formattedPhone}...`);
 
       const res = await axios.get(url, {
         timeout: 25000,
@@ -92,7 +161,6 @@ export class WhatsappService implements OnModuleInit {
     } else {
       for (const page of pages) {
         let totalFollowers = 0;
-        let likesCount = 0;
 
         // Fetch fresh follower count from Facebook Graph API
         try {
@@ -102,11 +170,8 @@ export class WhatsappService implements OnModuleInit {
           );
           if (res.data) {
             totalFollowers = res.data.followers_count || res.data.fan_count || 0;
-            likesCount = res.data.fan_count || totalFollowers;
           }
-        } catch (_) {
-          // Token expired or network issue
-        }
+        } catch (_) {}
 
         const completedUploads = page.uploads.filter((u) => u.status === 'COMPLETED').length;
         const failedUploads = page.uploads.filter((u) => u.status === 'FAILED').length;
@@ -213,14 +278,14 @@ ${alertSection}
     });
 
     for (const config of activeConfigs) {
-      if (!config.phoneNumber || !config.apiKey) continue;
+      if (!config.phoneNumber) continue;
 
       // Check if time matches and hasn't been sent today
       if (config.reportTime === currentPktTime && config.lastSentDate !== currentPktDate) {
         this.logger.log(`Triggering daily morning WhatsApp report for user ${config.userId || 'Global'} (${config.phoneNumber}) at ${currentPktTime} PKT`);
 
         const report = await this.generateReportContent(config.userId || undefined);
-        const result = await this.sendCallMeBotMessage(config.phoneNumber, config.apiKey, report);
+        const result = await this.dispatchWhatsAppMessage(config.phoneNumber, report, config.apiKey || undefined);
 
         if (result.success) {
           await this.prisma.whatsAppConfig.update({
@@ -253,9 +318,9 @@ ${alertSection}
   }
 
   /**
-   * Save or update WhatsApp configuration
+   * Save or update WhatsApp configuration (apiKey is optional)
    */
-  async saveConfig(data: { phoneNumber: string; apiKey: string; reportTime?: string; enabled?: boolean; userId?: string }) {
+  async saveConfig(data: { phoneNumber: string; apiKey?: string; reportTime?: string; enabled?: boolean; userId?: string }) {
     const { phoneNumber, apiKey, reportTime = '09:00', enabled = true, userId } = data;
 
     if (userId) {
@@ -264,13 +329,13 @@ ${alertSection}
         create: {
           userId,
           phoneNumber,
-          apiKey,
+          apiKey: apiKey || null,
           reportTime,
           enabled,
         },
         update: {
           phoneNumber,
-          apiKey,
+          apiKey: apiKey || null,
           reportTime,
           enabled,
         },
@@ -283,7 +348,7 @@ ${alertSection}
         where: { id: existing.id },
         data: {
           phoneNumber,
-          apiKey,
+          apiKey: apiKey || null,
           reportTime,
           enabled,
         },
@@ -293,7 +358,7 @@ ${alertSection}
     return this.prisma.whatsAppConfig.create({
       data: {
         phoneNumber,
-        apiKey,
+        apiKey: apiKey || null,
         reportTime,
         enabled,
       },
@@ -301,13 +366,13 @@ ${alertSection}
   }
 
   /**
-   * Send test report immediately to verify phone and API key
+   * Send test report immediately to verify phone
    */
-  async sendTestReport(phoneNumber: string, apiKey: string, userId?: string) {
+  async sendTestReport(phoneNumber: string, apiKey?: string, userId?: string) {
     const reportContent = await this.generateReportContent(userId);
-    const testHeader = `🧪 *AutoPost WhatsApp Test Message*\n_Your connection is verified and active! Here is how your daily morning report will look:_\n\n`;
+    const testHeader = `🧪 *AutoPost WhatsApp Test Message*\n_Connection verified! Here is how your daily morning report will look:_\n\n`;
     const fullTestMessage = testHeader + reportContent;
 
-    return this.sendCallMeBotMessage(phoneNumber, apiKey, fullTestMessage);
+    return this.dispatchWhatsAppMessage(phoneNumber, fullTestMessage, apiKey);
   }
 }
