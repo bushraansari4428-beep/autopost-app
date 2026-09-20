@@ -289,7 +289,7 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                    Upload fail hone, token expire hone, account verification / checkpoint aane, scheduled slot miss hone, ya queue me <strong>0 videos</strong> baki rehne par foran WhatsApp message milega.
+                    Sirf un Pages ke alerts aayenge jinki <strong>Mega Cloud</strong> mapping ON hai (jin pages ki mapping OFF hai ya jin par TikTok source hai unke alerts nahi aayenge). Upload fail hone ya queue me <strong>0 videos</strong> baki rehne par foran WhatsApp message milega.
                   </p>
                 </div>
               </div>

@@ -167,7 +167,38 @@ export class WhatsappService implements OnModuleInit {
   }
 
   /**
-   * Fetches real-time Facebook and YouTube data to construct executive daily morning report
+  /**
+   * Returns list of Facebook Pages that have an active Mega Cloud mapping that is ON (status === ACTIVE and scheduledTime != '00:00')
+   */
+  async getActiveMegaCloudPages(userId?: string) {
+    const pageFilter = userId ? { userId } : {};
+    return this.prisma.facebookPage.findMany({
+      where: {
+        ...pageFilter,
+        status: 'ACTIVE',
+        mappings: {
+          some: {
+            status: 'ACTIVE',
+            scheduledTime: { not: null, notIn: ['00:00', ''] },
+            source: { platform: 'MEGA_CLOUD' },
+          },
+        },
+      },
+      include: {
+        mappings: {
+          where: {
+            status: 'ACTIVE',
+            scheduledTime: { not: null, notIn: ['00:00', ''] },
+            source: { platform: 'MEGA_CLOUD' },
+          },
+          include: { source: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * Fetches real-time Facebook data for active Mega Cloud pages to construct executive daily morning report
    */
   async generateReportContent(userId?: string): Promise<string> {
     const now = new Date();
@@ -183,20 +214,12 @@ export class WhatsappService implements OnModuleInit {
 
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // 1. Fetch Facebook Pages
-    const pageFilter = userId ? { userId } : {};
-    const pages = await this.prisma.facebookPage.findMany({
-      where: pageFilter,
-      include: {
-        uploads: {
-          where: { createdAt: { gte: last24h } },
-        },
-      },
-    });
+    // 1. Fetch ONLY Facebook Pages with active Mega Cloud mapping ON
+    const pages = await this.getActiveMegaCloudPages(userId);
 
     let fbSection = '';
     if (pages.length === 0) {
-      fbSection = '  _Koi Facebook Page connected nahi hai._\n';
+      fbSection = '  _Koi active Mega Cloud Page nahi mila (ya mapping/schedule OFF hai)._\n';
     } else {
       for (const page of pages) {
         let totalFollowers = 0;
@@ -212,8 +235,22 @@ export class WhatsappService implements OnModuleInit {
           }
         } catch (_) {}
 
-        const completedUploads = page.uploads.filter((u) => u.status === 'COMPLETED').length;
-        const failedUploads = page.uploads.filter((u) => u.status === 'FAILED').length;
+        const completedUploads = await this.prisma.uploadHistory.count({
+          where: {
+            facebookPageId: page.id,
+            status: 'COMPLETED',
+            createdAt: { gte: last24h },
+            video: { source: { platform: 'MEGA_CLOUD' } },
+          },
+        });
+        const failedUploads = await this.prisma.uploadHistory.count({
+          where: {
+            facebookPageId: page.id,
+            status: 'FAILED',
+            createdAt: { gte: last24h },
+            video: { source: { platform: 'MEGA_CLOUD' } },
+          },
+        });
 
         // Cloud queue count for this page
         const cloudQueueCount = await this.prisma.video.count({
@@ -223,55 +260,69 @@ export class WhatsappService implements OnModuleInit {
           },
         });
 
+        const activeMapping = page.mappings[0];
+        const scheduleSlots = activeMapping?.scheduledTime || 'ON';
+
         fbSection += `🔹 *${page.name}*\n`;
         fbSection += `   • 👥 Followers: *${totalFollowers.toLocaleString()}*\n`;
-        fbSection += `   • 🎬 Videos Uploaded (24h): *${completedUploads}* ${failedUploads > 0 ? `(${failedUploads} failed ⚠️)` : '✅'}\n`;
+        fbSection += `   • 🎬 Cloud Videos Posted (24h): *${completedUploads}* ${failedUploads > 0 ? `(${failedUploads} failed ⚠️)` : '✅'}\n`;
         fbSection += `   • 📁 Cloud Queue: *${cloudQueueCount}* videos left\n`;
-        fbSection += `   • 🟢 Status: ${page.status === 'ACTIVE' ? 'Active' : 'Paused'}\n\n`;
+        fbSection += `   • 🕒 Schedule: *${scheduleSlots}* PKT\n\n`;
       }
     }
 
-    // 2. Fetch YouTube Channels (if any)
+    // 2. Fetch YouTube Channels (ONLY Cloud active channels, no TikTok)
     const ytFilter = userId ? { userId } : {};
     const ytChannels = await this.prisma.youtubeChannel.findMany({
-      where: ytFilter,
+      where: {
+        ...ytFilter,
+        status: 'ACTIVE',
+        scheduledTime: { not: null, notIn: ['00:00', ''] },
+      },
     });
 
     let ytSection = '';
     if (ytChannels.length > 0) {
-      ytSection = '🔴 *YOUTUBE SHORTS:*\n';
+      ytSection = '🔴 *YOUTUBE SHORTS (CLOUD):*\n';
       for (const ch of ytChannels) {
-        const tiktokShortsUploaded = await this.prisma.tiktokYoutubeUpload.count({
-          where: { youtubeChannelId: ch.id, status: 'COMPLETED', createdAt: { gte: last24h } },
-        });
         const cloudShortsUploaded = await this.prisma.youtubeCloudVideo.count({
           where: { youtubeChannelId: ch.id, status: 'COMPLETED', uploadedAt: { gte: last24h } },
         });
-        const totalShorts = tiktokShortsUploaded + cloudShortsUploaded;
 
         const ytPendingQueue = await this.prisma.youtubeCloudVideo.count({
           where: { youtubeChannelId: ch.id, status: 'PENDING' },
         });
 
         ytSection += `🔹 *${ch.name}*\n`;
-        ytSection += `   • 🎬 Shorts Posted (24h): *${totalShorts}* ✅\n`;
+        ytSection += `   • 🎬 Shorts Posted (24h): *${cloudShortsUploaded}* ✅\n`;
         ytSection += `   • 📁 Cloud Queue: *${ytPendingQueue}* videos\n`;
-        ytSection += `   • 🕒 Scheduled Times: *${ch.scheduledTime || 'OFF'}* (${ch.videosPerDay}/day)\n\n`;
+        ytSection += `   • 🕒 Scheduled Times: *${ch.scheduledTime}* (${ch.videosPerDay}/day)\n\n`;
       }
     }
 
-    // 3. Check for Token or System Alerts
+    // 3. Check for Token or System Alerts (ONLY for active Mega Cloud pages)
     const tokenIssues = await this.prisma.uploadHistory.count({
       where: {
         status: 'FAILED',
         createdAt: { gte: last24h },
+        video: { source: { platform: 'MEGA_CLOUD' } },
+        facebookPage: {
+          status: 'ACTIVE',
+          mappings: {
+            some: {
+              status: 'ACTIVE',
+              scheduledTime: { not: null, notIn: ['00:00', ''] },
+              source: { platform: 'MEGA_CLOUD' },
+            },
+          },
+        },
         errorMessage: { contains: 'access token', mode: 'insensitive' },
       },
     });
 
-    let alertSection = '✅ All Page tokens & automation healthy.';
+    let alertSection = '✅ All active Cloud Page tokens & automation healthy.';
     if (tokenIssues > 0) {
-      alertSection = `⚠️ *ATTENTION:* ${tokenIssues} upload(s) failed due to invalid/expired Facebook token. Please check your Pages!`;
+      alertSection = `⚠️ *ATTENTION:* ${tokenIssues} cloud upload(s) failed due to invalid/expired Facebook token. Please check your Pages!`;
     }
 
     const message = 
@@ -428,14 +479,28 @@ ${alertSection}
 
       // ─────────────────────────────────────────────────────────────
       // 1. Facebook Upload Failures (Last 60 Minutes)
+      // STRICT FILTER: Source must be MEGA_CLOUD and mapping must be ON
       // ─────────────────────────────────────────────────────────────
       const recentFbFails = await this.prisma.uploadHistory.findMany({
         where: {
           status: 'FAILED',
           createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+          video: {
+            source: { platform: 'MEGA_CLOUD' }, // No TikTok or external sources
+          },
+          facebookPage: {
+            status: 'ACTIVE',
+            mappings: {
+              some: {
+                status: 'ACTIVE',
+                scheduledTime: { not: null, notIn: ['00:00', ''] },
+                source: { platform: 'MEGA_CLOUD' }, // Mapping must be ON for MEGA_CLOUD
+              },
+            },
+          },
         },
         include: {
-          video: true,
+          video: { include: { source: true } },
           facebookPage: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -466,12 +531,16 @@ ${alertSection}
       }
 
       // ─────────────────────────────────────────────────────────────
-      // 2. YouTube Upload Failures (Last 60 Minutes)
+      // 2. YouTube Upload Failures (Last 60 Minutes - CLOUD ONLY, NO TIKTOK)
       // ─────────────────────────────────────────────────────────────
       const recentYtCloudFails = await this.prisma.youtubeCloudVideo.findMany({
         where: {
           status: 'FAILED',
           updatedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+          youtubeChannel: {
+            status: 'ACTIVE',
+            scheduledTime: { not: null, notIn: ['00:00', ''] }, // Only if cloud schedule is ON
+          },
         },
         include: { youtubeChannel: true },
         orderBy: { updatedAt: 'desc' },
@@ -501,46 +570,21 @@ ${alertSection}
         }
       }
 
-      const recentTiktokYtFails = await this.prisma.tiktokYoutubeUpload.findMany({
-        where: {
-          status: 'FAILED',
-          updatedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-        },
-        include: { youtubeChannel: true },
-        orderBy: { updatedAt: 'desc' },
-        take: 10,
-      });
+      // ─────────────────────────────────────────────────────────────
+      // 3. Zero Remaining Videos Alert (Instant One-Time Alert)
+      // STRICT FILTER: Only for pages with active MEGA_CLOUD mapping ON
+      // ─────────────────────────────────────────────────────────────
+      const activeCloudPages = await this.getActiveMegaCloudPages();
+      const activeCloudPageIds = new Set(activeCloudPages.map((p) => p.id));
 
-      for (const fail of recentTiktokYtFails) {
-        const alertKey = `tt_yt_fail_${fail.id}`;
-        if (!this.sentAlertIds.has(alertKey)) {
-          this.sentAlertIds.add(alertKey);
-
-          const channelName = fail.youtubeChannel?.name || 'YouTube Channel';
-          const videoTitle = fail.title || 'TikTok Short';
-          const errorMsg = this.formatErrorMessage(fail.errorMessage);
-
-          const alert =
-`🚨 *AutoPost Alert: YouTube Sync Failed!*
-━━━━━━━━━━━━━━━━━━━━
-🔴 *YouTube Channel:* *${channelName}*
-🎬 *Short:* ${videoTitle}
-⚠️ *Wajah:* ${errorMsg}
-🕒 *Time:* ${pktTimeStr} PKT
-━━━━━━━━━━━━━━━━━━━━`;
-
-          await this.sendAlertToRecipients(alert, fail.youtubeChannel?.userId);
+      // Clean up alerted pages that are no longer active cloud pages (e.g. mapping turned OFF)
+      for (const alertedId of Array.from(this.zeroStockAlertedPages)) {
+        if (!activeCloudPageIds.has(alertedId)) {
+          this.zeroStockAlertedPages.delete(alertedId);
         }
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // 3. Zero Remaining Videos Alert (Instant One-Time Alert)
-      // ─────────────────────────────────────────────────────────────
-      const activePages = await this.prisma.facebookPage.findMany({
-        where: { status: 'ACTIVE' },
-      });
-
-      for (const page of activePages) {
+      for (const page of activeCloudPages) {
         const cloudQueueCount = await this.prisma.video.count({
           where: {
             source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
@@ -556,23 +600,27 @@ ${alertSection}
 `⚠️ *AutoPost Stock Alert: 0 Videos Left!*
 ━━━━━━━━━━━━━━━━━━━━
 📄 *Page:* *${page.name}*
-📁 *Queue Status:* Cloud queue me koi video baki nahi rahi (*0 Videos Remaining*).
+📁 *Queue Status:* Mega Cloud queue me koi video baki nahi rahi (*0 Videos Remaining*).
 🕒 *Time:* ${pktTimeStr} PKT
 ━━━━━━━━━━━━━━━━━━━━
-💡 _Agli scheduled posting miss ho sakti hai. Baraye meharbani mazeed videos upload karein taake auto-posting chalti rahe._`;
+💡 _Agli scheduled posting miss ho sakti hai. Baraye meharbani mazeed videos cloud folder me upload karein taake auto-posting chalti rahe._`;
 
             await this.sendAlertToRecipients(alert, page.userId);
           }
         } else {
-          // Re-arm alert if new videos added
+          // Re-arm alert when videos are added back to cloud
           if (this.zeroStockAlertedPages.has(page.id)) {
             this.zeroStockAlertedPages.delete(page.id);
           }
         }
       }
 
+      // YouTube Channels (Cloud Only)
       const activeYtChannels = await this.prisma.youtubeChannel.findMany({
-        where: { status: 'ACTIVE' },
+        where: {
+          status: 'ACTIVE',
+          scheduledTime: { not: null, notIn: ['00:00', ''] },
+        },
       });
 
       for (const ch of activeYtChannels) {
@@ -605,6 +653,7 @@ ${alertSection}
 
       // ─────────────────────────────────────────────────────────────
       // 4. Missed Scheduled Upload Alert
+      // STRICT FILTER: Only MEGA_CLOUD mappings with status === ACTIVE and scheduledTime != '00:00'
       // ─────────────────────────────────────────────────────────────
       const pktHours = parseInt(
         new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(now),
@@ -619,7 +668,9 @@ ${alertSection}
       const activeMappings = await this.prisma.mapping.findMany({
         where: {
           status: 'ACTIVE',
-          scheduledTime: { not: null },
+          scheduledTime: { not: null, notIn: ['00:00', ''] },
+          source: { platform: 'MEGA_CLOUD' }, // STRICTLY MEGA_CLOUD ONLY
+          facebookPage: { status: 'ACTIVE' },
         },
         include: {
           facebookPage: true,
@@ -628,9 +679,7 @@ ${alertSection}
       });
 
       for (const mapping of activeMappings) {
-        if (!mapping.scheduledTime || mapping.scheduledTime === '00:00') continue;
-
-        const slots = mapping.scheduledTime.split(',').map((s) => s.trim()).filter(Boolean);
+        const slots = mapping.scheduledTime!.split(',').map((s) => s.trim()).filter(Boolean);
         for (const slot of slots) {
           const parts = slot.split(':').map(Number);
           if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) continue;
@@ -675,12 +724,13 @@ ${alertSection}
 
       // ─────────────────────────────────────────────────────────────
       // 5. Periodic Facebook Token & Checkpoint Verification (Every 15 mins)
+      // STRICT FILTER: Only check active pages with active MEGA_CLOUD mapping ON
       // ─────────────────────────────────────────────────────────────
       const nowMs = Date.now();
       if (nowMs - this.lastTokenCheckTime > 15 * 60 * 1000) {
         this.lastTokenCheckTime = nowMs;
 
-        for (const page of activePages) {
+        for (const page of activeCloudPages) {
           if (!page.accessToken) continue;
           try {
             const res = await axios.get(
@@ -831,11 +881,11 @@ ${alertSection}
 `⚡ *AutoPost Alert: Instant Notification Test!*
 ━━━━━━━━━━━━━━━━━━━━
 📄 *Status:* Instant Alerts Active & Operational ✅
-🎯 *Coverage:*
- • Upload failures & errors
- • Facebook token expiration & checkpoints
- • Cloud Queue 0 videos baki rehne par instant stock alert
- • Missed scheduled upload slots
+🎯 *Coverage Policy:*
+ • Sirf active MEGA CLOUD pages jinki mapping ON hai unke alerts aayenge.
+ • Jin pages ki mapping OFF hai ya jin par TikTok source hai, unke alerts send nahi honge.
+ • Cloud Queue me 0 videos baki rehne par foran stock alert.
+ • Upload failures, missed slots aur token checkpoints.
 🕒 *Time:* ${pktTimeStr} PKT
 ━━━━━━━━━━━━━━━━━━━━
 🤖 _AutoPost Real-Time Watchdog Engine_`;
