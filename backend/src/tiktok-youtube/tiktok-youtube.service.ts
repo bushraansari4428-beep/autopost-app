@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { YoutubeService } from './youtube.service';
 import { LogsService } from '../logs/logs.service';
+import { MegaService } from '../workers/mega.service';
 import { getLatestTikTokVideos, downloadTikTokVideo, getYtDlpBinaryPath } from '../workers/tiktok.scraper';
 import { execPromise } from '../utils/exec.util';
 import * as fs from 'fs';
@@ -19,15 +20,22 @@ export class TiktokYoutubeService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly youtubeService: YoutubeService,
     private readonly logsService: LogsService,
+    private readonly megaService: MegaService,
   ) {}
 
   onModuleInit() {
-    this.logger.log('==== TIKTOK TO YOUTUBE CRON WORKER INITIALIZED (Interval: 5 minutes) ====');
+    this.logger.log('==== TIKTOK TO YOUTUBE & CLOUD CRON WORKER INITIALIZED (Interval: 5 minutes) ====');
     if (process.env.GITHUB_ACTIONS !== 'true' && process.env.IS_WORKER !== 'true') {
       // Run every 5 minutes (300,000 ms)
-      this.timer = setInterval(() => this.syncAllActiveMappings(), 5 * 60 * 1000);
+      this.timer = setInterval(() => {
+        this.syncAllActiveMappings();
+        this.processScheduledCloudUploads();
+      }, 5 * 60 * 1000);
       // Also run 20 seconds after app startup
-      setTimeout(() => this.syncAllActiveMappings(), 20000);
+      setTimeout(() => {
+        this.syncAllActiveMappings();
+        this.processScheduledCloudUploads();
+      }, 20000);
     }
   }
 
@@ -586,5 +594,400 @@ export class TiktokYoutubeService implements OnModuleInit {
       recentUploads,
       monitoringIntervalMinutes: 5,
     };
+  }
+
+  // ==========================================
+  // YOUTUBE CLOUD QUEUE & SCHEDULED UPLOADS
+  // ==========================================
+
+  /**
+   * Upload video to YouTube Channel's Cloud Folder on Mega
+   * Automatically extracts title/caption from original filename
+   */
+  async uploadCloudVideo(channelId: string, originalFilename: string, buffer: Buffer, user?: any) {
+    const channel = await this.prisma.youtubeChannel.findUnique({
+      where: { id: channelId },
+    });
+
+    if (!channel) {
+      throw new Error('YouTube Channel not found');
+    }
+
+    if (user && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+      if (channel.userId && channel.userId !== user.id) {
+        throw new Error('Unauthorized to upload to this channel cloud');
+      }
+    }
+
+    // Resolve user Mega credentials
+    let megaEmail: string | undefined;
+    let megaPassword: string | undefined;
+    if (channel.userId) {
+      const channelUser = await this.prisma.user.findUnique({ where: { id: channel.userId } });
+      if (channelUser) {
+        if (channelUser.role !== 'ADMIN' && (!channelUser.megaEmail || !channelUser.megaPassword)) {
+          throw new Error('Mega Cloud credentials are not configured. Please update your profile.');
+        }
+        megaEmail = channelUser.megaEmail || undefined;
+        megaPassword = channelUser.megaPassword || undefined;
+      }
+    }
+
+    // Channel specific folder name: '[YouTube] ChannelName'
+    const cleanChannelName = channel.name.replace(/[^\w\s-]/g, '').trim() || channel.channelId;
+    const folderName = `[YouTube] ${cleanChannelName}`;
+
+    const cleanTitle = path.parse(originalFilename).name.trim();
+    const ext = path.extname(originalFilename) || '.mp4';
+    const megaFilename = `yt_${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
+
+    this.logger.log(`Uploading "${originalFilename}" to Mega folder "${folderName}" for channel "${channel.name}"...`);
+    await this.logsService.log('INFO', `[YouTube Cloud] Uploading "${originalFilename}" to folder "${folderName}"...`);
+
+    // Upload to Mega folder
+    const megaLink = await this.megaService.uploadFile(megaFilename, buffer, megaEmail, megaPassword, folderName);
+
+    // Update channel cloud folder name if not set
+    if (!channel.cloudFolderName) {
+      await this.prisma.youtubeChannel.update({
+        where: { id: channel.id },
+        data: { cloudFolderName: folderName },
+      });
+    }
+
+    // Create YoutubeCloudVideo record in queue
+    const cloudVideo = await this.prisma.youtubeCloudVideo.create({
+      data: {
+        youtubeChannelId: channel.id,
+        filename: originalFilename,
+        title: cleanTitle,
+        description: `${cleanTitle}\n\n${channel.customHashtags || '#Shorts #viral #fyp'}`.trim(),
+        url: megaLink,
+        status: 'PENDING',
+      },
+    });
+
+    await this.logsService.log('INFO', `[YouTube Cloud] Video "${cleanTitle}" queued for channel "${channel.name}"!`);
+    return {
+      success: true,
+      message: `Video "${cleanTitle}" added to cloud queue successfully!`,
+      video: cloudVideo,
+    };
+  }
+
+  /**
+   * Get YouTube Channel's Cloud Queue
+   */
+  async getCloudQueue(channelId: string, user?: any) {
+    const channel = await this.prisma.youtubeChannel.findUnique({
+      where: { id: channelId },
+    });
+
+    if (!channel) {
+      throw new Error('YouTube Channel not found');
+    }
+
+    const videos = await this.prisma.youtubeCloudVideo.findMany({
+      where: { youtubeChannelId: channelId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pendingCount = videos.filter(v => v.status === 'PENDING').length;
+    const completedCount = videos.filter(v => v.status === 'COMPLETED').length;
+
+    return {
+      channel: {
+        id: channel.id,
+        name: channel.name,
+        channelId: channel.channelId,
+        thumbnailUrl: channel.thumbnailUrl,
+        scheduledTime: channel.scheduledTime || '12:00',
+        videosPerDay: channel.videosPerDay || 1,
+        customHashtags: channel.customHashtags || '#Shorts #viral #fyp',
+        privacyStatus: channel.privacyStatus || 'public',
+        cloudFolderName: channel.cloudFolderName || `[YouTube] ${channel.name}`,
+      },
+      totalCount: videos.length,
+      pendingCount,
+      completedCount,
+      videos,
+    };
+  }
+
+  /**
+   * Update Channel Cloud Schedule Settings
+   */
+  async updateChannelSchedule(channelId: string, dto: {
+    scheduledTime?: string;
+    videosPerDay?: number;
+    customHashtags?: string;
+    privacyStatus?: string;
+  }, user?: any) {
+    const channel = await this.prisma.youtubeChannel.findUnique({
+      where: { id: channelId },
+    });
+
+    if (!channel) throw new Error('YouTube Channel not found');
+
+    const updated = await this.prisma.youtubeChannel.update({
+      where: { id: channelId },
+      data: {
+        scheduledTime: dto.scheduledTime,
+        videosPerDay: dto.videosPerDay ? Number(dto.videosPerDay) : 1,
+        customHashtags: dto.customHashtags,
+        privacyStatus: dto.privacyStatus,
+      },
+    });
+
+    await this.logsService.log('INFO', `Updated cloud schedule for channel "${channel.name}": Times [${dto.scheduledTime || 'OFF'}], Quantity [${dto.videosPerDay || 1}/day]`);
+    return updated;
+  }
+
+  /**
+   * Post Next Queued Cloud Video (Manual or Scheduled)
+   */
+  async postNextCloudVideo(channelId: string): Promise<{ success: boolean; message: string; video?: any }> {
+    const channel = await this.prisma.youtubeChannel.findUnique({
+      where: { id: channelId },
+    });
+
+    if (!channel || channel.status !== 'ACTIVE') {
+      return { success: false, message: 'YouTube Channel not found or inactive.' };
+    }
+
+    // Find oldest pending video in queue
+    const nextVideo = await this.prisma.youtubeCloudVideo.findFirst({
+      where: {
+        youtubeChannelId: channelId,
+        status: 'PENDING',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (!nextVideo) {
+      return { success: false, message: 'No pending videos in cloud queue.' };
+    }
+
+    await this.logsService.log('INFO', `[YouTube Cloud] Preparing to post queued video "${nextVideo.title}" to "${channel.name}"...`);
+    
+    await this.prisma.youtubeCloudVideo.update({
+      where: { id: nextVideo.id },
+      data: { status: 'PROCESSING' },
+    });
+
+    let downloadedPath: string | null = null;
+    let strippedPath: string | null = null;
+
+    try {
+      // 1. Download file from Mega
+      downloadedPath = await this.megaService.downloadFile(nextVideo.url);
+      if (!downloadedPath || !fs.existsSync(downloadedPath)) {
+        throw new Error(`Failed to download video from Mega: ${nextVideo.url}`);
+      }
+
+      // 2. Strip metadata via FFmpeg
+      let uploadPath = downloadedPath;
+      strippedPath = downloadedPath.replace('.mp4', '_stripped.mp4');
+      try {
+        const ffmpegPath = require('ffmpeg-static');
+        if (ffmpegPath) {
+          await execPromise(`"${ffmpegPath}" -loglevel error -i "${downloadedPath}" -map_metadata -1 -c:v copy -c:a copy "${strippedPath}"`);
+          if (fs.existsSync(strippedPath) && fs.statSync(strippedPath).size > 1000) {
+            uploadPath = strippedPath;
+          }
+        }
+      } catch (e: any) {
+        this.logger.warn(`FFmpeg strip skipped for cloud video: ${e.message}`);
+      }
+
+      // 3. Prepare Title and Description
+      let title = nextVideo.title.trim();
+      const customTags = (channel.customHashtags || '#Shorts #viral #fyp').trim();
+      if (!title.toLowerCase().includes('#shorts')) {
+        title = `${title} ${customTags}`.trim();
+      }
+      if (title.length > 100) {
+        title = title.substring(0, 97).trim() + '...';
+      }
+
+      const description = `${nextVideo.title}\n\n${customTags}\n\nUploaded via AutoPost Cloud`.trim();
+      const tagMatches = (description.match(/#([a-zA-Z0-9_]+)/g) || []).map(t => t.replace('#', ''));
+      const tags = Array.from(new Set(['Shorts', 'YouTubeShorts', ...tagMatches])).slice(0, 15);
+
+      // 4. Upload to YouTube
+      const uploadRes = await this.youtubeService.uploadVideo({
+        channelId: channel.id,
+        filePath: uploadPath,
+        title,
+        description,
+        tags,
+        privacyStatus: (channel.privacyStatus as any) || 'public',
+      });
+
+      // 5. Update record to COMPLETED
+      await this.prisma.youtubeCloudVideo.update({
+        where: { id: nextVideo.id },
+        data: {
+          status: 'COMPLETED',
+          youtubeVideoId: uploadRes.videoId,
+          youtubeUrl: uploadRes.youtubeUrl,
+          uploadedAt: new Date(),
+          errorMessage: null,
+        },
+      });
+
+      // 6. Update channel lastScheduledRun
+      await this.prisma.youtubeChannel.update({
+        where: { id: channel.id },
+        data: { lastScheduledRun: new Date() },
+      });
+
+      const successMsg = `[YouTube Cloud] Successfully published "${nextVideo.title}" to "${channel.name}"! Link: ${uploadRes.youtubeUrl}`;
+      this.logger.log(successMsg);
+      await this.logsService.log('INFO', successMsg);
+
+      return {
+        success: true,
+        message: successMsg,
+        video: uploadRes,
+      };
+    } catch (err: any) {
+      this.logger.error(`Failed to post cloud video "${nextVideo.title}": ${err.message}`);
+      await this.prisma.youtubeCloudVideo.update({
+        where: { id: nextVideo.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: err.message,
+        },
+      });
+      await this.logsService.log('ERROR', `[YouTube Cloud] Upload failed for "${nextVideo.title}": ${err.message}`);
+      return { success: false, message: err.message };
+    } finally {
+      if (downloadedPath && fs.existsSync(downloadedPath)) {
+        try { fs.unlinkSync(downloadedPath); } catch (_) {}
+      }
+      if (strippedPath && fs.existsSync(strippedPath)) {
+        try { fs.unlinkSync(strippedPath); } catch (_) {}
+      }
+    }
+  }
+
+  /**
+   * Periodic scheduler: Check all active YouTube channels with scheduled times.
+   */
+  async processScheduledCloudUploads() {
+    try {
+      const channels = await this.prisma.youtubeChannel.findMany({
+        where: {
+          status: 'ACTIVE',
+          scheduledTime: { not: null },
+        },
+      });
+
+      if (channels.length === 0) return;
+
+      // Calculate current PKT time (UTC+5)
+      const nowUTC = new Date();
+      const pktTime = new Date(nowUTC.getTime() + (5 * 60 * 60 * 1000));
+      const pkHours = pktTime.getUTCHours();
+      const pkMinutes = pktTime.getUTCMinutes();
+
+      for (const channel of channels) {
+        if (!channel.scheduledTime || channel.scheduledTime === '00:00') continue;
+
+        const timeSlots = channel.scheduledTime.split(',').map(t => t.trim()).filter(Boolean);
+        let isDue = false;
+
+        for (const timeStr of timeSlots) {
+          const [schedH, schedM] = timeStr.split(':').map(Number);
+          const schedTotalMins = schedH * 60 + schedM;
+          const currentTotalMins = pkHours * 60 + pkMinutes;
+
+          if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
+            isDue = true;
+            break;
+          }
+        }
+
+        if (!isDue) continue;
+
+        // Check if already uploaded for this scheduled slot today
+        const startOfDay = new Date(pktTime);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const startOfDayUTC = new Date(startOfDay.getTime() - (5 * 60 * 60 * 1000));
+
+        const uploadsToday = await this.prisma.youtubeCloudVideo.count({
+          where: {
+            youtubeChannelId: channel.id,
+            status: 'COMPLETED',
+            uploadedAt: { gte: startOfDayUTC },
+          },
+        });
+
+        const maxPerDay = channel.videosPerDay || 1;
+        if (uploadsToday >= maxPerDay) {
+          continue;
+        }
+
+        // Avoid double posting within the same 25-minute window
+        if (channel.lastScheduledRun) {
+          const lastRunDiff = Date.now() - new Date(channel.lastScheduledRun).getTime();
+          if (lastRunDiff < 25 * 60 * 1000) {
+            continue;
+          }
+        }
+
+        this.logger.log(`[YouTube Cloud Cron] Triggering scheduled post for Channel "${channel.name}"...`);
+        await this.postNextCloudVideo(channel.id);
+      }
+    } catch (err: any) {
+      this.logger.error(`Error in processScheduledCloudUploads: ${err.message}`);
+    }
+  }
+
+  /**
+   * Delete single video from cloud queue
+   */
+  async deleteCloudQueueVideo(channelId: string, videoId: string, user?: any) {
+    const video = await this.prisma.youtubeCloudVideo.findFirst({
+      where: { id: videoId, youtubeChannelId: channelId },
+    });
+
+    if (!video) throw new Error('Video not found in cloud queue');
+
+    if (video.url) {
+      try {
+        await this.megaService.deleteFile(video.url);
+      } catch (e: any) {
+        this.logger.warn(`Failed to delete from Mega: ${e.message}`);
+      }
+    }
+
+    await this.prisma.youtubeCloudVideo.delete({ where: { id: videoId } });
+    await this.logsService.log('INFO', `Deleted video "${video.title}" from YouTube cloud queue.`);
+    return { success: true };
+  }
+
+  /**
+   * Clear all or selected videos from cloud queue
+   */
+  async clearCloudQueue(channelId: string, videoIds?: string[], user?: any) {
+    const where: any = { youtubeChannelId: channelId };
+    if (videoIds && videoIds.length > 0) {
+      where.id = { in: videoIds };
+    }
+
+    const videos = await this.prisma.youtubeCloudVideo.findMany({ where });
+    for (const v of videos) {
+      if (v.url) {
+        try {
+          await this.megaService.deleteFile(v.url);
+        } catch (_) {}
+      }
+    }
+
+    await this.prisma.youtubeCloudVideo.deleteMany({ where });
+    await this.logsService.log('INFO', `Cleared ${videos.length} videos from YouTube cloud queue.`);
+    return { success: true, count: videos.length };
   }
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Youtube, 
   Plus, 
@@ -18,13 +18,33 @@ import {
   ChevronDown, 
   ChevronUp,
   Video,
-  ArrowRight
+  ArrowRight,
+  Cloud,
+  UploadCloud,
+  FileVideo,
+  Calendar,
+  Folder,
+  Send
 } from 'lucide-react';
 import ToastContainer, { ToastMessage } from '@/components/Toast';
 import ConfirmModal from '@/components/ConfirmModal';
 
+interface CloudVideoItem {
+  id: string;
+  filename: string;
+  title: string;
+  description?: string;
+  url: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  youtubeVideoId?: string;
+  youtubeUrl?: string;
+  errorMessage?: string;
+  uploadedAt?: string;
+  createdAt: string;
+}
+
 export default function TiktokYoutubePage() {
-  const [activeTab, setActiveTab] = useState<'mappings' | 'channels' | 'history'>('mappings');
+  const [activeTab, setActiveTab] = useState<'mappings' | 'cloud' | 'channels' | 'history'>('mappings');
   
   // Data states
   const [channels, setChannels] = useState<any[]>([]);
@@ -44,8 +64,28 @@ export default function TiktokYoutubePage() {
   // Modals state
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [showMappingModal, setShowMappingModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showHelpGuide, setShowHelpGuide] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'mapping' | 'channel'; id: string; name: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'mapping' | 'channel' | 'cloudVideo' | 'clearQueue'; id: string; name: string } | null>(null);
+
+  // Cloud Tab state
+  const [selectedCloudChannelId, setSelectedCloudChannelId] = useState<string>('');
+  const [cloudQueue, setCloudQueue] = useState<CloudVideoItem[]>([]);
+  const [cloudMeta, setCloudMeta] = useState<any>(null);
+  const [isQueueLoading, setIsQueueLoading] = useState(false);
+  const [isPostingNext, setIsPostingNext] = useState(false);
+  const [cloudFiles, setCloudFiles] = useState<File[]>([]);
+  const [isUploadingCloud, setIsUploadingCloud] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Schedule Form State
+  const [scheduleForm, setScheduleForm] = useState({
+    scheduledTime: '12:00, 18:00',
+    videosPerDay: 2,
+    customHashtags: '#Shorts #viral #fyp #AI',
+    privacyStatus: 'public',
+  });
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   // Channel Form state
   const [channelForm, setChannelForm] = useState({
@@ -92,7 +132,13 @@ export default function TiktokYoutubePage() {
         fetch('/api/tiktok-youtube/stats', { credentials: 'omit', headers: getHeaders() }),
       ]);
 
-      if (channelsRes.ok) setChannels(await channelsRes.json());
+      if (channelsRes.ok) {
+        const chData = await channelsRes.json();
+        setChannels(chData);
+        if (chData.length > 0 && !selectedCloudChannelId) {
+          setSelectedCloudChannelId(chData[0].id);
+        }
+      }
       if (mappingsRes.ok) setMappings(await mappingsRes.json());
       if (historyRes.ok) {
         const histData = await historyRes.json();
@@ -100,7 +146,7 @@ export default function TiktokYoutubePage() {
       }
       if (statsRes.ok) setStats(await statsRes.json());
     } catch (err: any) {
-      console.error('Failed to load TikTok to YouTube data', err);
+      console.error('Failed to load data', err);
       addToast('Failed to load data from server', 'error');
     } finally {
       setLoading(false);
@@ -110,6 +156,40 @@ export default function TiktokYoutubePage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Fetch Cloud Queue when selected channel changes
+  const fetchCloudQueue = async (channelId: string) => {
+    if (!channelId) return;
+    setIsQueueLoading(true);
+    try {
+      const res = await fetch(`/api/tiktok-youtube/channels/${channelId}/cloud-queue`, {
+        headers: getHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCloudMeta(data.channel);
+        setCloudQueue(data.videos || []);
+        if (data.channel) {
+          setScheduleForm({
+            scheduledTime: data.channel.scheduledTime || '12:00',
+            videosPerDay: data.channel.videosPerDay || 1,
+            customHashtags: data.channel.customHashtags || '#Shorts #viral #fyp #AI',
+            privacyStatus: data.channel.privacyStatus || 'public',
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load cloud queue', e);
+    } finally {
+      setIsQueueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedCloudChannelId) {
+      fetchCloudQueue(selectedCloudChannelId);
+    }
+  }, [selectedCloudChannelId]);
 
   // Connect Channel
   const handleConnectChannel = async (e: React.FormEvent) => {
@@ -131,6 +211,9 @@ export default function TiktokYoutubePage() {
         setShowChannelModal(false);
         setChannelForm({ refreshToken: '', clientId: '', clientSecret: '', customName: '' });
         fetchData();
+        if (!selectedCloudChannelId) {
+          setSelectedCloudChannelId(data.id);
+        }
       } else {
         addToast(`Connection failed: ${data.message || 'Check credentials'}`, 'error');
       }
@@ -175,6 +258,104 @@ export default function TiktokYoutubePage() {
     }
   };
 
+  // Save Schedule Settings
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCloudChannelId) return;
+    setIsSavingSchedule(true);
+    try {
+      const res = await fetch(`/api/tiktok-youtube/channels/${selectedCloudChannelId}/cloud-schedule`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(scheduleForm),
+      });
+      if (res.ok) {
+        addToast('Cloud upload schedule updated successfully!', 'success');
+        setShowScheduleModal(false);
+        fetchCloudQueue(selectedCloudChannelId);
+      } else {
+        addToast('Failed to update schedule', 'error');
+      }
+    } catch (e: any) {
+      addToast(`Error saving schedule: ${e.message}`, 'error');
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  // Bulk Upload AI Videos to Cloud Queue
+  const handleBulkCloudUpload = async () => {
+    if (cloudFiles.length === 0 || !selectedCloudChannelId) {
+      addToast('Please select at least 1 video file (.mp4) to upload.', 'error');
+      return;
+    }
+    setIsUploadingCloud(true);
+    setUploadProgress(0);
+
+    const token = localStorage.getItem('token');
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < cloudFiles.length; i++) {
+      const file = cloudFiles[i];
+      const formData = new FormData();
+      formData.append('video', file);
+
+      try {
+        const res = await fetch(`/api/tiktok-youtube/channels/${selectedCloudChannelId}/cloud-upload`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (err) {
+        failCount++;
+      }
+      setUploadProgress(Math.round(((i + 1) / cloudFiles.length) * 100));
+    }
+
+    setIsUploadingCloud(false);
+    setCloudFiles([]);
+    setUploadProgress(0);
+
+    if (successCount > 0) {
+      addToast(`Successfully uploaded ${successCount} AI video(s) to Cloud Queue!`, 'success');
+      fetchCloudQueue(selectedCloudChannelId);
+    }
+    if (failCount > 0) {
+      addToast(`Failed to upload ${failCount} video(s).`, 'error');
+    }
+  };
+
+  // Post Next Queued Cloud Video Immediately ("Post Next Video Now")
+  const handlePostNextVideo = async () => {
+    if (!selectedCloudChannelId) return;
+    setIsPostingNext(true);
+    addToast('Uploading next queued video to YouTube Shorts...', 'info');
+    try {
+      const res = await fetch(`/api/tiktok-youtube/channels/${selectedCloudChannelId}/post-next`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(data.message || 'Video published to YouTube Shorts successfully!', 'success');
+        fetchCloudQueue(selectedCloudChannelId);
+        fetchData();
+      } else {
+        addToast(`Upload failed: ${data.message || 'Unknown error'}`, 'error');
+      }
+    } catch (e: any) {
+      addToast(`Error posting video: ${e.message}`, 'error');
+    } finally {
+      setIsPostingNext(false);
+    }
+  };
+
   // Toggle Mapping Status (Active / Paused)
   const handleToggleMappingStatus = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
@@ -197,7 +378,7 @@ export default function TiktokYoutubePage() {
     }
   };
 
-  // Trigger Manual Instant Sync
+  // Trigger Manual Instant Sync for TikTok Mapping
   const handleManualSync = async (id: string, username: string) => {
     setSyncingMappingId(id);
     addToast(`Scanning @${username} for newest videos & uploading to YouTube...`, 'info');
@@ -225,19 +406,26 @@ export default function TiktokYoutubePage() {
     if (!deleteConfirm) return;
     const { type, id, name } = deleteConfirm;
     try {
-      const endpoint = type === 'mapping' 
-        ? `/api/tiktok-youtube/mappings/${id}` 
-        : `/api/tiktok-youtube/channels/${id}`;
-      
+      let endpoint = '';
+      let method = 'DELETE';
+      if (type === 'mapping') endpoint = `/api/tiktok-youtube/mappings/${id}`;
+      else if (type === 'channel') endpoint = `/api/tiktok-youtube/channels/${id}`;
+      else if (type === 'cloudVideo') endpoint = `/api/tiktok-youtube/channels/${selectedCloudChannelId}/cloud-queue/${id}`;
+      else if (type === 'clearQueue') endpoint = `/api/tiktok-youtube/channels/${selectedCloudChannelId}/cloud-queue`;
+
       const res = await fetch(endpoint, {
-        method: 'DELETE',
+        method,
         headers: getHeaders(),
       });
       if (res.ok) {
-        addToast(`${type === 'mapping' ? 'Mapping' : 'Channel'} "${name}" deleted.`, 'success');
-        fetchData();
+        addToast(`Deleted successfully.`, 'success');
+        if (type === 'cloudVideo' || type === 'clearQueue') {
+          fetchCloudQueue(selectedCloudChannelId);
+        } else {
+          fetchData();
+        }
       } else {
-        addToast(`Failed to delete ${type}`, 'error');
+        addToast(`Failed to delete`, 'error');
       }
     } catch (err: any) {
       addToast(`Delete error: ${err.message}`, 'error');
@@ -245,6 +433,10 @@ export default function TiktokYoutubePage() {
       setDeleteConfirm(null);
     }
   };
+
+  const selectedChannelObj = useMemo(() => {
+    return channels.find(c => c.id === selectedCloudChannelId);
+  }, [channels, selectedCloudChannelId]);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -257,17 +449,17 @@ export default function TiktokYoutubePage() {
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-semibold uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              <span>TikTok ➔ YouTube Shorts AutoPost</span>
+              <span>TikTok Creator Sync & YouTube Cloud AutoPost</span>
             </div>
             <h1 className="text-3xl lg:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              <span>Creator Sync & Reposter</span>
+              <span>YouTube Shorts Automation</span>
               <span className="text-rose-500 font-normal">|</span>
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-rose-400 via-pink-400 to-indigo-400">
-                5-10 Min AutoPost
+                TikTok & Cloud AI Sync
               </span>
             </h1>
             <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
-              Find unique TikTok creators not on YouTube, map them to your YouTube channels, and our automated engine will detect new videos within 5–10 minutes, download HD unwatermarked video streams, and publish them to YouTube Shorts with original captions & hashtags.
+              Auto-sync videos from TikTok creators within 5–10 minutes OR bulk-upload your custom AI videos to dedicated YouTube Cloud folders for automated daily scheduled posting!
             </p>
           </div>
 
@@ -288,10 +480,17 @@ export default function TiktokYoutubePage() {
                 }
                 setShowMappingModal(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-semibold text-sm shadow-xl shadow-rose-600/30 border border-rose-400/30 transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-semibold text-sm shadow-xl shadow-rose-600/30 border border-rose-400/30 transition-all active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>New Creator Mapping</span>
+              <span>New TikTok Mapping</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('cloud')}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-semibold text-sm shadow-xl shadow-indigo-600/30 border border-indigo-400/30 transition-all active:scale-95"
+            >
+              <Cloud className="w-4 h-4" />
+              <span>Upload AI Videos (Cloud)</span>
             </button>
           </div>
         </div>
@@ -303,12 +502,12 @@ export default function TiktokYoutubePage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
-            <span className="text-emerald-400 font-semibold">Active Background Monitor:</span>
-            <span>Checking active TikTok creators every 5 minutes</span>
+            <span className="text-emerald-400 font-semibold">Live Engine Running:</span>
+            <span>Checking active TikTok creators (5m) & Scheduled Cloud Slots in PKT</span>
           </div>
           <div className="flex items-center gap-4">
-            <span>HD Unwatermarked Stream: <strong className="text-slate-200">Active</strong></span>
-            <span>Duplicate Hash Protection (FFmpeg): <strong className="text-slate-200">Enabled</strong></span>
+            <span>Separate Cloud Folders: <strong className="text-slate-200">Enabled</strong></span>
+            <span>FFmpeg Anti-Duplicate Filter: <strong className="text-slate-200">Active</strong></span>
           </div>
         </div>
       </div>
@@ -327,11 +526,21 @@ export default function TiktokYoutubePage() {
 
         <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-xl shadow-xl flex items-center justify-between">
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Mappings</div>
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">TikTok Mappings</div>
             <div className="text-3xl font-black text-white">{stats.activeMappings || mappings.filter(m => m.status === 'ACTIVE').length}</div>
           </div>
           <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
             <Layers className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-xl shadow-xl flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cloud Queue Videos</div>
+            <div className="text-3xl font-black text-indigo-400">{cloudQueue.filter(v => v.status === 'PENDING').length}</div>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <Cloud className="w-6 h-6" />
           </div>
         </div>
 
@@ -344,21 +553,11 @@ export default function TiktokYoutubePage() {
             <CheckCircle className="w-6 h-6" />
           </div>
         </div>
-
-        <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-xl shadow-xl flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Auto-Sync Cycle</div>
-            <div className="text-2xl font-black text-indigo-400">Every 5 Mins</div>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-            <Clock className="w-6 h-6" />
-          </div>
-        </div>
       </div>
 
       {/* Tabs Switcher */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 flex-wrap gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setActiveTab('mappings')}
             className={`px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
@@ -368,7 +567,19 @@ export default function TiktokYoutubePage() {
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Creator Mappings ({mappings.length})</span>
+            <span>TikTok Mappings ({mappings.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cloud')}
+            className={`px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
+              activeTab === 'cloud'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border border-indigo-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Cloud className="w-4 h-4" />
+            <span>YouTube Cloud Upload & Schedule</span>
           </button>
 
           <button
@@ -397,7 +608,10 @@ export default function TiktokYoutubePage() {
         </div>
 
         <button
-          onClick={fetchData}
+          onClick={() => {
+            fetchData();
+            if (selectedCloudChannelId) fetchCloudQueue(selectedCloudChannelId);
+          }}
           disabled={loading}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 text-xs font-semibold transition-all"
         >
@@ -406,7 +620,7 @@ export default function TiktokYoutubePage() {
         </button>
       </div>
 
-      {/* TAB 1: MAPPINGS */}
+      {/* TAB 1: TIKTOK CREATOR MAPPINGS */}
       {activeTab === 'mappings' && (
         <div className="space-y-4">
           {mappings.length === 0 ? (
@@ -417,7 +631,7 @@ export default function TiktokYoutubePage() {
               <div className="space-y-1">
                 <h3 className="text-lg font-bold text-white">No Creator Mappings Yet</h3>
                 <p className="text-slate-400 text-sm max-w-md mx-auto">
-                  Map your first TikTok creator to a connected YouTube channel to start automatic video syncing!
+                  Map your first TikTok creator to a connected YouTube channel to start automatic video syncing within 5-10 minutes!
                 </p>
               </div>
               <button
@@ -548,7 +762,278 @@ export default function TiktokYoutubePage() {
         </div>
       )}
 
-      {/* TAB 2: CONNECTED CHANNELS */}
+      {/* TAB 2: YOUTUBE CLOUD UPLOAD & SCHEDULE */}
+      {activeTab === 'cloud' && (
+        <div className="space-y-6">
+          {/* Channel Selector Header */}
+          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-xl backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                <Folder className="w-4 h-4" />
+                <span>Dedicated YouTube Cloud Folder</span>
+              </div>
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <span>Channel:</span>
+                <span className="text-indigo-400">{selectedChannelObj?.name || 'Select a Channel'}</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Bulk-upload AI videos to this channel's cloud folder. Filename becomes the title & caption automatically.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <select
+                value={selectedCloudChannelId}
+                onChange={(e) => setSelectedCloudChannelId(e.target.value)}
+                className="px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-semibold focus:outline-none focus:border-indigo-500 transition-colors w-full md:w-64"
+              >
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.channelId})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md shrink-0 active:scale-95"
+              >
+                <Clock className="w-4 h-4" />
+                <span>Edit Schedule</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Cloud Info & Folder Banner */}
+          {cloudMeta && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">Mega Cloud Folder</div>
+                <div className="text-sm font-bold text-indigo-300 flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span className="truncate">{cloudMeta.cloudFolderName || `[YouTube] ${cloudMeta.name}`}</span>
+                </div>
+                <div className="text-[10px] text-slate-500">100% Isolated from Facebook Pages</div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">Posting Schedule</div>
+                <div className="text-sm font-bold text-white flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{cloudMeta.scheduledTime || 'OFF'} (PKT)</span>
+                </div>
+                <div className="text-[10px] text-slate-500">{cloudMeta.videosPerDay || 1} video(s) per day</div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">Queue Inventory</div>
+                <div className="text-sm font-bold text-emerald-400 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{cloudQueue.filter(v => v.status === 'PENDING').length} Ready to Post</span>
+                </div>
+                <div className="text-[10px] text-slate-500">{cloudQueue.filter(v => v.status === 'COMPLETED').length} Already Posted</div>
+              </div>
+            </div>
+          )}
+
+          {/* Bulk Video Uploader Drag & Drop Box */}
+          <div className="p-8 rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-950/60 transition-all text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+              <UploadCloud className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-base font-bold text-white">Bulk Upload AI Videos to YouTube Cloud</h4>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Select or drag multiple .mp4 video files. Video file names will be automatically preserved as Title & Caption.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center justify-center gap-3">
+              <input
+                type="file"
+                multiple
+                accept="video/mp4,video/*"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    setCloudFiles(Array.from(e.target.files));
+                  }
+                }}
+                id="cloud-file-input"
+                className="hidden"
+              />
+              <label
+                htmlFor="cloud-file-input"
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 cursor-pointer transition-all shadow-md active:scale-95"
+              >
+                Browse Video Files (.mp4)
+              </label>
+
+              {cloudFiles.length > 0 && (
+                <div className="w-full max-w-md p-3 rounded-xl bg-slate-900 border border-slate-800 text-left space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-300 font-semibold">
+                    <span>{cloudFiles.length} file(s) selected</span>
+                    <button
+                      onClick={() => setCloudFiles([])}
+                      className="text-rose-400 hover:underline text-[11px]"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="max-h-24 overflow-y-auto space-y-1 text-[11px] text-slate-400 font-mono">
+                    {cloudFiles.map((f, i) => (
+                      <div key={i} className="truncate flex items-center gap-2">
+                        <FileVideo className="w-3 h-3 text-indigo-400 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={handleBulkCloudUpload}
+                    disabled={isUploadingCloud}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isUploadingCloud ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading... {uploadProgress}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>Upload {cloudFiles.length} Video(s) to Cloud Queue</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cloud Queue List */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-white text-base">Current Cloud Queue</h4>
+                <span className="text-xs text-slate-500">({cloudQueue.length} total)</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePostNextVideo}
+                  disabled={isPostingNext || cloudQueue.filter(v => v.status === 'PENDING').length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50 active:scale-95"
+                >
+                  <Send className={`w-3.5 h-3.5 ${isPostingNext ? 'animate-spin' : ''}`} />
+                  <span>{isPostingNext ? 'Posting...' : 'Post Next Video Now'}</span>
+                </button>
+
+                {cloudQueue.length > 0 && (
+                  <button
+                    onClick={() => setDeleteConfirm({ type: 'clearQueue', id: selectedCloudChannelId, name: 'entire cloud queue' })}
+                    className="px-3 py-2 rounded-xl text-slate-400 hover:text-rose-400 text-xs font-semibold hover:bg-rose-500/10 transition-colors"
+                  >
+                    Clear Queue
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {isQueueLoading ? (
+              <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Loading cloud queue...</span>
+              </div>
+            ) : cloudQueue.length === 0 ? (
+              <div className="p-8 text-center rounded-2xl bg-slate-900/40 border border-slate-800 text-xs text-slate-400">
+                No videos in queue for this channel. Upload MP4 videos above to begin automated scheduled posting!
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-800/80 overflow-hidden bg-slate-900/60 backdrop-blur-xl shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-slate-300">
+                    <thead className="bg-slate-950/80 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                      <tr>
+                        <th className="py-3 px-4 font-bold">#</th>
+                        <th className="py-3 px-4 font-bold">Video Title / Filename</th>
+                        <th className="py-3 px-4 font-bold">Status</th>
+                        <th className="py-3 px-4 font-bold">Uploaded Date</th>
+                        <th className="py-3 px-4 font-bold text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {cloudQueue.map((item, idx) => {
+                        const isCompleted = item.status === 'COMPLETED';
+                        const isProcessing = item.status === 'PROCESSING';
+                        const isFailed = item.status === 'FAILED';
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-3 px-4 font-bold text-slate-500 text-xs">
+                              {idx + 1}
+                            </td>
+                            <td className="py-3 px-4 max-w-sm">
+                              <div className="font-semibold text-white truncate" title={item.title}>
+                                {item.title}
+                              </div>
+                              <div className="text-xs text-slate-400 truncate font-mono">
+                                {item.filename}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                isCompleted
+                                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                                  : isProcessing
+                                  ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400 animate-pulse'
+                                  : isFailed
+                                  ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                                  : 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
+                              }`}>
+                                {isCompleted && <CheckCircle className="w-3 h-3" />}
+                                {isProcessing && <RefreshCw className="w-3 h-3 animate-spin" />}
+                                {isFailed && <AlertCircle className="w-3 h-3" />}
+                                {!isCompleted && !isProcessing && !isFailed && <Clock className="w-3 h-3" />}
+                                <span>{isCompleted ? 'POSTED' : item.status}</span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-xs text-slate-400">
+                              {item.uploadedAt ? new Date(item.uploadedAt).toLocaleString() : new Date(item.createdAt).toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {item.youtubeUrl && (
+                                  <a
+                                    href={item.youtubeUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
+                                    title="View YouTube Shorts"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => setDeleteConfirm({ type: 'cloudVideo', id: item.id, name: item.title })}
+                                  className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
+                                  title="Delete video"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: CONNECTED YOUTUBE CHANNELS */}
       {activeTab === 'channels' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -625,13 +1110,36 @@ export default function TiktokYoutubePage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-400">
-                      <span>Active Mappings:</span>
-                      <span className="text-slate-200 font-semibold">{channel._count?.mappings || 0} creators</span>
+                      <span>Cloud Folder:</span>
+                      <span className="text-indigo-400 font-medium font-mono">{channel.cloudFolderName || `[YouTube] ${channel.name}`}</span>
                     </div>
                     <div className="flex items-center justify-between text-slate-400">
-                      <span>Total Videos Uploaded:</span>
-                      <span className="text-slate-200 font-semibold">{channel._count?.uploads || 0} videos</span>
+                      <span>Cloud Schedule:</span>
+                      <span className="text-slate-200 font-semibold">{channel.scheduledTime || 'OFF'} ({channel.videosPerDay || 1}/day)</span>
                     </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedCloudChannelId(channel.id);
+                        setActiveTab('cloud');
+                      }}
+                      className="w-full py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-semibold text-xs border border-indigo-500/30 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Cloud className="w-3.5 h-3.5" />
+                      <span>Upload to Cloud</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedCloudChannelId(channel.id);
+                        setShowScheduleModal(true);
+                      }}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                      title="Schedule Settings"
+                    >
+                      <Clock className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -640,7 +1148,7 @@ export default function TiktokYoutubePage() {
         </div>
       )}
 
-      {/* TAB 3: SYNC & UPLOAD HISTORY */}
+      {/* TAB 4: SYNC & UPLOAD HISTORY */}
       {activeTab === 'history' && (
         <div className="space-y-4">
           {history.length === 0 ? (
@@ -648,7 +1156,7 @@ export default function TiktokYoutubePage() {
               <Clock className="w-8 h-8 text-slate-500 mx-auto" />
               <div className="text-white font-bold text-base">No Videos Synced Yet</div>
               <p className="text-slate-400 text-sm max-w-sm mx-auto">
-                Once a mapped creator posts a new video, it will be automatically downloaded and published to YouTube Shorts here within 5-10 minutes.
+                Once a mapped TikTok creator posts or a Cloud scheduled video is posted, it will appear here with live links to YouTube Shorts.
               </p>
             </div>
           ) : (
@@ -657,8 +1165,8 @@ export default function TiktokYoutubePage() {
                 <table className="w-full text-left text-sm text-slate-300">
                   <thead className="bg-slate-950/80 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
                     <tr>
-                      <th className="py-3 px-4 font-bold">Video & Caption</th>
-                      <th className="py-3 px-4 font-bold">Source Creator</th>
+                      <th className="py-3 px-4 font-bold">Video Title & Caption</th>
+                      <th className="py-3 px-4 font-bold">Source</th>
                       <th className="py-3 px-4 font-bold">YouTube Channel</th>
                       <th className="py-3 px-4 font-bold">Status</th>
                       <th className="py-3 px-4 font-bold">Published Date</th>
@@ -673,22 +1181,29 @@ export default function TiktokYoutubePage() {
                         <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
                           <td className="py-3 px-4 max-w-xs">
                             <div className="font-semibold text-white truncate" title={item.title}>
-                              {item.title || `TikTok Video ${item.tiktokVideoId}`}
+                              {item.title || `Video ${item.tiktokVideoId || item.id}`}
                             </div>
                             <div className="text-xs text-slate-400 truncate">
-                              ID: {item.tiktokVideoId}
+                              {item.tiktokVideoId ? `TikTok ID: ${item.tiktokVideoId}` : 'Cloud Video'}
                             </div>
                           </td>
                           <td className="py-3 px-4 whitespace-nowrap">
-                            <a
-                              href={item.tiktokUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-cyan-400 hover:underline font-medium text-xs flex items-center gap-1"
-                            >
-                              <span>@{item.mapping?.tiktokUsername || 'creator'}</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                            {item.tiktokUrl ? (
+                              <a
+                                href={item.tiktokUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-cyan-400 hover:underline font-medium text-xs flex items-center gap-1"
+                              >
+                                <span>@{item.mapping?.tiktokUsername || 'creator'}</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            ) : (
+                              <span className="text-indigo-400 font-medium text-xs flex items-center gap-1">
+                                <Cloud className="w-3 h-3" />
+                                <span>Cloud AI Video</span>
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4 whitespace-nowrap font-medium text-xs text-slate-200">
                             {item.youtubeChannel?.name || 'YouTube'}
@@ -737,7 +1252,134 @@ export default function TiktokYoutubePage() {
         </div>
       )}
 
-      {/* MODAL 1: CONNECT YOUTUBE CHANNEL */}
+      {/* MODAL 1: SCHEDULE CONFIGURATION MODAL */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">YouTube Cloud Schedule</h3>
+                  <p className="text-xs text-slate-400">Set daily posting times & quantity for Shorts</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowScheduleModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSchedule} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Posting Times (PKT, Comma-separated) <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={scheduleForm.scheduledTime}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, scheduledTime: e.target.value })}
+                  placeholder="e.g. 12:00, 18:00, 21:00"
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+                <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+                  <span className="text-slate-500">Quick Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => setScheduleForm({ ...scheduleForm, scheduledTime: '12:00', videosPerDay: 1 })}
+                    className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    1/Day (12:00)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScheduleForm({ ...scheduleForm, scheduledTime: '12:00, 18:00', videosPerDay: 2 })}
+                    className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    2/Day (12:00, 18:00)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScheduleForm({ ...scheduleForm, scheduledTime: '11:00, 16:00, 21:00', videosPerDay: 3 })}
+                    className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    3/Day (11:00, 16:00, 21:00)
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Videos Per Day (Quantity)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={scheduleForm.videosPerDay}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, videosPerDay: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Video Privacy
+                  </label>
+                  <select
+                    value={scheduleForm.privacyStatus}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, privacyStatus: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                  >
+                    <option value="public">Public (Immediate reach)</option>
+                    <option value="unlisted">Unlisted</option>
+                    <option value="private">Private</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Custom Hashtags (Appended to title/caption)
+                </label>
+                <input
+                  type="text"
+                  value={scheduleForm.customHashtags}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, customHashtags: e.target.value })}
+                  placeholder="#Shorts #viral #fyp #AI"
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white font-semibold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingSchedule}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+                >
+                  {isSavingSchedule ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  <span>Save Schedule</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: CONNECT YOUTUBE CHANNEL */}
       {showChannelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl relative">
@@ -809,7 +1451,7 @@ export default function TiktokYoutubePage() {
                   type="text"
                   value={channelForm.customName}
                   onChange={(e) => setChannelForm({ ...channelForm, customName: e.target.value })}
-                  placeholder="e.g. My Shorts Channel"
+                  placeholder="e.g. My AI Shorts Channel"
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:border-rose-500 transition-colors"
                 />
               </div>
@@ -862,7 +1504,7 @@ export default function TiktokYoutubePage() {
         </div>
       )}
 
-      {/* MODAL 2: ADD CREATOR MAPPING */}
+      {/* MODAL 3: ADD CREATOR MAPPING */}
       {showMappingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl relative">
@@ -932,9 +1574,6 @@ export default function TiktokYoutubePage() {
                   placeholder="#Shorts #viral #fyp"
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:border-rose-500 transition-colors"
                 />
-                <p className="text-[11px] text-slate-500">
-                  Original caption and hashtags are preserved; custom tags are added cleanly.
-                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -978,7 +1617,7 @@ export default function TiktokYoutubePage() {
       {deleteConfirm && (
         <ConfirmModal
           isOpen={true}
-          title={`Delete ${deleteConfirm.type === 'mapping' ? 'Mapping' : 'Channel'}`}
+          title={`Confirm Delete`}
           message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
           confirmText="Delete"
           cancelText="Cancel"

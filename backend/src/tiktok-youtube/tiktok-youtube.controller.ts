@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { TiktokYoutubeService } from './tiktok-youtube.service';
 import { YoutubeService } from './youtube.service';
+import * as multer from 'multer';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('tiktok-youtube')
@@ -109,4 +111,63 @@ export class TiktokYoutubeController {
   async getStats(@Request() req: any) {
     return this.tiktokYoutubeService.getStats(req.user?.id);
   }
+
+  // ==========================================
+  // YOUTUBE CLOUD QUEUE & SCHEDULE
+  // ==========================================
+
+  @Post('channels/:id/cloud-upload')
+  @UseInterceptors(
+    FileInterceptor('video', {
+      storage: multer.memoryStorage(),
+    }),
+  )
+  async uploadCloudVideo(
+    @Param('id') channelId: string,
+    @UploadedFile() file: any,
+    @Request() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No video file provided');
+    }
+    return this.tiktokYoutubeService.uploadCloudVideo(channelId, file.originalname, file.buffer, req.user);
+  }
+
+  @Get('channels/:id/cloud-queue')
+  async getCloudQueue(@Param('id') channelId: string, @Request() req: any) {
+    return this.tiktokYoutubeService.getCloudQueue(channelId, req.user);
+  }
+
+  @Put('channels/:id/cloud-schedule')
+  async updateChannelSchedule(
+    @Param('id') channelId: string,
+    @Body() body: any,
+    @Request() req: any,
+  ) {
+    return this.tiktokYoutubeService.updateChannelSchedule(channelId, body, req.user);
+  }
+
+  @Post('channels/:id/post-next')
+  async postNextCloudVideo(@Param('id') channelId: string) {
+    return this.tiktokYoutubeService.postNextCloudVideo(channelId);
+  }
+
+  @Delete('channels/:id/cloud-queue/:videoId')
+  async deleteCloudQueueVideo(
+    @Param('id') channelId: string,
+    @Param('videoId') videoId: string,
+    @Request() req: any,
+  ) {
+    return this.tiktokYoutubeService.deleteCloudQueueVideo(channelId, videoId, req.user);
+  }
+
+  @Delete('channels/:id/cloud-queue')
+  async clearCloudQueue(
+    @Param('id') channelId: string,
+    @Body() body: { videoIds?: string[] },
+    @Request() req: any,
+  ) {
+    return this.tiktokYoutubeService.clearCloudQueue(channelId, body?.videoIds, req.user);
+  }
 }
+

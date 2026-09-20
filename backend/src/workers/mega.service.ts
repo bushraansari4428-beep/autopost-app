@@ -33,21 +33,34 @@ export class MegaService {
     return storage;
   }
 
-  async uploadFile(filename: string, buffer: Buffer, megaEmail?: string, megaPassword?: string): Promise<string> {
+  async uploadFile(filename: string, buffer: Buffer, megaEmail?: string, megaPassword?: string, folderName = 'AutoPost_Cloud'): Promise<string> {
     const storage = await this.getStorage(megaEmail, megaPassword);
     
-    // Find or create 'AutoPost_Cloud' folder
-    let targetFolder = storage.root.children?.find((c: any) => c.name === 'AutoPost_Cloud');
+    // Find or create specified folder
+    let targetFolder = storage.root.children?.find((c: any) => c.name === folderName);
     if (!targetFolder) {
-      targetFolder = await storage.mkdir('AutoPost_Cloud');
+      targetFolder = await storage.mkdir(folderName);
     }
 
-    this.logger.log(`Uploading ${filename} to Mega.nz...`);
+    this.logger.log(`Uploading ${filename} to Mega.nz in folder "${folderName}"...`);
     const file = await (targetFolder.upload(filename, buffer) as any).complete;
     
     const link = await file.link(false);
     this.logger.log(`Uploaded to Mega: ${link}`);
     return link as string;
+  }
+
+  async getOrCreateFolder(folderName: string, megaEmail?: string, megaPassword?: string): Promise<{ folderName: string; link?: string }> {
+    const storage = await this.getStorage(megaEmail, megaPassword);
+    let targetFolder = storage.root.children?.find((c: any) => c.name === folderName);
+    if (!targetFolder) {
+      targetFolder = await storage.mkdir(folderName);
+    }
+    let folderLink = '';
+    try {
+      folderLink = await (targetFolder as any).link(false);
+    } catch (_) {}
+    return { folderName, link: folderLink };
   }
 
   async downloadFile(megaUrl: string): Promise<string> {
@@ -97,28 +110,34 @@ export class MegaService {
     try {
       const storage = await this.getStorage(megaEmail, megaPassword);
       
-      // We need to parse the file ID from the URL or just search all children for the link
-      const targetFolder = storage.root.children?.find((c: any) => c.name === 'AutoPost_Cloud');
-      if (targetFolder && targetFolder.children) {
-        // Since we can't easily extract the exact file ID from a folder link,
-        // we'll load the file from URL to get its ID, then find it in our storage
-        const fileRef = File.fromURL(megaUrl);
-        // Wait, file.nodeId is available if we load attributes, but the URL contains it
-        
-        // Let's just find the file whose link matches
-        for (const child of targetFolder.children) {
-           const link = await child.link(false);
-           if (link === megaUrl) {
-             this.logger.log(`Deleting file from Mega.nz: ${child.name}`);
-             await child.delete();
-             return true;
-           }
+      // Search across all root children and subfolders
+      const searchChildren = async (items: any[]): Promise<boolean> => {
+        for (const item of items) {
+          try {
+            const link = await item.link(false);
+            if (link === megaUrl) {
+              this.logger.log(`Deleting file from Mega.nz: ${item.name}`);
+              await item.delete();
+              return true;
+            }
+          } catch (_) {}
+
+          if (item.children && Array.isArray(item.children)) {
+            const found = await searchChildren(item.children);
+            if (found) return true;
+          }
         }
+        return false;
+      };
+
+      if (storage.root.children) {
+        const deleted = await searchChildren(storage.root.children);
+        if (deleted) return true;
       }
       
       this.logger.warn(`File not found in Mega tree for deletion: ${megaUrl}`);
       return false;
-    } catch (e) {
+    } catch (e: any) {
       this.logger.error(`Failed to delete file from Mega: ${e.message}`);
       return false;
     }

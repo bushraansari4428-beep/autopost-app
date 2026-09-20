@@ -172,6 +172,16 @@ model YoutubeChannel {
   user          User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   mappings      TiktokYoutubeMapping[]
   uploads       TiktokYoutubeUpload[]
+  cloudVideos   YoutubeCloudVideo[]
+  
+  // Cloud Schedule & Folder
+  scheduledTime    String?
+  videosPerDay     Int                     @default(1)
+  customHashtags   String?                 @default("#Shorts #viral #fyp")
+  privacyStatus    String                  @default("public")
+  lastScheduledRun DateTime?
+  cloudFolderName  String?
+  
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
 }
@@ -218,4 +228,21 @@ model TiktokYoutubeUpload {
   updatedAt        DateTime             @updatedAt
 
   @@unique([mappingId, tiktokVideoId])
+}
+
+model YoutubeCloudVideo {
+  id               String         @id @default(uuid())
+  youtubeChannelId String
+  youtubeChannel   YoutubeChannel @relation(fields: [youtubeChannelId], references: [id], onDelete: Cascade)
+  filename         String
+  title            String
+  description      String?
+  url              String
+  status           UploadStatus   @default(PENDING)
+  errorMessage     String?
+  youtubeVideoId   String?
+  youtubeUrl       String?
+  uploadedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 }
