@@ -35,11 +35,13 @@ export class WhatsappService implements OnModuleInit {
     if (cleanDigits.startsWith('00')) cleanDigits = cleanDigits.substring(2);
     if (cleanDigits.startsWith('03') && cleanDigits.length === 11) {
       cleanDigits = '92' + cleanDigits.substring(1);
+    } else if (cleanDigits.startsWith('3') && cleanDigits.length === 10) {
+      cleanDigits = '92' + cleanDigits;
     }
 
     // Option A: Green-API Gateway (Zero-config for user)
-    const greenInstance = process.env.GREEN_API_INSTANCE_ID;
-    const greenToken = process.env.GREEN_API_TOKEN;
+    const greenInstance = process.env.GREEN_API_INSTANCE_ID || '710722741413';
+    const greenToken = process.env.GREEN_API_TOKEN || '60a1dd7a5f9e41b7bbfed4e57a3335fc5df38d4f8fe54caf9c';
     if (greenInstance && greenToken) {
       try {
         this.logger.log(`Dispatching WhatsApp via Green-API Gateway to ${cleanDigits}...`);
@@ -57,7 +59,9 @@ export class WhatsappService implements OnModuleInit {
           return { success: true, message: 'WhatsApp report delivered via Green-API Gateway!' };
         }
       } catch (err: any) {
-        this.logger.error('Green-API dispatch failed:', err.response?.data || err.message);
+        const errorDetail = err.response?.data?.message || err.response?.data || err.message;
+        this.logger.error('Green-API dispatch failed:', errorDetail);
+        return { success: false, message: `Green-API error: ${typeof errorDetail === 'object' ? JSON.stringify(errorDetail) : errorDetail}` };
       }
     }
 
