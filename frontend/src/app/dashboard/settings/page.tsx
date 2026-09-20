@@ -13,7 +13,8 @@ import {
   Key, 
   RefreshCw,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import ToastContainer, { ToastMessage } from '@/components/Toast';
 
@@ -28,10 +29,12 @@ export default function SettingsPage() {
     apiKey: '',
     reportTime: '09:00',
     enabled: true,
+    instantAlerts: true,
   });
   const [loadingWhatsapp, setLoadingWhatsapp] = useState(true);
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
   const [testingWhatsapp, setTestingWhatsapp] = useState(false);
+  const [testingInstantAlert, setTestingInstantAlert] = useState(false);
   const [showAdvancedGateway, setShowAdvancedGateway] = useState(false);
 
   const addToast = (message: string, type: 'success' | 'error' | 'info') => {
@@ -76,6 +79,7 @@ export default function SettingsPage() {
             apiKey: data.apiKey || '',
             reportTime: data.reportTime || '09:00',
             enabled: data.enabled !== undefined ? data.enabled : true,
+            instantAlerts: data.instantAlerts !== undefined ? data.instantAlerts : true,
           });
         }
       }
@@ -83,6 +87,37 @@ export default function SettingsPage() {
       console.error('Failed to load WhatsApp config:', err);
     } finally {
       setLoadingWhatsapp(false);
+    }
+  };
+
+  const handleSendTestInstantAlert = async () => {
+    if (!whatsappForm.phoneNumber) {
+      addToast('Please enter your WhatsApp phone number first.', 'error');
+      return;
+    }
+
+    setTestingInstantAlert(true);
+    addToast('Sending instant alert test to your WhatsApp...', 'info');
+
+    try {
+      const res = await fetch('/api/whatsapp/test-instant', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          phoneNumber: whatsappForm.phoneNumber,
+          apiKey: whatsappForm.apiKey || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast('⚡ Instant alert test received! Check WhatsApp.', 'success');
+      } else {
+        addToast(`Delivery status: ${data.message || 'Check number format'}`, 'error');
+      }
+    } catch (err: any) {
+      addToast(`Test error: ${err.message}`, 'error');
+    } finally {
+      setTestingInstantAlert(false);
     }
   };
 
@@ -240,6 +275,40 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Instant Real-Time Alerts Watchdog Switch */}
+            <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white">Instant Real-Time Alerts (⚡ Foran Ittila)</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                      Active Watchdog
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                    Upload fail hone, token expire hone, account verification / checkpoint aane, scheduled slot miss hone, ya queue me <strong>0 videos</strong> baki rehne par foran WhatsApp message milega.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setWhatsappForm({ ...whatsappForm, instantAlerts: !whatsappForm.instantAlerts })}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                  whatsappForm.instantAlerts ? 'bg-emerald-600' : 'bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    whatsappForm.instantAlerts ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Optional Advanced Settings Toggle */}
             <div className="border border-gray-800/80 rounded-2xl overflow-hidden bg-gray-950/40">
               <button
@@ -274,9 +343,28 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
               <button
                 type="button"
+                onClick={handleSendTestInstantAlert}
+                disabled={testingInstantAlert}
+                className="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-amber-300 font-semibold text-xs border border-gray-700 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+              >
+                {testingInstantAlert ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                    <span>Testing Alert...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Test Instant Alert</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
                 onClick={handleSendTestReport}
                 disabled={testingWhatsapp}
-                className="px-5 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-semibold text-xs border border-gray-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                className="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-semibold text-xs border border-gray-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
               >
                 {testingWhatsapp ? (
                   <>
@@ -286,7 +374,7 @@ export default function SettingsPage() {
                 ) : (
                   <>
                     <Send className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Send Test Report Now</span>
+                    <span>Send Daily Report Test</span>
                   </>
                 )}
               </button>

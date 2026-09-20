@@ -255,6 +255,7 @@ model WhatsAppConfig {
   phoneNumber  String
   apiKey       String?
   enabled      Boolean   @default(true)
+  instantAlerts Boolean  @default(true)
   reportTime   String    @default("09:00") // Time in PKT e.g. "09:00"
   lastSentDate String?   // "YYYY-MM-DD" in PKT
   createdAt    DateTime  @default(now())
