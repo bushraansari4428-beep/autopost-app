@@ -16,6 +16,7 @@ import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
 
 import { NotificationsModule } from './notifications/notifications.module';
+import { TiktokYoutubeModule } from './tiktok-youtube/tiktok-youtube.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     LogsModule,
     WorkersModule,
     NotificationsModule,
+    TiktokYoutubeModule,
   ],
   controllers: [AppController, WebhooksController],
   providers: [AppService],

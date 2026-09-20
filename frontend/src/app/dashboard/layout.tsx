@@ -14,7 +14,8 @@ import {
   User, 
   LogOut,
   Sparkles,
-  Bell
+  Bell,
+  Youtube
 } from 'lucide-react';
 import NotificationDrawer, { AlertItem } from '@/components/NotificationDrawer';
 
@@ -122,6 +123,7 @@ export default function DashboardLayout({
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'TikTok ➔ YouTube', href: '/dashboard/tiktok-youtube', icon: Youtube },
     { name: 'Sources', href: '/dashboard/sources', icon: Layers },
     { name: 'Facebook Pages', href: '/dashboard/pages', icon: Globe },
     { name: 'Mappings', href: '/dashboard/mappings', icon: Workflow },

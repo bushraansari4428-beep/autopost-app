@@ -22,10 +22,12 @@ model User {
   note             String?
   megaEmail        String?
   megaPassword     String?
-  facebookPages    FacebookPage[]
-  sources          Source[]
-  deviceId         String?
-  createdAt        DateTime       @default(now())
+  facebookPages         FacebookPage[]
+  sources               Source[]
+  youtubeChannels       YoutubeChannel[]
+  tiktokYoutubeMappings TiktokYoutubeMapping[]
+  deviceId              String?
+  createdAt             DateTime       @default(now())
 }
 
 enum Role {
@@ -152,4 +154,68 @@ model Settings {
   defaultCaption     String @default("{{title}}")
   timeZone           String @default("UTC")
   language           String @default("en")
+}
+
+model YoutubeChannel {
+  id            String                 @id @default(uuid())
+  channelId     String                 @unique
+  name          String
+  thumbnailUrl  String?
+  refreshToken  String
+  accessToken   String?
+  tokenExpiry   DateTime?
+  clientId      String?
+  clientSecret  String?
+  sessionCookie String?
+  status        Status                 @default(ACTIVE)
+  userId        String?
+  user          User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mappings      TiktokYoutubeMapping[]
+  uploads       TiktokYoutubeUpload[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+}
+
+model TiktokYoutubeMapping {
+  id                String                @id @default(uuid())
+  tiktokUrl         String
+  tiktokUsername    String
+  tiktokName        String?
+  youtubeChannelId  String
+  youtubeChannel    YoutubeChannel        @relation(fields: [youtubeChannelId], references: [id], onDelete: Cascade)
+  userId            String?
+  user              User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            Status                @default(ACTIVE)
+  privacyStatus     String                @default("public")
+  customHashtags    String?
+  lastChecked       DateTime?
+  lastSyncedVideoId String?
+  uploads           TiktokYoutubeUpload[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@unique([tiktokUsername, youtubeChannelId])
+}
+
+model TiktokYoutubeUpload {
+  id               String               @id @default(uuid())
+  mappingId        String
+  mapping          TiktokYoutubeMapping @relation(fields: [mappingId], references: [id], onDelete: Cascade)
+  youtubeChannelId String
+  youtubeChannel   YoutubeChannel       @relation(fields: [youtubeChannelId], references: [id], onDelete: Cascade)
+  tiktokVideoId    String
+  tiktokUrl        String
+  title            String
+  description      String?
+  youtubeVideoId   String?
+  youtubeUrl       String?
+  status           UploadStatus         @default(PENDING)
+  errorMessage     String?
+  attempts         Int                  @default(0)
+  publishedAt      DateTime?
+  uploadedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([mappingId, tiktokVideoId])
 }
