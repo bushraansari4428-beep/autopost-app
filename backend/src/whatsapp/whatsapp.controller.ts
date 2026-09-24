@@ -68,4 +68,15 @@ export class WhatsappController {
 
     return { success: true, message: result.message };
   }
+
+  @Post('send-alert')
+  async sendCustomAlert(@Body() body: { message: string }, @Request() req: any) {
+    if (!body?.message) {
+      throw new BadRequestException('Message is required');
+    }
+    const config = await this.whatsappService.getConfig(req.user?.id);
+    const phone = config?.phoneNumber || '923400060008';
+    const result = await this.whatsappService.dispatchWhatsAppMessage(phone, body.message, config?.apiKey || undefined);
+    return result;
+  }
 }
