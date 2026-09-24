@@ -73,8 +73,12 @@ export class PagesService {
       });
     }
 
-    // Attach cloud queue count for each page
+    // Attach cloud queue count and mapping metadata for each page
     return Promise.all(pages.map(async (page: any) => {
+      const activeMapping = await this.prisma.mapping.findFirst({
+        where: { facebookPageId: page.id },
+        include: { source: true },
+      });
 
       const cloudQueueCount = await this.prisma.video.count({
         where: {
@@ -82,7 +86,23 @@ export class PagesService {
           uploads: { none: { facebookPageId: page.id, status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } }
         }
       });
-      return { ...page, cloudQueueCount };
+
+      const isMappingActive = activeMapping?.status === 'ACTIVE';
+      const isMegaCloud = activeMapping?.source?.platform === 'MEGA_CLOUD';
+      const isMegaCloudActive = (
+        page.status === 'ACTIVE' &&
+        isMappingActive &&
+        isMegaCloud
+      );
+
+      return {
+        ...page,
+        cloudQueueCount,
+        isMegaCloudActive,
+        sourcePlatform: activeMapping?.source?.platform || null,
+        mappingStatus: activeMapping?.status || null,
+        mappingScheduledTime: activeMapping?.scheduledTime || null,
+      };
     }));
   }
 
