@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { HistoryService } from './history.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -7,9 +7,14 @@ import { AuthGuard } from '@nestjs/passport';
 export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}
 
+  @Get('stats')
+  getStats(@Request() req: any) {
+    return this.historyService.getStats(req.user);
+  }
+
   @Get()
-  findAll(@Request() req: any) {
-    return this.historyService.findAll(req.user);
+  findAll(@Request() req: any, @Query('limit') limit?: string) {
+    return this.historyService.findAll(req.user, limit ? parseInt(limit, 10) : undefined);
   }
 
   @Delete('failed')

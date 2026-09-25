@@ -5,17 +5,80 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HistoryService {
   constructor(private prisma: PrismaService) {}
 
-  findAll(user?: any) {
+  async getStats(user?: any) {
     const notCloudQueue = {
       NOT: {
         facebookPostId: 'MEGA_CLOUD_UPLOAD'
       }
     };
 
+    const userCondition = (!user || user.role === 'ADMIN') ? {} : {
+      OR: [
+        { video: { source: { userId: user.id } } },
+        { facebookPage: { userId: user.id } }
+      ]
+    };
+
+    const baseWhere = {
+      AND: [
+        notCloudQueue,
+        userCondition
+      ]
+    };
+
+    const [completed, failed, processing, total, totalSources, connectedPages] = await Promise.all([
+      this.prisma.uploadHistory.count({
+        where: {
+          ...baseWhere,
+          status: 'COMPLETED'
+        }
+      }),
+      this.prisma.uploadHistory.count({
+        where: {
+          ...baseWhere,
+          status: 'FAILED'
+        }
+      }),
+      this.prisma.uploadHistory.count({
+        where: {
+          ...baseWhere,
+          status: { in: ['PROCESSING', 'PENDING'] }
+        }
+      }),
+      this.prisma.uploadHistory.count({
+        where: baseWhere
+      }),
+      this.prisma.source.count({
+        where: (!user || user.role === 'ADMIN') ? {} : { userId: user.id }
+      }),
+      this.prisma.facebookPage.count({
+        where: (!user || user.role === 'ADMIN') ? {} : { userId: user.id }
+      })
+    ]);
+
+    return {
+      completed,
+      failed,
+      processing,
+      total,
+      totalSources,
+      connectedPages
+    };
+  }
+
+  findAll(user?: any, limit?: number) {
+    const notCloudQueue = {
+      NOT: {
+        facebookPostId: 'MEGA_CLOUD_UPLOAD'
+      }
+    };
+
+    const takeLimit = limit ? Math.min(Math.max(Number(limit), 1), 2000) : 500;
+
     if (!user || user.role === 'ADMIN') {
       return this.prisma.uploadHistory.findMany({
         where: notCloudQueue,
-        take: 300,
+        take: takeLimit,
         include: {
           video: {
             include: {
@@ -39,7 +102,7 @@ export class HistoryService {
           }
         ]
       },
-      take: 300,
+      take: takeLimit,
       include: {
         video: {
           include: {

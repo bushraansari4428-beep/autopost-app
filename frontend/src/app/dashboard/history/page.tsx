@@ -23,21 +23,30 @@ export default function HistoryPage() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'FAILED' | 'PENDING'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [clearingFailed, setClearingFailed] = useState(false);
+  const [dbStats, setDbStats] = useState<any>(null);
   const itemsPerPage = 15;
 
   const fetchHistory = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/history', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        cache: 'no-store'
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const headers = {
+        'Authorization': `Bearer ${token}`
+      };
+
+      const [resHistory, resStats] = await Promise.all([
+        fetch('/api/history', { headers, cache: 'no-store' }).catch(() => null),
+        fetch('/api/history/stats', { headers, cache: 'no-store' }).catch(() => null)
+      ]);
+
+      if (resHistory && resHistory.ok) {
+        const data = await resHistory.json();
         setHistory(Array.isArray(data) ? data : []);
+      }
+
+      if (resStats && resStats.ok) {
+        const statsData = await resStats.json();
+        setDbStats(statsData);
       }
     } catch (err) {
       console.error('Failed to fetch history:', err);
@@ -91,14 +100,22 @@ export default function HistoryPage() {
     fetchHistory();
   }, []);
 
-  // Stats calculation
+  // Stats calculation (Uses live DB stats, falling back to local array)
   const stats = useMemo(() => {
+    if (dbStats) {
+      return {
+        total: typeof dbStats.total === 'number' ? dbStats.total : history.length,
+        completed: typeof dbStats.completed === 'number' ? dbStats.completed : history.filter(h => h.status === 'COMPLETED').length,
+        failed: typeof dbStats.failed === 'number' ? dbStats.failed : history.filter(h => h.status === 'FAILED').length,
+        processing: typeof dbStats.processing === 'number' ? dbStats.processing : history.filter(h => h.status === 'PROCESSING' || h.status === 'PENDING').length
+      };
+    }
     const total = history.length;
     const completed = history.filter(h => h.status === 'COMPLETED').length;
     const failed = history.filter(h => h.status === 'FAILED').length;
     const processing = history.filter(h => h.status === 'PROCESSING' || h.status === 'PENDING').length;
     return { total, completed, failed, processing };
-  }, [history]);
+  }, [history, dbStats]);
 
   // Filtering
   const filteredHistory = useMemo(() => {

@@ -38,12 +38,13 @@ export default function Dashboard() {
 
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [resSources, resPages, resHistory, resMappings, resLogs] = await Promise.all([
+      const [resSources, resPages, resHistory, resMappings, resLogs, resStats] = await Promise.all([
         fetch('/api/sources', { headers, cache: 'no-store' }).catch(() => null),
         fetch('/api/pages', { headers, cache: 'no-store' }).catch(() => null),
-        fetch('/api/history', { headers, cache: 'no-store' }).catch(() => null),
+        fetch('/api/history?limit=10', { headers, cache: 'no-store' }).catch(() => null),
         fetch('/api/mappings', { headers, cache: 'no-store' }).catch(() => null),
-        fetch('/api/logs', { headers, cache: 'no-store' }).catch(() => null)
+        fetch('/api/logs', { headers, cache: 'no-store' }).catch(() => null),
+        fetch('/api/history/stats', { headers, cache: 'no-store' }).catch(() => null)
       ]);
 
       let sourcesCount = 0;
@@ -66,10 +67,21 @@ export default function Dashboard() {
       if (resHistory && resHistory.ok) {
         const history = await resHistory.json();
         if (Array.isArray(history)) {
+          recent = history.slice(0, 5);
           successCount = history.filter(h => h.status === 'COMPLETED' || h.status === 'SUCCESS').length;
           failCount = history.filter(h => h.status === 'FAILED' || h.status === 'ERROR').length;
-          recent = history.slice(0, 5);
         }
+      }
+
+      // Exact live DB counts from dedicated stats API (solves 300 limit cap)
+      if (resStats && resStats.ok) {
+        try {
+          const statsData = await resStats.json();
+          if (typeof statsData.completed === 'number') successCount = statsData.completed;
+          if (typeof statsData.failed === 'number') failCount = statsData.failed;
+          if (typeof statsData.totalSources === 'number') sourcesCount = statsData.totalSources;
+          if (typeof statsData.connectedPages === 'number') pagesCount = statsData.connectedPages;
+        } catch (_) {}
       }
 
       let fetchedLogs: any[] = [];
@@ -145,7 +157,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 30000);
+    const interval = setInterval(fetchDashboardData, 15000);
     return () => clearInterval(interval);
   }, []);
 
