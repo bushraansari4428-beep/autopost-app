@@ -11,6 +11,7 @@ import { InstagramRelayClient } from './instagram-relay.client';
 import { getLatestTikTokVideos, downloadTikTokVideo, getYtDlpBinaryPath } from './tiktok.scraper';
 import { extractXiaohongshuVideos, downloadXiaohongshuVideo } from './xiaohongshu.scraper';
 import { MegaService } from './mega.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 @Injectable()
 export class SyncService {
@@ -43,6 +44,7 @@ export class SyncService {
     private readonly logsService: LogsService,
     private readonly igRelayClient: InstagramRelayClient,
     private readonly megaService: MegaService,
+    private readonly whatsappService: WhatsappService,
   ) {}
 
   private async getYtDlpCmd(): Promise<string> {
@@ -229,7 +231,7 @@ export class SyncService {
     
     const source = await this.prisma.source.findUnique({ 
       where: { id: sourceId },
-      include: { mappings: true }
+      include: { mappings: { include: { facebookPage: true } } }
     });
     if (!source) {
       this.logger.error(`Source not found: ${sourceId}`);
@@ -731,6 +733,15 @@ export class SyncService {
             }
           });
           this.logsService.log('INFO', `Auto-Poster: Queued oldest unposted video '${oldestUnpostedVideo.title}' (Published: ${oldestUnpostedVideo.publishedAt ? oldestUnpostedVideo.publishedAt.toISOString().split('T')[0] : 'Unknown'}) to Facebook Page!`);
+
+          // WhatsApp Real-Time Notification
+          this.whatsappService.sendVideoActivityAlert({
+            pageName: mapping.facebookPage?.name,
+            videoTitle: oldestUnpostedVideo.title,
+            sourcePlatform: source.platform,
+            action: 'Video Downloaded & Queued for Posting',
+            details: `Auto downloader ne naya video discover kar ke posting queue me add kar diya hai.`
+          }).catch(() => {});
         } else {
           this.logger.log(`All discovered videos for source ${source.name} have already been uploaded (or deduplicated) to page ${mapping.facebookPageId}.`);
           await this.logsService.log('INFO', `All discovered videos for source ${source.name} have already been posted to your Facebook Page.`);
@@ -1217,7 +1228,7 @@ export class SyncService {
       while (true) {
         const pendingUpload = await this.prisma.uploadHistory.findFirst({
           where: { status: 'PENDING' },
-          include: { video: true, facebookPage: true },
+          include: { video: { include: { source: true } }, facebookPage: true },
           orderBy: { createdAt: 'asc' }
         });
 
@@ -1240,6 +1251,14 @@ export class SyncService {
             where: { id: pendingUpload.id },
             data: { status: 'FAILED', errorMessage: err.message }
           });
+          this.whatsappService.sendVideoActivityAlert({
+            pageName: pendingUpload.facebookPage?.name,
+            videoTitle: pendingUpload.video?.title,
+            sourcePlatform: pendingUpload.video?.source?.platform,
+            action: 'Upload Failed! ⚠️',
+            details: err.message,
+            isError: true,
+          }).catch(() => {});
         }
       }
 
@@ -1613,6 +1632,15 @@ export class SyncService {
         errorMessage: null
       }
     });
+
+    // Real-Time WhatsApp Alert
+    this.whatsappService.sendVideoActivityAlert({
+      pageName: uploadHistory.facebookPage?.name,
+      videoTitle: video.title,
+      sourcePlatform: uploadHistory.video?.source?.platform,
+      action: 'Video Successfully Uploaded to Facebook! ✅',
+      details: `Post ID: ${fbData.id}`,
+    }).catch(() => {});
   }
 
   private async downloadAndUpload(uploadHistory: any) {

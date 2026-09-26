@@ -6,10 +6,9 @@ import axios from 'axios';
 export class WhatsappService implements OnModuleInit {
   private readonly logger = new Logger(WhatsappService.name);
 
-  // Deduplication & tracking caches for instant alerts
+  // Deduplication & tracking caches for instant alerts and schedules
   private readonly sentAlertIds = new Set<string>();
-  private readonly zeroStockAlertedPages = new Set<string>();
-  private readonly zeroStockAlertedChannels = new Set<string>();
+  private readonly sentStockAlertSlots = new Set<string>();
   private readonly missedSlotAlerts = new Set<string>();
   private readonly tokenAlertedPages = new Set<string>();
   private isCheckingAlerts = false;
@@ -37,21 +36,25 @@ export class WhatsappService implements OnModuleInit {
       existingYtFails.forEach((f) => this.sentAlertIds.add(`yt_cloud_fail_${f.id}`));
     } catch (_) {}
 
-    // Check every 45 seconds for scheduled WhatsApp daily reports
+    // Check every 45 seconds for scheduled WhatsApp daily reports (8:00 AM & 8:00 PM PKT)
+    // and scheduled low stock alerts (7:00 AM, 12:00 PM, 5:00 PM PKT)
     setInterval(() => {
       this.checkAndSendScheduledReports().catch((err) => {
         this.logger.error('Error in scheduled WhatsApp reporter:', err.message);
       });
+      this.checkAndSendScheduledStockAlerts().catch((err) => {
+        this.logger.error('Error in scheduled WhatsApp stock alert engine:', err.message);
+      });
     }, 45 * 1000);
 
-    // Check every 30 seconds for instant real-time alerts (failures, zero stock, missed slots)
+    // Check every 30 seconds for instant real-time alerts (failures, missed slots, token issues)
     setInterval(() => {
       this.checkAndSendInstantAlerts().catch((err) => {
         this.logger.error('Error in instant WhatsApp alerts watcher:', err.message);
       });
     }, 30 * 1000);
 
-    this.logger.log('WhatsApp Automated Daily Reporter & Instant Alert Engine initialized.');
+    this.logger.log('WhatsApp Automated Reporting & Alert Engine initialized.');
   }
 
   /**
@@ -198,7 +201,14 @@ export class WhatsappService implements OnModuleInit {
   }
 
   /**
-   * Fetches real-time Facebook data for active Mega Cloud pages to construct executive daily morning report
+   * Constructs the comprehensive Executive Daily Report (Sent at 8:00 AM & 8:00 PM PKT):
+   * - Page Name
+   * - Daily updated followers count (queried fresh from Facebook Graph API)
+   * - Uploaded videos in last 24h with exact Titles and Upload Times (Video 1, Video 2, etc.)
+   * - Daily posting target and count of videos posted
+   * - Current Mega Cloud stock / remaining quota in cloud queue for AI content pages
+   * - YouTube Shorts updates
+   * - System health & token status
    */
   async generateReportContent(userId?: string): Promise<string> {
     const now = new Date();
@@ -213,71 +223,150 @@ export class WhatsappService implements OnModuleInit {
     }).format(now);
 
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const pageFilter = userId ? { userId } : {};
 
-    // 1. Fetch ONLY Facebook Pages with active Mega Cloud mapping ON
-    const pages = await this.getActiveMegaCloudPages(userId);
+    // 1. Fetch ALL active Facebook Pages
+    const pages = await this.prisma.facebookPage.findMany({
+      where: {
+        ...pageFilter,
+        status: 'ACTIVE',
+      },
+      include: {
+        mappings: {
+          include: { source: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
 
     let fbSection = '';
     if (pages.length === 0) {
-      fbSection = '  _Koi active Mega Cloud Page nahi mila (ya mapping/schedule OFF hai)._\n';
+      fbSection = '  _Koi active Facebook Page nahi mila._\n';
     } else {
       for (const page of pages) {
         let totalFollowers = 0;
 
-        // Fetch fresh follower count from Facebook Graph API
-        try {
-          const res = await axios.get(
-            `https://graph.facebook.com/v19.0/${page.pageId}?fields=followers_count,fan_count,name&access_token=${page.accessToken}`,
-            { timeout: 8000 }
-          );
-          if (res.data) {
-            totalFollowers = res.data.followers_count || res.data.fan_count || 0;
+        // Fetch fresh follower count from Facebook Graph API daily
+        if (page.accessToken) {
+          try {
+            const res = await axios.get(
+              `https://graph.facebook.com/v19.0/${page.pageId}?fields=followers_count,fan_count,name&access_token=${page.accessToken}`,
+              { timeout: 8000 }
+            );
+            if (res.data) {
+              totalFollowers = res.data.followers_count || res.data.fan_count || 0;
+            }
+          } catch (fbErr: any) {
+            this.logger.warn(`Could not fetch followers for ${page.name}: ${fbErr.message}`);
           }
-        } catch (_) {}
+        }
 
-        const completedUploads = await this.prisma.uploadHistory.count({
+        // Fetch completed uploads in the last 24 hours
+        const completedUploads = await this.prisma.uploadHistory.findMany({
           where: {
             facebookPageId: page.id,
             status: 'COMPLETED',
             createdAt: { gte: last24h },
-            video: { source: { platform: 'MEGA_CLOUD' } },
+            OR: [
+              { facebookPostId: null },
+              { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } },
+            ],
           },
+          include: {
+            video: {
+              include: { source: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
         });
-        const failedUploads = await this.prisma.uploadHistory.count({
+
+        // Fetch failed uploads in the last 24 hours
+        const failedUploads = await this.prisma.uploadHistory.findMany({
           where: {
             facebookPageId: page.id,
             status: 'FAILED',
             createdAt: { gte: last24h },
-            video: { source: { platform: 'MEGA_CLOUD' } },
           },
+          take: 3,
         });
 
-        // Cloud queue count for this page
-        const cloudQueueCount = await this.prisma.video.count({
-          where: {
-            source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
-            uploads: { none: { facebookPageId: page.id, status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } },
-          },
-        });
+        // Determine if page uses Mega Cloud (Self-uploaded AI content)
+        const megaMapping = page.mappings?.find(
+          (m) => m.source?.platform === 'MEGA_CLOUD' || m.source?.url?.startsWith('cloud://')
+        );
+        const hasMegaCloud = !!megaMapping || page.mappings?.some((m) => m.source?.platform === 'MEGA_CLOUD');
 
-        const activeMapping = page.mappings[0];
-        const scheduleSlots = activeMapping?.scheduledTime || 'ON';
+        let cloudQueueCount = 0;
+        if (hasMegaCloud) {
+          cloudQueueCount = await this.prisma.video.count({
+            where: {
+              source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
+              uploads: {
+                none: {
+                  facebookPageId: page.id,
+                  status: 'COMPLETED',
+                  facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' },
+                },
+              },
+            },
+          });
+        }
+
+        const primaryMapping = page.mappings?.find((m) => m.status === 'ACTIVE') || page.mappings?.[0];
+        const targetPerDay = primaryMapping?.videosPerDay || page.videosPerDay || 2;
+        const scheduleSlots = primaryMapping?.scheduledTime || page.scheduledTime || 'Auto';
 
         fbSection += `🔹 *${page.name}*\n`;
-        fbSection += `   • 👥 Followers: *${totalFollowers.toLocaleString()}*\n`;
-        fbSection += `   • 🎬 Cloud Videos Posted (24h): *${completedUploads}* ${failedUploads > 0 ? `(${failedUploads} failed ⚠️)` : '✅'}\n`;
-        fbSection += `   • 📁 Cloud Queue: *${cloudQueueCount}* videos left\n`;
-        fbSection += `   • 🕒 Schedule: *${scheduleSlots}* PKT\n\n`;
+        fbSection += `   • 👥 Total Followers: *${totalFollowers > 0 ? totalFollowers.toLocaleString() : 'Active'}* (Updated Today)\n`;
+        fbSection += `   • 📊 Daily Quota: *${targetPerDay} videos/day* (*${completedUploads.length}* posted in 24h ${completedUploads.length >= targetPerDay ? '✅' : '⏳'})\n`;
+
+        // Detail each uploaded video with Title and Upload Time
+        if (completedUploads.length === 0) {
+          fbSection += `   • 🎬 Videos Posted (24h): *0* videos posted\n`;
+        } else {
+          completedUploads.forEach((u, idx) => {
+            const uploadTimeStr = new Intl.DateTimeFormat('en-GB', {
+              timeZone: 'Asia/Karachi',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }).format(u.updatedAt || u.createdAt);
+
+            const rawTitle = (u.video?.title || 'Video').trim();
+            const cleanTitle = rawTitle.length > 55 ? rawTitle.substring(0, 52) + '...' : rawTitle;
+            fbSection += `   • 🎬 Video ${idx + 1}: *"${cleanTitle}"* (Uploaded: ${uploadTimeStr} PKT)\n`;
+          });
+        }
+
+        // Show Mega Cloud queue remaining stock for AI content pages
+        if (hasMegaCloud) {
+          let stockBadge = '✅';
+          if (cloudQueueCount === 0) {
+            stockBadge = '🔴 *(Stock Empty! 0 Videos Remaining)*';
+          } else if (cloudQueueCount <= 2) {
+            stockBadge = `🟡 *(Low Stock! ${cloudQueueCount} Remaining)*`;
+          }
+          fbSection += `   • 📁 Mega Cloud Stock: *${cloudQueueCount}* videos left in queue ${stockBadge}\n`;
+        } else {
+          const srcPlatform = primaryMapping?.source?.platform || 'AUTOMATED';
+          const srcName = primaryMapping?.source?.name || 'Downloader Feed';
+          fbSection += `   • 🔗 Auto Downloader: *${srcPlatform}* (${srcName})\n`;
+        }
+
+        fbSection += `   • 🕒 Schedule: *${scheduleSlots}* PKT\n`;
+        if (failedUploads.length > 0) {
+          fbSection += `   • ⚠️ Failures: *${failedUploads.length}* upload error(s) in last 24h\n`;
+        }
+        fbSection += `\n`;
       }
     }
 
-    // 2. Fetch YouTube Channels (ONLY Cloud active channels, no TikTok)
+    // 2. Fetch YouTube Channels (Cloud active channels)
     const ytFilter = userId ? { userId } : {};
     const ytChannels = await this.prisma.youtubeChannel.findMany({
       where: {
         ...ytFilter,
         status: 'ACTIVE',
-        scheduledTime: { not: null, notIn: ['00:00', ''] },
       },
     });
 
@@ -285,8 +374,13 @@ export class WhatsappService implements OnModuleInit {
     if (ytChannels.length > 0) {
       ytSection = '🔴 *YOUTUBE SHORTS (CLOUD):*\n';
       for (const ch of ytChannels) {
-        const cloudShortsUploaded = await this.prisma.youtubeCloudVideo.count({
-          where: { youtubeChannelId: ch.id, status: 'COMPLETED', uploadedAt: { gte: last24h } },
+        const completedShorts = await this.prisma.youtubeCloudVideo.findMany({
+          where: {
+            youtubeChannelId: ch.id,
+            status: 'COMPLETED',
+            uploadedAt: { gte: last24h },
+          },
+          orderBy: { uploadedAt: 'asc' },
         });
 
         const ytPendingQueue = await this.prisma.youtubeCloudVideo.count({
@@ -294,55 +388,63 @@ export class WhatsappService implements OnModuleInit {
         });
 
         ytSection += `🔹 *${ch.name}*\n`;
-        ytSection += `   • 🎬 Shorts Posted (24h): *${cloudShortsUploaded}* ✅\n`;
-        ytSection += `   • 📁 Cloud Queue: *${ytPendingQueue}* videos\n`;
-        ytSection += `   • 🕒 Scheduled Times: *${ch.scheduledTime}* (${ch.videosPerDay}/day)\n\n`;
+        ytSection += `   • 📊 Daily Quota: *${ch.videosPerDay || 1}/day* (*${completedShorts.length}* posted in 24h)\n`;
+        if (completedShorts.length === 0) {
+          ytSection += `   • 🎬 Shorts Posted: *0* shorts in last 24h\n`;
+        } else {
+          completedShorts.forEach((s, idx) => {
+            const shortTime = s.uploadedAt
+              ? new Intl.DateTimeFormat('en-GB', {
+                  timeZone: 'Asia/Karachi',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                }).format(s.uploadedAt)
+              : 'Earlier';
+            const shortTitle = (s.title || 'Short').slice(0, 50);
+            ytSection += `   • 🎬 Short ${idx + 1}: *"${shortTitle}"* (Uploaded: ${shortTime} PKT)\n`;
+          });
+        }
+        ytSection += `   • 📁 Cloud Queue: *${ytPendingQueue}* shorts left\n`;
+        ytSection += `   • 🕒 Scheduled Times: *${ch.scheduledTime || 'Auto'}* PKT\n\n`;
       }
     }
 
-    // 3. Check for Token or System Alerts (ONLY for active Mega Cloud pages)
+    // 3. System Health & Token Alerts
     const tokenIssues = await this.prisma.uploadHistory.count({
       where: {
         status: 'FAILED',
         createdAt: { gte: last24h },
-        video: { source: { platform: 'MEGA_CLOUD' } },
-        facebookPage: {
-          status: 'ACTIVE',
-          mappings: {
-            some: {
-              status: 'ACTIVE',
-              scheduledTime: { not: null, notIn: ['00:00', ''] },
-              source: { platform: 'MEGA_CLOUD' },
-            },
-          },
-        },
         errorMessage: { contains: 'access token', mode: 'insensitive' },
       },
     });
 
-    let alertSection = '✅ All active Cloud Page tokens & automation healthy.';
+    let alertSection = '✅ All Page tokens, credentials & automation healthy.';
     if (tokenIssues > 0) {
-      alertSection = `⚠️ *ATTENTION:* ${tokenIssues} cloud upload(s) failed due to invalid/expired Facebook token. Please check your Pages!`;
+      alertSection = `⚠️ *ATTENTION:* ${tokenIssues} upload(s) failed due to invalid/expired Facebook token. Please check Pages dashboard!`;
     }
 
     const message = 
-`📊 *AutoPost Daily Executive Report*
-🗓 *Date:* ${pktDateStr} PKT
+`📊 *AutoPost Executive Daily Report*
+🗓 *Date & Time:* ${pktDateStr} PKT
 ━━━━━━━━━━━━━━━━━━━━
 
 📄 *FACEBOOK PAGES UPDATE:*
 ${fbSection.trim()}
 
-${ytSection ? `${ytSection.trim()}\n━━━━━━━━━━━━━━━━━━━━\n` : ''}⚙️ *System Health:*
+${ytSection ? `${ytSection.trim()}\n━━━━━━━━━━━━━━━━━━━━\n` : ''}⚙️ *System Health & Watchdog:*
 ${alertSection}
 ━━━━━━━━━━━━━━━━━━━━
-🤖 _AutoPost Cloud Monitoring Engine_`;
+🤖 _AutoPost Executive Monitoring Engine_`;
 
     return message;
   }
 
   /**
-   * Cron check running every 45s: matches PKT time against user configured reportTime
+   * Scheduled WhatsApp Executive Daily Reporter:
+   * Triggers TWICE daily at 8:00 AM (08:00) and 8:00 PM (20:00) PKT,
+   * plus any custom times specified by the user.
+   * Tracks sent slots per date so neither morning nor evening reports are skipped.
    */
   async checkAndSendScheduledReports() {
     const now = new Date();
@@ -352,14 +454,14 @@ ${alertSection}
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-    }).format(now); // e.g. "09:00"
+    }).format(now); // e.g. "08:00" or "20:00"
 
     const currentPktDate = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Karachi',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).format(now); // e.g. "2026-09-21"
+    }).format(now); // e.g. "2026-09-26"
 
     const activeConfigs = await this.prisma.whatsAppConfig.findMany({
       where: {
@@ -370,24 +472,136 @@ ${alertSection}
     for (const config of activeConfigs) {
       if (!config.phoneNumber) continue;
 
-      // Check if time matches and hasn't been sent today
-      if (config.reportTime === currentPktTime && config.lastSentDate !== currentPktDate) {
-        this.logger.log(`Triggering daily morning WhatsApp report for user ${config.userId || 'Global'} (${config.phoneNumber}) at ${currentPktTime} PKT`);
+      // Primary schedule slots: 8:00 AM (08:00) and 8:00 PM (20:00) PKT
+      let targetSlots = ['08:00', '20:00'];
+      if (config.reportTime && config.reportTime.trim()) {
+        const customSlots = config.reportTime.split(',').map((s) => s.trim()).filter(Boolean);
+        targetSlots = Array.from(new Set([...customSlots, '08:00', '20:00']));
+      }
 
-        const report = await this.generateReportContent(config.userId || undefined);
-        const result = await this.dispatchWhatsAppMessage(config.phoneNumber, report, config.apiKey || undefined);
+      if (targetSlots.includes(currentPktTime)) {
+        const slotKey = `${currentPktDate}_${currentPktTime}`;
+        const sentSlots = (config.lastSentDate || '').split(',').map((s) => s.trim());
 
-        if (result.success) {
-          await this.prisma.whatsAppConfig.update({
-            where: { id: config.id },
-            data: { lastSentDate: currentPktDate },
-          });
-          this.logger.log(`Scheduled WhatsApp report sent successfully to ${config.phoneNumber}`);
-        } else {
-          this.logger.warn(`Failed to send scheduled WhatsApp report: ${result.message}`);
+        if (!sentSlots.includes(slotKey)) {
+          this.logger.log(`Dispatching executive WhatsApp report for ${config.phoneNumber} at ${currentPktTime} PKT (Slot: ${slotKey})`);
+
+          const report = await this.generateReportContent(config.userId || undefined);
+          const result = await this.dispatchWhatsAppMessage(config.phoneNumber, report, config.apiKey || undefined);
+
+          if (result.success) {
+            // Keep only today's sent slots to prevent unbounded growth
+            const updatedSentSlots = sentSlots
+              .filter((s) => s.startsWith(currentPktDate))
+              .concat(slotKey);
+
+            await this.prisma.whatsAppConfig.update({
+              where: { id: config.id },
+              data: { lastSentDate: updatedSentSlots.join(',') },
+            });
+            this.logger.log(`Scheduled WhatsApp report delivered successfully to ${config.phoneNumber} (${slotKey})`);
+          } else {
+            this.logger.warn(`Failed to dispatch scheduled WhatsApp report: ${result.message}`);
+          }
         }
       }
     }
+  }
+
+  /**
+   * Scheduled Low Video Stock Checker:
+   * Triggers ONLY 3 times a day at 07:00 AM, 12:00 PM, and 05:00 PM PKT.
+   * Gathers all pages with low/empty Mega Cloud stock and sends a single consolidated warning.
+   * Completely eliminates the 10-minute repeat spam.
+   */
+  async checkAndSendScheduledStockAlerts() {
+    const now = new Date();
+    const currentPktTime = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(now); // e.g. "07:00", "12:00", "17:00"
+
+    const currentPktDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Karachi',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now); // "2026-09-26"
+
+    const STOCK_ALERT_TIMES = ['07:00', '12:00', '17:00']; // 7:00 AM, 12:00 PM, 5:00 PM PKT
+    if (!STOCK_ALERT_TIMES.includes(currentPktTime)) {
+      return;
+    }
+
+    const slotKey = `stock_${currentPktDate}_${currentPktTime}`;
+    if (this.sentStockAlertSlots.has(slotKey)) {
+      return;
+    }
+    this.sentStockAlertSlots.add(slotKey);
+
+    // Prune old slots from memory cache
+    if (this.sentStockAlertSlots.size > 50) {
+      const arr = Array.from(this.sentStockAlertSlots).slice(-20);
+      this.sentStockAlertSlots.clear();
+      arr.forEach((k) => this.sentStockAlertSlots.add(k));
+    }
+
+    const activeCloudPages = await this.getActiveMegaCloudPages();
+    if (activeCloudPages.length === 0) return;
+
+    const lowStockPages: { pageName: string; remaining: number; userId?: string | null }[] = [];
+
+    for (const page of activeCloudPages) {
+      const cloudQueueCount = await this.prisma.video.count({
+        where: {
+          source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
+          uploads: { none: { facebookPageId: page.id, status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } },
+        },
+      });
+
+      // Video kam hone ka alert: stock <= 2 or 0 videos remaining
+      if (cloudQueueCount <= 2) {
+        lowStockPages.push({
+          pageName: page.name,
+          remaining: cloudQueueCount,
+          userId: page.userId,
+        });
+      }
+    }
+
+    if (lowStockPages.length === 0) {
+      this.logger.log(`Stock check at ${currentPktTime} PKT: All cloud pages have healthy video stock.`);
+      return;
+    }
+
+    const pktTimeStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(now);
+
+    let itemsList = '';
+    for (const item of lowStockPages) {
+      const badge = item.remaining === 0 ? '🔴 *0 Videos Left (Out of Stock!)*' : `🟡 *${item.remaining} Video(s) Left (Low Stock!)*`;
+      itemsList += `   • 📄 *${item.pageName}*: ${badge}\n`;
+    }
+
+    const alertMessage =
+`⚠️ *AutoPost Stock Alert: Low Video Notice!*
+━━━━━━━━━━━━━━━━━━━━
+📌 *Pages with Low Mega Cloud Video Stock:*
+${itemsList.trim()}
+
+🕒 *Alert Time:* ${pktTimeStr} PKT
+━━━━━━━━━━━━━━━━━━━━
+💡 _Baraye meharbani Mega Cloud folder me mazeed AI videos upload karein taake scheduled posting jari rahe._
+🤖 _AutoPost Stock Monitor (Scheduled at 7:00 AM, 12:00 PM & 5:00 PM PKT)_`;
+
+    await this.sendAlertToRecipients(alertMessage);
+    this.logger.log(`Dispatched scheduled low-stock alert for ${lowStockPages.length} pages at ${currentPktTime} PKT`);
   }
 
   /**
@@ -417,6 +631,40 @@ ${alertSection}
     } catch (err: any) {
       this.logger.error('Failed to send alert to recipients:', err.message);
     }
+  }
+
+  /**
+   * Dispatches instant real-time alert for video generation/downloading/scraping
+   */
+  async sendVideoActivityAlert(data: {
+    pageName?: string;
+    videoTitle?: string;
+    sourcePlatform?: string;
+    action: string;
+    details?: string;
+    isError?: boolean;
+    userId?: string | null;
+  }) {
+    const now = new Date();
+    const pktTimeStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(now);
+
+    const icon = data.isError ? '🚨' : '🎬';
+    const title = data.isError ? 'Auto Downloader: Video Issue Alert!' : 'Auto Downloader: Video Activity Update!';
+
+    const message =
+`${icon} *${title}*
+━━━━━━━━━━━━━━━━━━━━
+${data.pageName ? `📄 *Page:* *${data.pageName}*\n` : ''}${data.videoTitle ? `🎬 *Video:* ${data.videoTitle}\n` : ''}${data.sourcePlatform ? `🌐 *Source:* ${data.sourcePlatform}\n` : ''}⚡ *Status:* ${data.action}
+${data.details ? `📝 *Details:* ${data.details}\n` : ''}🕒 *Time:* ${pktTimeStr} PKT
+━━━━━━━━━━━━━━━━━━━━
+🤖 _AutoPost Video Automation Engine_`;
+
+    return this.sendAlertToRecipients(message, data.userId);
   }
 
   /**
@@ -571,89 +819,16 @@ ${alertSection}
       }
 
       // ─────────────────────────────────────────────────────────────
-      // 3. Zero Remaining Videos Alert (Instant One-Time Alert)
-      // STRICT FILTER: Only for pages with active MEGA_CLOUD mapping ON
+      // 3. Low Video Stock Alerts: Handled strictly via scheduled
+      // checkAndSendScheduledStockAlerts() at 7:00 AM, 12:00 PM, and 5:00 PM PKT.
+      // Instant watcher spam is disabled per user requirement.
       // ─────────────────────────────────────────────────────────────
-      const activeCloudPages = await this.getActiveMegaCloudPages();
-      const activeCloudPageIds = new Set(activeCloudPages.map((p) => p.id));
-
-      // Clean up alerted pages that are no longer active cloud pages (e.g. mapping turned OFF)
-      for (const alertedId of Array.from(this.zeroStockAlertedPages)) {
-        if (!activeCloudPageIds.has(alertedId)) {
-          this.zeroStockAlertedPages.delete(alertedId);
-        }
-      }
-
-      for (const page of activeCloudPages) {
-        const cloudQueueCount = await this.prisma.video.count({
-          where: {
-            source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
-            uploads: { none: { facebookPageId: page.id, status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } },
-          },
-        });
-
-        if (cloudQueueCount === 0) {
-          if (!this.zeroStockAlertedPages.has(page.id)) {
-            this.zeroStockAlertedPages.add(page.id);
-
-            const alert =
-`⚠️ *AutoPost Stock Alert: 0 Videos Left!*
-━━━━━━━━━━━━━━━━━━━━
-📄 *Page:* *${page.name}*
-📁 *Queue Status:* Mega Cloud queue me koi video baki nahi rahi (*0 Videos Remaining*).
-🕒 *Time:* ${pktTimeStr} PKT
-━━━━━━━━━━━━━━━━━━━━
-💡 _Agli scheduled posting miss ho sakti hai. Baraye meharbani mazeed videos cloud folder me upload karein taake auto-posting chalti rahe._`;
-
-            await this.sendAlertToRecipients(alert, page.userId);
-          }
-        } else {
-          // Re-arm alert when videos are added back to cloud
-          if (this.zeroStockAlertedPages.has(page.id)) {
-            this.zeroStockAlertedPages.delete(page.id);
-          }
-        }
-      }
-
-      // YouTube Channels (Cloud Only)
-      const activeYtChannels = await this.prisma.youtubeChannel.findMany({
-        where: {
-          status: 'ACTIVE',
-          scheduledTime: { not: null, notIn: ['00:00', ''] },
-        },
-      });
-
-      for (const ch of activeYtChannels) {
-        const ytPendingQueue = await this.prisma.youtubeCloudVideo.count({
-          where: { youtubeChannelId: ch.id, status: 'PENDING' },
-        });
-
-        if (ytPendingQueue === 0) {
-          if (!this.zeroStockAlertedChannels.has(ch.id)) {
-            this.zeroStockAlertedChannels.add(ch.id);
-
-            const alert =
-`⚠️ *AutoPost Stock Alert: 0 Shorts Left!*
-━━━━━━━━━━━━━━━━━━━━
-🔴 *YouTube Channel:* *${ch.name}*
-📁 *Queue Status:* YouTube cloud queue me koi short baki nahi raha (*0 Shorts Remaining*).
-🕒 *Time:* ${pktTimeStr} PKT
-━━━━━━━━━━━━━━━━━━━━
-💡 _Baraye meharbani mazeed shorts upload karein taake YouTube schedule miss na ho._`;
-
-            await this.sendAlertToRecipients(alert, ch.userId);
-          }
-        } else {
-          // Re-arm alert if new videos added
-          if (this.zeroStockAlertedChannels.has(ch.id)) {
-            this.zeroStockAlertedChannels.delete(ch.id);
-          }
-        }
-      }
 
       // ─────────────────────────────────────────────────────────────
       // 4. Missed Scheduled Upload Alert
       // STRICT FILTER: Only MEGA_CLOUD mappings with status === ACTIVE and scheduledTime != '00:00'
+      // Only fires if queue actually has unposted videos (if queue is empty,
+      // the user is already informed at 7 AM, 12 PM, 5 PM, so we do not spam).
       // ─────────────────────────────────────────────────────────────
       const pktHours = parseInt(
         new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(now),
@@ -691,31 +866,42 @@ ${alertSection}
             if (!this.missedSlotAlerts.has(alertKey)) {
               this.missedSlotAlerts.add(alertKey);
 
-              const slotStartTime = new Date(Date.now() - 45 * 60 * 1000);
-              const uploadsCount = await this.prisma.uploadHistory.count({
+              // Check if queue had videos available
+              const cloudQueueCount = await this.prisma.video.count({
                 where: {
-                  facebookPageId: mapping.facebookPageId,
-                  createdAt: { gte: slotStartTime },
-                  status: { in: ['COMPLETED', 'PROCESSING', 'PENDING'] },
-                  OR: [
-                    { facebookPostId: null },
-                    { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } },
-                  ],
+                  source: { platform: 'MEGA_CLOUD', url: `cloud://${mapping.facebookPage?.pageId}` },
+                  uploads: { none: { facebookPageId: mapping.facebookPageId, status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } } },
                 },
               });
 
-              if (uploadsCount === 0) {
-                const alert =
-`⚠️ *AutoPost Alert: Scheduled Slot Missed!*
+              // Only alert if there were videos in queue that failed to post
+              if (cloudQueueCount > 0) {
+                const slotStartTime = new Date(Date.now() - 45 * 60 * 1000);
+                const uploadsCount = await this.prisma.uploadHistory.count({
+                  where: {
+                    facebookPageId: mapping.facebookPageId,
+                    createdAt: { gte: slotStartTime },
+                    status: { in: ['COMPLETED', 'PROCESSING', 'PENDING'] },
+                    OR: [
+                      { facebookPostId: null },
+                      { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } },
+                    ],
+                  },
+                });
+
+                if (uploadsCount === 0) {
+                  const alert =
+`⚠️ *AutoPost Alert: Scheduled Upload Missed!*
 ━━━━━━━━━━━━━━━━━━━━
 📄 *Page:* *${mapping.facebookPage?.name || 'Page'}*
-⏰ *Scheduled Time:* *${slot}* PKT
-❌ *Status:* Is time slot pe video post nahi hui (Queue khali hai ya upload execute nahi hui).
+⏰ *Scheduled Slot:* *${slot}* PKT
+❌ *Issue:* Queue me video mojood hone ke bawajood scheduled time pe post nahi hui.
 🕒 *Time:* ${pktTimeStr} PKT
 ━━━━━━━━━━━━━━━━━━━━
-💡 _Baraye meharbani page queue aur schedule check karein._`;
+💡 _Baraye meharbani page settings ya system logs check karein._`;
 
-                await this.sendAlertToRecipients(alert, mapping.facebookPage?.userId);
+                  await this.sendAlertToRecipients(alert, mapping.facebookPage?.userId);
+                }
               }
             }
           }
@@ -730,6 +916,7 @@ ${alertSection}
       if (nowMs - this.lastTokenCheckTime > 15 * 60 * 1000) {
         this.lastTokenCheckTime = nowMs;
 
+        const activeCloudPages = await this.getActiveMegaCloudPages();
         for (const page of activeCloudPages) {
           if (!page.accessToken) continue;
           try {

@@ -27,7 +27,7 @@ export default function SettingsPage() {
   const [whatsappForm, setWhatsappForm] = useState({
     phoneNumber: '',
     apiKey: '',
-    reportTime: '09:00',
+    reportTime: '08:00, 20:00',
     enabled: true,
     instantAlerts: true,
   });
@@ -210,13 +210,13 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <span>WhatsApp Daily Morning Report</span>
+                  <span>WhatsApp Executive Reports & Alerts</span>
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
                     Direct Phone Alerts
                   </span>
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Enter your mobile number to get daily reports on Facebook Page followers, upload status, and YouTube Shorts.
+                  Enter your mobile number to get twice-daily executive reports (8:00 AM & 8:00 PM), low stock warnings (7 AM, 12 PM, 5 PM), and live automation alerts.
                 </p>
               </div>
             </div>
@@ -261,17 +261,17 @@ export default function SettingsPage() {
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Daily Delivery Time (PKT) *</span>
+                  <span>Daily Delivery Times (PKT) *</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={whatsappForm.reportTime}
                   onChange={(e) => setWhatsappForm({ ...whatsappForm, reportTime: e.target.value })}
-                  placeholder="09:00"
+                  placeholder="08:00, 20:00"
                   className="w-full px-4 py-2.5 bg-gray-950 border border-gray-800 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
                 />
-                <span className="text-[11px] text-gray-500">Roz subah kis waqt report chahiye (e.g. 09:00 AM)</span>
+                <span className="text-[11px] text-gray-500">Roz do dafa: 8:00 AM subah aur 8:00 PM sham (08:00, 20:00)</span>
               </div>
             </div>
 
@@ -289,7 +289,7 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                    Sirf un Pages ke alerts aayenge jinki <strong>Mega Cloud</strong> mapping ON hai (jin pages ki mapping OFF hai ya jin par TikTok source hai unke alerts nahi aayenge). Upload fail hone ya queue me <strong>0 videos</strong> baki rehne par foran WhatsApp message milega.
+                    Upload fail hone, token disconnect hone, ya Auto Bulk Downloader / Video Generator me video process/fail hone par foran WhatsApp message milega. Mega Cloud low-stock alerts din me 3 dafa (7 AM, 12 PM, 5 PM) bheje jaate hain.
                   </p>
                 </div>
               </div>

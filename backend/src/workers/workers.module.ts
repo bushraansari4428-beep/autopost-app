@@ -4,6 +4,7 @@ import { CronService } from './cron.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { FacebookModule } from '../facebook/facebook.module';
 import { LogsModule } from '../logs/logs.module';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { InstagramWebhookController } from './instagram-webhook.controller';
 import { InstagramRelayClient } from './instagram-relay.client';
 import { MegaService } from './mega.service';
@@ -13,6 +14,7 @@ import { MegaService } from './mega.service';
     PrismaModule,
     FacebookModule,
     LogsModule,
+    WhatsappModule,
   ],
   controllers: [
     InstagramWebhookController

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { YoutubeService } from './youtube.service';
 import { LogsService } from '../logs/logs.service';
 import { MegaService } from '../workers/mega.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { getLatestTikTokVideos, downloadTikTokVideo, getYtDlpBinaryPath } from '../workers/tiktok.scraper';
 import { execPromise } from '../utils/exec.util';
 import * as fs from 'fs';
@@ -21,6 +22,7 @@ export class TiktokYoutubeService implements OnModuleInit {
     private readonly youtubeService: YoutubeService,
     private readonly logsService: LogsService,
     private readonly megaService: MegaService,
+    private readonly whatsappService: WhatsappService,
   ) {}
 
   onModuleInit() {

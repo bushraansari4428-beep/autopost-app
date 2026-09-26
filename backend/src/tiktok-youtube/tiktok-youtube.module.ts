@@ -5,9 +5,10 @@ import { WorkersModule } from '../workers/workers.module';
 import { YoutubeService } from './youtube.service';
 import { TiktokYoutubeService } from './tiktok-youtube.service';
 import { TiktokYoutubeController } from './tiktok-youtube.controller';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [PrismaModule, LogsModule, WorkersModule],
+  imports: [PrismaModule, LogsModule, WorkersModule, WhatsappModule],
   controllers: [TiktokYoutubeController],
   providers: [YoutubeService, TiktokYoutubeService],
   exports: [YoutubeService, TiktokYoutubeService],
