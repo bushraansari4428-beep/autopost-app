@@ -30,6 +30,51 @@ export default function FacebookPagesPage() {
   const [accessToken, setAccessToken] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Bulk Import state
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkInput, setBulkInput] = useState('');
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const [bulkResults, setBulkResults] = useState<any>(null);
+  const [bulkError, setBulkError] = useState('');
+
+  const detectedTokens = bulkInput.match(/EAA[A-Za-z0-9_-]+/g) || [];
+  const uniqueTokenCount = new Set(detectedTokens).size;
+
+  const handleBulkImport = async () => {
+    if (!bulkInput.trim()) return;
+    setIsBulkSubmitting(true);
+    setBulkError('');
+    setBulkResults(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pages/bulk-import-tokens', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ tokens: bulkInput })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setBulkResults(data);
+        addToast(`Bulk sync complete: ${data.totalPagesImported} new pages added, ${data.totalPagesUpdated} updated!`, 'success');
+        fetchPages();
+      } else {
+        setBulkError(data.message || 'Failed to import bulk tokens.');
+        addToast(`Bulk import failed: ${data.message || 'Server error'}`, 'error');
+      }
+    } catch (err: any) {
+      console.error('Failed to execute bulk token import:', err);
+      setBulkError(err.message || 'Network error');
+      addToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
+
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -139,12 +184,24 @@ export default function FacebookPagesPage() {
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Facebook Pages</h1>
           <p className="text-gray-400 mt-1">Click on any connected Facebook Page card to view live real-time statistics & analytics.</p>
         </div>
-        <button 
-          onClick={() => setShowModal(true)}
-          className="px-6 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold shadow-lg shadow-[#1877F2]/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
-        >
-          + Add FB Page
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => {
+              setShowBulkModal(true);
+              setBulkResults(null);
+              setBulkError('');
+            }}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 text-white font-bold shadow-lg shadow-orange-500/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+          >
+            <span>⚡</span> Bulk Import (1000+ Pages)
+          </button>
+          <button 
+            onClick={() => setShowModal(true)}
+            className="px-6 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold shadow-lg shadow-[#1877F2]/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+          >
+            + Add Single Page
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -603,6 +660,262 @@ export default function FacebookPagesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 1-Click Bulk Facebook Importer Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="bg-gray-900 border border-gray-700/80 rounded-3xl p-6 sm:p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl relative">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-5 border-b border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-orange-500/20">
+                  ⚡
+                </div>
+                <div>
+                  <h2 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                    Bulk Facebook Page Importer
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                      1000+ Pages
+                    </span>
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                    Paste raw User Access Tokens or seller account dumps. System automatically fetches and connects all managed pages.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isBulkSubmitting) setShowBulkModal(false);
+                }}
+                disabled={isBulkSubmitting}
+                className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-gray-800 transition text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {bulkError && (
+              <div className="mt-4 bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-2xl text-sm flex items-start gap-3">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <p className="font-bold">Import Failed</p>
+                  <p className="text-xs opacity-90">{bulkError}</p>
+                </div>
+              </div>
+            )}
+
+            {!bulkResults ? (
+              /* INPUT FORM VIEW */
+              <div className="mt-6 space-y-5">
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+                      <span>Facebook User Access Tokens / Account Strings</span>
+                      <span className="text-xs font-normal text-gray-400">(Supports pure tokens or UID|PASS|2FA|COOKIE|EAA...)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 text-xs font-bold rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        {detectedTokens.length} Tokens Detected
+                      </span>
+                      <span className="px-2.5 py-0.5 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        {uniqueTokenCount} Unique
+                      </span>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={8}
+                    value={bulkInput}
+                    onChange={(e) => setBulkInput(e.target.value)}
+                    disabled={isBulkSubmitting}
+                    placeholder={`Paste 1 to 100+ tokens or lines here...\n\nExample:\nEAABwzL1... (one token per line)\nOR\n1000928172|Pass123|2FA|datr=xyz|EAABwzL1...\n1000928173|Pass123|2FA|datr=abc|EAABwzL2...`}
+                    className="w-full bg-gray-950/80 border border-gray-700/80 rounded-2xl p-4 text-white text-xs sm:text-sm font-mono focus:outline-none focus:border-orange-500 transition custom-scrollbar placeholder-gray-600 disabled:opacity-50"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    💡 <strong>Pro Tip:</strong> Even if your tokens are mixed with IDs, passwords, or cookies, our parser automatically filters and extracts every valid <code className="text-orange-400 font-mono">EAAB...</code> token.
+                  </p>
+                </div>
+
+                {/* Features Highlights */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
+                    <div className="text-blue-400 font-bold text-xs flex items-center gap-1.5">
+                      <span>🔄</span> Auto Page Discovery
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Calls Graph API for each account to retrieve all connected pages & page-level tokens.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
+                    <div className="text-emerald-400 font-bold text-xs flex items-center gap-1.5">
+                      <span>☁️</span> Auto Cloud Setup
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Creates MEGA_CLOUD sources and posting mappings (04:30 & 19:00 daily) automatically.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
+                    <div className="text-purple-400 font-bold text-xs flex items-center gap-1.5">
+                      <span>🛡️</span> Zero Duplication
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Existing pages are refreshed with new tokens without creating duplicate entries.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Submit / Cancel Buttons */}
+                <div className="flex gap-4 pt-4 border-t border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkModal(false)}
+                    disabled={isBulkSubmitting}
+                    className="flex-1 py-3 px-4 rounded-xl font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 transition disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkImport}
+                    disabled={isBulkSubmitting || uniqueTokenCount === 0}
+                    className="flex-[2] py-3 px-4 rounded-xl font-bold text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-orange-500/25 transition flex items-center justify-center gap-2"
+                  >
+                    {isBulkSubmitting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        <span>Extracting & Linking Pages (~{uniqueTokenCount} Accounts)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>🚀</span>
+                        <span>Start 1-Click Import ({uniqueTokenCount} Accounts)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* RESULTS VIEW */
+              <div className="mt-6 space-y-6">
+                {/* Success Banner */}
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">🎉</span>
+                    <div>
+                      <h3 className="font-extrabold text-white text-base">Bulk Import Successfully Completed!</h3>
+                      <p className="text-xs text-emerald-400">
+                        Total {bulkResults.totalPagesImported + bulkResults.totalPagesUpdated} pages synchronized across {bulkResults.validTokensCount} Facebook accounts.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-white">{bulkResults.validTokensCount}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">Valid Accounts</div>
+                  </div>
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-amber-400">{bulkResults.totalPagesImported + bulkResults.totalPagesUpdated}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">Total Pages Found</div>
+                  </div>
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-emerald-400">{bulkResults.totalPagesImported}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">New Pages Added</div>
+                  </div>
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-blue-400">{bulkResults.totalPagesUpdated}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">Tokens Updated</div>
+                  </div>
+                </div>
+
+                {/* Failed Tokens Alert if any */}
+                {bulkResults.failedTokensCount > 0 && (
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+                      <span>⚠️</span>
+                      <span>{bulkResults.failedTokensCount} Accounts Failed (Tokens Expired or Invalid):</span>
+                    </div>
+                    <div className="max-h-28 overflow-y-auto custom-scrollbar space-y-1 text-xs text-gray-400">
+                      {bulkResults.failedAccounts?.map((f: any, idx: number) => (
+                        <div key={idx} className="flex justify-between font-mono bg-black/40 px-2 py-1 rounded">
+                          <span className="text-rose-300">{f.tokenPreview}</span>
+                          <span className="text-gray-500">{f.error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Breakdown by Account */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center justify-between">
+                    <span>Synchronized Accounts & Pages ({bulkResults.accounts?.length || 0})</span>
+                  </h4>
+                  <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                    {bulkResults.accounts?.map((acc: any, index: number) => (
+                      <div key={index} className="p-3.5 bg-gray-950/60 border border-gray-800 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 text-xs font-bold flex items-center justify-center">
+                              {index + 1}
+                            </span>
+                            <span className="font-bold text-white text-sm">{acc.accountName}</span>
+                            <span className="text-gray-500 font-mono text-xs">({acc.accountId})</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            {acc.pagesCount} Pages Synced
+                          </span>
+                        </div>
+                        {acc.pages && acc.pages.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-800/60">
+                            {acc.pages.map((p: any) => (
+                              <span key={p.id} className="text-[11px] bg-gray-800/80 text-gray-300 px-2 py-0.5 rounded-md border border-gray-700/50">
+                                📄 {p.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer Button */}
+                <div className="pt-4 border-t border-gray-800 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkResults(null);
+                      setBulkInput('');
+                    }}
+                    className="py-2.5 px-4 rounded-xl text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 transition text-sm font-semibold"
+                  >
+                    Import More Tokens
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBulkModal(false);
+                      setBulkResults(null);
+                      setBulkInput('');
+                      fetchPages();
+                    }}
+                    className="py-2.5 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/25 transition text-sm"
+                  >
+                    Done & View All Pages
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}

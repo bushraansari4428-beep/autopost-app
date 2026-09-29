@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -378,5 +378,245 @@ export class PagesService {
     }
 
     return stats;
+  }
+
+  async bulkImportTokens(input: string | string[], user: any) {
+    if (!input) {
+      throw new BadRequestException('Tokens input is required');
+    }
+
+    let rawLines: string[] = [];
+    if (Array.isArray(input)) {
+      rawLines = input;
+    } else if (typeof input === 'string') {
+      rawLines = input.split(/[\r\n]+/);
+    }
+
+    const tokenList: string[] = [];
+    for (const line of rawLines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // Match EAA token in line (handles raw tokens, CSV, pipe-delimited UID|PASS|2FA|COOKIE|EAA...)
+      const match = trimmed.match(/(EAA[A-Za-z0-9_-]+)/);
+      if (match && match[1]) {
+        tokenList.push(match[1]);
+      } else if (trimmed.startsWith('EAA')) {
+        tokenList.push(trimmed);
+      }
+    }
+
+    // Deduplicate
+    const uniqueTokens = Array.from(new Set(tokenList));
+    if (uniqueTokens.length === 0) {
+      throw new BadRequestException('No valid Facebook tokens (starting with EAA...) found in input.');
+    }
+
+    const results = {
+      totalTokensProvided: uniqueTokens.length,
+      validTokensCount: 0,
+      failedTokensCount: 0,
+      totalPagesImported: 0,
+      totalPagesUpdated: 0,
+      accounts: [] as any[],
+      failedAccounts: [] as any[],
+    };
+
+    // Concurrently process in chunks of 5
+    const chunkSize = 5;
+    for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
+      const chunk = uniqueTokens.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map(async (token, chunkIdx) => {
+          const tokenIndex = i + chunkIdx + 1;
+          const tokenPreview = token.length > 16 
+            ? `${token.substring(0, 8)}...${token.substring(token.length - 6)}`
+            : token;
+
+          try {
+            // 1. Identify account owner if possible
+            let accountName = `FB Account #${tokenIndex}`;
+            let accountId = `user_${tokenIndex}`;
+            try {
+              const meRes = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${token}`, {
+                signal: AbortSignal.timeout(10000)
+              });
+              if (meRes.ok) {
+                const meData = await meRes.json();
+                accountName = meData.name || accountName;
+                accountId = meData.id || accountId;
+              }
+            } catch (_) {}
+
+            // 2. Fetch all pages managed by this token
+            let nextUrl: string | null = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,category,picture&limit=250&access_token=${token}`;
+            const fetchedPages: any[] = [];
+            let isPageTokenFallback = false;
+
+            while (nextUrl) {
+              const res: any = await fetch(nextUrl, { signal: AbortSignal.timeout(15000) });
+              if (!res.ok) {
+                const errData: any = await res.json().catch(() => ({}));
+                const errMsg = errData.error?.message || `HTTP ${res.status}`;
+
+                // Fallback check: maybe this is a direct Page token, not a User token?
+                if (fetchedPages.length === 0 && (errMsg.includes('Page') || errMsg.includes('type Page') || res.status === 400)) {
+                  try {
+                    const pageCheckRes: any = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,category&access_token=${token}`, {
+                      signal: AbortSignal.timeout(10000)
+                    });
+                    if (pageCheckRes.ok) {
+                      const pageCheckData: any = await pageCheckRes.json();
+                      if (pageCheckData.id) {
+                        fetchedPages.push({
+                          id: pageCheckData.id,
+                          name: pageCheckData.name || `Page ${pageCheckData.id}`,
+                          access_token: token
+                        });
+                        isPageTokenFallback = true;
+                        break;
+                      }
+                    }
+                  } catch (_) {}
+                }
+
+                if (!isPageTokenFallback) {
+                  throw new Error(errMsg);
+                }
+              }
+
+              if (isPageTokenFallback) break;
+
+              const data: any = await res.json();
+              if (data.data && Array.isArray(data.data)) {
+                fetchedPages.push(...data.data);
+              }
+              nextUrl = data.paging?.next || null;
+            }
+
+            if (fetchedPages.length === 0) {
+              results.validTokensCount++;
+              results.accounts.push({
+                accountName,
+                accountId,
+                tokenPreview,
+                pagesCount: 0,
+                imported: 0,
+                updated: 0,
+                message: 'Token is valid, but no Facebook Pages are managed by this account.'
+              });
+              return;
+            }
+
+            let importedThisToken = 0;
+            let updatedThisToken = 0;
+
+            for (const fbPage of fetchedPages) {
+              const pageId = String(fbPage.id);
+              const pageName = fbPage.name || `Facebook Page ${pageId}`;
+              const pageAccessToken = fbPage.access_token || token;
+
+              const existing = await this.prisma.facebookPage.findFirst({
+                where: { pageId }
+              });
+
+              let pageRecord: any;
+              if (existing) {
+                pageRecord = await this.prisma.facebookPage.update({
+                  where: { id: existing.id },
+                  data: {
+                    name: pageName,
+                    accessToken: pageAccessToken,
+                    status: 'ACTIVE',
+                    userId: user?.id || existing.userId
+                  }
+                });
+                updatedThisToken++;
+                results.totalPagesUpdated++;
+              } else {
+                pageRecord = await this.prisma.facebookPage.create({
+                  data: {
+                    pageId,
+                    name: pageName,
+                    accessToken: pageAccessToken,
+                    status: 'ACTIVE',
+                    userId: user?.id,
+                    videosPerDay: 2
+                  }
+                });
+                importedThisToken++;
+                results.totalPagesImported++;
+              }
+
+              // Auto-create / ensure Cloud Source
+              let cloudSource = await this.prisma.source.findFirst({
+                where: { platform: 'MEGA_CLOUD', url: `cloud://${pageId}` }
+              });
+              if (!cloudSource) {
+                cloudSource = await this.prisma.source.create({
+                  data: {
+                    platform: 'MEGA_CLOUD',
+                    name: `Cloud Upload (${pageName})`,
+                    url: `cloud://${pageId}`,
+                    userId: user?.id
+                  }
+                });
+              } else {
+                await this.prisma.source.update({
+                  where: { id: cloudSource.id },
+                  data: {
+                    name: `Cloud Upload (${pageName})`,
+                    userId: user?.id || cloudSource.userId
+                  }
+                });
+              }
+
+              // Auto-create / ensure Mapping
+              const existingMapping = await this.prisma.mapping.findFirst({
+                where: { facebookPageId: pageRecord.id }
+              });
+              if (!existingMapping) {
+                await this.prisma.mapping.create({
+                  data: {
+                    sourceId: cloudSource.id,
+                    facebookPageId: pageRecord.id,
+                    scheduledTime: '04:30,19:00',
+                    status: 'ACTIVE'
+                  }
+                });
+              } else if (existingMapping.sourceId === cloudSource.id) {
+                await this.prisma.mapping.update({
+                  where: { id: existingMapping.id },
+                  data: {
+                    status: 'ACTIVE',
+                    scheduledTime: existingMapping.scheduledTime || '04:30,19:00'
+                  }
+                });
+              }
+            }
+
+            results.validTokensCount++;
+            results.accounts.push({
+              accountName,
+              accountId,
+              tokenPreview,
+              pagesCount: fetchedPages.length,
+              imported: importedThisToken,
+              updated: updatedThisToken,
+              pages: fetchedPages.map((p) => ({ id: p.id, name: p.name }))
+            });
+
+          } catch (err: any) {
+            results.failedTokensCount++;
+            results.failedAccounts.push({
+              tokenIndex,
+              tokenPreview,
+              error: err.message || 'Failed to fetch pages with this token'
+            });
+          }
+        })
+      );
+    }
+
+    return results;
   }
 }

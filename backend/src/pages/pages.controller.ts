@@ -15,6 +15,11 @@ export class PagesController {
     return this.pagesService.create(createPageDto);
   }
 
+  @Post('bulk-import-tokens')
+  bulkImportTokens(@Body() body: { tokens: string | string[] }, @Request() req: any) {
+    return this.pagesService.bulkImportTokens(body.tokens, req.user);
+  }
+
   @Get()
   findAll(@Request() req: any) {
     return this.pagesService.findAll(req.user);
