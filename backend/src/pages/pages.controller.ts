@@ -20,6 +20,16 @@ export class PagesController {
     return this.pagesService.bulkImportTokens(body.tokens, req.user);
   }
 
+  @Post('bulk-create-pages')
+  bulkCreatePages(@Body() body: any, @Request() req: any) {
+    return this.pagesService.bulkCreatePages(body, req.user);
+  }
+
+  @Get('saved-accounts')
+  getSavedAccounts(@Request() req: any) {
+    return this.pagesService.getSavedAccounts(req.user);
+  }
+
   @Get()
   findAll(@Request() req: any) {
     return this.pagesService.findAll(req.user);

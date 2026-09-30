@@ -23,6 +23,7 @@ model User {
   megaEmail        String?
   megaPassword     String?
   facebookPages         FacebookPage[]
+  facebookAccounts      FacebookAccount[]
   sources               Source[]
   youtubeChannels       YoutubeChannel[]
   tiktokYoutubeMappings TiktokYoutubeMapping[]
@@ -261,3 +262,16 @@ model WhatsAppConfig {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
+
+model FacebookAccount {
+  id          String   @id @default(uuid())
+  uid         String?
+  name        String?
+  userToken   String   @unique
+  status      Status   @default(ACTIVE)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+

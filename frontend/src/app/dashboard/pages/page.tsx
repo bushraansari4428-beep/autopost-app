@@ -75,6 +75,96 @@ export default function FacebookPagesPage() {
     }
   };
 
+  // AI Bulk Page Creator state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [savedAccounts, setSavedAccounts] = useState<any[]>([]);
+  const [loadingSavedAccounts, setLoadingSavedAccounts] = useState(false);
+  const [createMode, setCreateMode] = useState<'saved' | 'paste'>('saved');
+  const [createTokensInput, setCreateTokensInput] = useState('');
+  const [niche, setNiche] = useState('Stickhead Skits');
+  const [pagesPerAccount, setPagesPerAccount] = useState(1);
+  const [category, setCategory] = useState('VIDEO_CREATOR');
+  const [customNamesInput, setCustomNamesInput] = useState('');
+  const [isCreatingPages, setIsCreatingPages] = useState(false);
+  const [createResults, setCreateResults] = useState<any>(null);
+  const [createError, setCreateError] = useState('');
+
+  const createDetectedTokens = createTokensInput.match(/EAA[A-Za-z0-9_-]+/g) || [];
+  const createUniqueTokenCount = new Set(createDetectedTokens).size;
+
+  const fetchSavedAccounts = async () => {
+    setLoadingSavedAccounts(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pages/saved-accounts', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSavedAccounts(data);
+        if (data.length === 0) {
+          setCreateMode('paste');
+        } else {
+          setCreateMode('saved');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved accounts:', err);
+    } finally {
+      setLoadingSavedAccounts(false);
+    }
+  };
+
+  const handleBulkCreate = async () => {
+    setIsCreatingPages(true);
+    setCreateError('');
+    setCreateResults(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const payload: any = {
+        niche,
+        pagesPerAccount,
+        category,
+        useSavedAccounts: createMode === 'saved',
+      };
+
+      if (createMode === 'paste') {
+        payload.tokens = createTokensInput;
+      }
+
+      if (customNamesInput.trim()) {
+        payload.customNames = customNamesInput;
+      }
+
+      const res = await fetch('/api/pages/bulk-create-pages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setCreateResults(data);
+        addToast(`🎉 Success! ${data.totalPagesCreated} new pages created across ${data.successfulAccounts} accounts!`, 'success');
+        fetchPages();
+        fetchSavedAccounts();
+      } else {
+        setCreateError(data.message || 'Failed to create pages.');
+        addToast(`Creation failed: ${data.message || 'Server error'}`, 'error');
+      }
+    } catch (err: any) {
+      console.error('Failed to bulk create pages:', err);
+      setCreateError(err.message || 'Network error');
+      addToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setIsCreatingPages(false);
+    }
+  };
+
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -185,6 +275,17 @@ export default function FacebookPagesPage() {
           <p className="text-gray-400 mt-1">Click on any connected Facebook Page card to view live real-time statistics & analytics.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => {
+              setShowCreateModal(true);
+              setCreateResults(null);
+              setCreateError('');
+              fetchSavedAccounts();
+            }}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-700 text-white font-bold shadow-lg shadow-teal-500/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+          >
+            <span>🏭</span> AI Bulk Page Creator
+          </button>
           <button 
             onClick={() => {
               setShowBulkModal(true);
@@ -664,7 +765,399 @@ export default function FacebookPagesPage() {
         </div>
       )}
 
-      {/* 1-Click Bulk Facebook Importer Modal */}
+      {/* 1-Click AI Bulk Page Creator Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="bg-gray-900 border border-gray-700/80 rounded-3xl p-6 sm:p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl relative">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-5 border-b border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-teal-500/20">
+                  🏭
+                </div>
+                <div>
+                  <h2 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                    AI Bulk Page Creator
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      Auto-Factory
+                    </span>
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                    Automatically create new Facebook Pages across your connected IDs with AI names, bios & auto cloud posting.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isCreatingPages) setShowCreateModal(false);
+                }}
+                disabled={isCreatingPages}
+                className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-gray-800 transition text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {createError && (
+              <div className="mt-4 bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-2xl text-sm flex items-start gap-3">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <p className="font-bold">Page Creation Failed</p>
+                  <p className="text-xs opacity-90">{createError}</p>
+                </div>
+              </div>
+            )}
+
+            {!createResults ? (
+              /* FORM / CONFIG VIEW */
+              <div className="mt-6 space-y-6">
+                
+                {/* Account Source Mode Tabs */}
+                <div>
+                  <label className="text-sm font-semibold text-gray-200 block mb-2">
+                    Select Facebook Accounts Source:
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 p-1 bg-gray-950/80 rounded-2xl border border-gray-800">
+                    <button
+                      type="button"
+                      onClick={() => setCreateMode('saved')}
+                      className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 ${
+                        createMode === 'saved'
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                          : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <span>⚡</span>
+                      <span>Connected IDs ({savedAccounts.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateMode('paste')}
+                      className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 ${
+                        createMode === 'paste'
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                          : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <span>📝</span>
+                      <span>Paste New Tokens</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mode 1: Saved Accounts View */}
+                {createMode === 'saved' && (
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl">
+                    {loadingSavedAccounts ? (
+                      <div className="text-center py-4 text-gray-500 text-xs">Loading connected accounts...</div>
+                    ) : savedAccounts.length === 0 ? (
+                      <div className="text-center py-4 text-gray-400 text-xs space-y-2">
+                        <p>No saved Facebook accounts found yet in the system.</p>
+                        <button
+                          type="button"
+                          onClick={() => setCreateMode('paste')}
+                          className="text-emerald-400 font-bold hover:underline"
+                        >
+                          Click here to paste your account tokens now →
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-bold text-gray-300">
+                            Ready to create pages for {savedAccounts.length} connected accounts:
+                          </span>
+                          <span className="text-[11px] text-emerald-400 font-mono">
+                            {savedAccounts.length * pagesPerAccount} Total Pages will be created
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
+                          {savedAccounts.map((acc: any, i: number) => (
+                            <span key={i} className="text-[11px] bg-gray-800/90 text-gray-300 px-2.5 py-1 rounded-lg border border-gray-700/60 font-mono">
+                              👤 {acc.name} ({acc.tokenPreview})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Mode 2: Paste New Tokens */}
+                {createMode === 'paste' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-semibold text-gray-300">
+                        Paste User Tokens or Account Strings:
+                      </label>
+                      <span className="px-2 py-0.5 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        {createUniqueTokenCount} Accounts Detected
+                      </span>
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={createTokensInput}
+                      onChange={(e) => setCreateTokensInput(e.target.value)}
+                      placeholder={`EAABwzL1... (one token per line)\nOR\nUID|PASS|2FA|COOKIE|EAABwzL1...`}
+                      className="w-full bg-gray-950/80 border border-gray-700/80 rounded-2xl p-3.5 text-white text-xs font-mono focus:outline-none focus:border-teal-500 transition custom-scrollbar"
+                    />
+                  </div>
+                )}
+
+                {/* Niche & Preset Quick Buttons */}
+                <div>
+                  <label className="text-sm font-semibold text-gray-200 block mb-2">
+                    Niche / Content Topic:
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {[
+                      { label: '🎭 Stickhead Skits', val: 'Stickhead Skits' },
+                      { label: '🔍 Mystery & Unexplained', val: 'Unexplained Mysteries' },
+                      { label: '😂 Comedy & Memes', val: 'Comedy & Memes' },
+                      { label: '🧠 Mindblowing Facts', val: 'Mindblowing Facts' },
+                      { label: '🐾 Funny Animals', val: 'Funny Animals' }
+                    ].map((n, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setNiche(n.val)}
+                        className={`text-xs px-3 py-1.5 rounded-xl border transition ${
+                          niche === n.val
+                            ? 'bg-teal-500/20 border-teal-500 text-teal-300 font-bold'
+                            : 'bg-gray-800/60 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
+                        }`}
+                      >
+                        {n.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    value={niche}
+                    onChange={(e) => setNiche(e.target.value)}
+                    placeholder="e.g. Stickhead Skits, Dark Mysteries, Daily Quotes..."
+                    required
+                    className="w-full bg-gray-950/80 border border-gray-700/80 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-teal-500"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    AI automatically generates unique page names, engaging bios, and category tags based on this topic.
+                  </p>
+                </div>
+
+                {/* Settings: Pages Per Account & Category */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-200 block mb-1.5">
+                      Pages per Account:
+                    </label>
+                    <select
+                      value={pagesPerAccount}
+                      onChange={(e) => setPagesPerAccount(Number(e.target.value))}
+                      className="w-full bg-gray-950/80 border border-gray-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-teal-500"
+                    >
+                      <option value={1}>1 Page per ID (Recommended - 100% Safe)</option>
+                      <option value={2}>2 Pages per ID (Safe)</option>
+                      <option value={3}>3 Pages per ID (Maximum Limit)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-200 block mb-1.5">
+                      Page Category:
+                    </label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full bg-gray-950/80 border border-gray-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="VIDEO_CREATOR">Video Creator (Best for Reels)</option>
+                      <option value="COMEDY_CLUB">Comedy / Entertainment</option>
+                      <option value="ENTERTAINMENT_WEBSITE">Entertainment Website</option>
+                      <option value="MEDIA_NEWS_COMPANY">Media / News</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Optional Custom Names */}
+                <div>
+                  <details className="group">
+                    <summary className="text-xs text-teal-400 font-semibold cursor-pointer hover:underline list-none flex items-center gap-1.5">
+                      <span>▸ Want to supply specific Page Names? (Optional)</span>
+                    </summary>
+                    <div className="mt-2.5 pt-2 border-t border-gray-800">
+                      <textarea
+                        rows={3}
+                        value={customNamesInput}
+                        onChange={(e) => setCustomNamesInput(e.target.value)}
+                        placeholder={`Leave blank for AI names, or enter custom names here (one per line):\nStickhead Official\nStickhead Skits VIP\nStickhead Funny Moments`}
+                        className="w-full bg-gray-950/80 border border-gray-700/80 rounded-xl p-3 text-white text-xs font-mono focus:outline-none focus:border-teal-500 custom-scrollbar"
+                      />
+                    </div>
+                  </details>
+                </div>
+
+                {/* Anti-Ban Shield Alert */}
+                <div className="p-3.5 bg-teal-500/10 border border-teal-500/20 rounded-2xl flex items-center gap-3">
+                  <span className="text-xl">🛡️</span>
+                  <div className="text-xs text-gray-300">
+                    <strong className="text-teal-300">Anti-Ban Engine Active:</strong> System enforces 3.5s human-like delays, unique AI bios, and rate-limit safeguards to keep all your Facebook IDs 100% safe.
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-4 pt-4 border-t border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    disabled={isCreatingPages}
+                    className="flex-1 py-3 px-4 rounded-xl font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 transition disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkCreate}
+                    disabled={isCreatingPages || (createMode === 'saved' && savedAccounts.length === 0) || (createMode === 'paste' && createUniqueTokenCount === 0)}
+                    className="flex-[2] py-3 px-4 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-teal-500/25 transition flex items-center justify-center gap-2"
+                  >
+                    {isCreatingPages ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        <span>Creating Pages with Anti-Ban Delay... Please Wait</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>🚀</span>
+                        <span>
+                          Start 1-Click Page Creation ({createMode === 'saved' ? savedAccounts.length * pagesPerAccount : createUniqueTokenCount * pagesPerAccount} Pages)
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </div>
+            ) : (
+              /* RESULTS VIEW */
+              <div className="mt-6 space-y-6">
+                
+                {/* Success Banner */}
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">🎉</span>
+                    <div>
+                      <h3 className="font-extrabold text-white text-base">Bulk Page Creation Completed!</h3>
+                      <p className="text-xs text-emerald-400">
+                        Created {createResults.totalPagesCreated} new pages across {createResults.successfulAccounts} Facebook accounts.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-white">{createResults.successfulAccounts} / {createResults.totalAccounts}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">Active Accounts</div>
+                  </div>
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-emerald-400">{createResults.totalPagesCreated}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">Pages Created</div>
+                  </div>
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-teal-400">{createResults.totalPagesCreated}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">Cloud Sources</div>
+                  </div>
+                  <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-2xl text-center">
+                    <div className="text-2xl font-black text-rose-400">{createResults.failedAccountsCount}</div>
+                    <div className="text-xs text-gray-400 mt-1 uppercase font-semibold">Failed / Limited</div>
+                  </div>
+                </div>
+
+                {/* Failed Accounts Alert if any */}
+                {createResults.failedAccountsCount > 0 && (
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+                      <span>⚠️</span>
+                      <span>{createResults.failedAccountsCount} Accounts could not create pages:</span>
+                    </div>
+                    <div className="max-h-28 overflow-y-auto custom-scrollbar space-y-1 text-xs text-gray-400">
+                      {createResults.failedAccounts?.map((f: any, idx: number) => (
+                        <div key={idx} className="flex justify-between font-mono bg-black/40 px-2.5 py-1.5 rounded">
+                          <span className="text-rose-300">{f.accountName} ({f.tokenPreview}):</span>
+                          <span className="text-gray-400 truncate max-w-[280px]">{f.error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Newly Created Pages List */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                    Newly Created & Connected Pages ({createResults.createdPages?.length || 0})
+                  </h4>
+                  <div className="space-y-2.5 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                    {createResults.createdPages?.map((p: any, index: number) => (
+                      <div key={index} className="p-3.5 bg-gray-950/60 border border-gray-800 rounded-xl flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold flex items-center justify-center">
+                              {index + 1}
+                            </span>
+                            <span className="font-bold text-white text-sm">{p.pageName}</span>
+                            <span className="text-gray-500 font-mono text-xs">(ID: {p.pageId})</span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1 italic pl-7">"{p.bio}"</p>
+                          <div className="flex items-center gap-3 mt-1.5 pl-7 text-[11px] text-gray-500">
+                            <span>👤 Account: {p.accountName}</span>
+                            <span>☁️ Cloud: cloud://{p.pageId}</span>
+                            <span className="text-emerald-400">⏰ Daily 04:30, 19:00</span>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                          Active & Mapped
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="pt-4 border-t border-gray-800 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateResults(null);
+                      fetchSavedAccounts();
+                    }}
+                    className="py-2.5 px-4 rounded-xl text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 transition text-sm font-semibold"
+                  >
+                    Create More Pages
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setCreateResults(null);
+                      fetchPages();
+                    }}
+                    className="py-2.5 px-6 rounded-xl font-bold text-white bg-teal-600 hover:bg-teal-500 shadow-lg shadow-teal-500/25 transition text-sm"
+                  >
+                    Done & View All Pages
+                  </button>
+                </div>
+
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
       {showBulkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
           <div className="bg-gray-900 border border-gray-700/80 rounded-3xl p-6 sm:p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl relative">

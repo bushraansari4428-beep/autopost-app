@@ -447,6 +447,26 @@ export class PagesService {
               }
             } catch (_) {}
 
+            // Save/upsert account in database for future 1-click page creation
+            try {
+              await this.prisma.facebookAccount.upsert({
+                where: { userToken: token },
+                update: {
+                  name: accountName,
+                  uid: accountId,
+                  status: 'ACTIVE',
+                  userId: user?.id
+                },
+                create: {
+                  name: accountName,
+                  uid: accountId,
+                  userToken: token,
+                  status: 'ACTIVE',
+                  userId: user?.id
+                }
+              });
+            } catch (_) {}
+
             // 2. Fetch all pages managed by this token
             let nextUrl: string | null = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,category,picture&limit=250&access_token=${token}`;
             const fetchedPages: any[] = [];
@@ -619,4 +639,277 @@ export class PagesService {
 
     return results;
   }
+
+  async getSavedAccounts(user: any) {
+    const where: any = {};
+    if (user?.role !== 'ADMIN' && user?.id) {
+      where.userId = user.id;
+    }
+    const accounts = await this.prisma.facebookAccount.findMany({
+      where,
+      orderBy: { createdAt: 'desc' }
+    });
+    return accounts.map((a: any) => ({
+      id: a.id,
+      name: a.name || 'Facebook User',
+      uid: a.uid || 'N/A',
+      tokenPreview: a.userToken ? `${a.userToken.substring(0, 8)}...${a.userToken.slice(-6)}` : 'N/A',
+      status: a.status,
+      createdAt: a.createdAt
+    }));
+  }
+
+  async bulkCreatePages(dto: {
+    tokens?: string | string[];
+    useSavedAccounts?: boolean;
+    niche?: string;
+    pagesPerAccount?: number;
+    category?: string;
+    customNames?: string | string[];
+  }, user: any) {
+    let tokensToProcess: string[] = [];
+
+    if (dto.tokens) {
+      const rawTokens: string[] = Array.isArray(dto.tokens) ? dto.tokens : [dto.tokens];
+      for (const line of rawTokens) {
+        if (!line) continue;
+        const matches = line.match(/(EAA[A-Za-z0-9_-]+)/g);
+        if (matches) {
+          tokensToProcess.push(...matches);
+        }
+      }
+      tokensToProcess = Array.from(new Set(tokensToProcess));
+    }
+
+    if (tokensToProcess.length === 0 && (dto.useSavedAccounts || !dto.tokens)) {
+      const where: any = { status: 'ACTIVE' };
+      if (user?.role !== 'ADMIN' && user?.id) {
+        where.userId = user.id;
+      }
+      const savedAccounts = await this.prisma.facebookAccount.findMany({ where });
+      tokensToProcess = savedAccounts.map((a: any) => a.userToken);
+    }
+
+    if (tokensToProcess.length === 0) {
+      throw new BadRequestException('No Facebook account tokens found. Please paste tokens or import accounts first.');
+    }
+
+    const pagesPerAccount = Math.min(Math.max(Number(dto.pagesPerAccount) || 1, 1), 3);
+    const niche = (dto.niche || 'Video Creator').trim();
+    const categoryEnum = dto.category || 'VIDEO_CREATOR';
+
+    let customNameList: string[] = [];
+    if (dto.customNames) {
+      if (Array.isArray(dto.customNames)) {
+        customNameList = dto.customNames.map(s => s.trim()).filter(Boolean);
+      } else {
+        customNameList = dto.customNames.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      }
+    }
+
+    const results = {
+      totalAccounts: tokensToProcess.length,
+      pagesPerAccount,
+      niche,
+      successfulAccounts: 0,
+      failedAccountsCount: 0,
+      totalPagesCreated: 0,
+      createdPages: [] as any[],
+      failedAccounts: [] as any[]
+    };
+
+    let globalPageCounter = 1;
+
+    for (let accIdx = 0; accIdx < tokensToProcess.length; accIdx++) {
+      const token = tokensToProcess[accIdx];
+      const tokenPreview = token.length > 16 
+        ? `${token.substring(0, 8)}...${token.substring(token.length - 6)}`
+        : token;
+
+      let accountName = `FB Account #${accIdx + 1}`;
+      let accountId = `user_${accIdx + 1}`;
+      try {
+        const meRes: any = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${token}`, {
+          signal: AbortSignal.timeout(10000)
+        });
+        if (meRes.ok) {
+          const meData: any = await meRes.json();
+          accountName = meData.name || accountName;
+          accountId = meData.id || accountId;
+
+          await this.prisma.facebookAccount.upsert({
+            where: { userToken: token },
+            update: { name: accountName, uid: accountId, status: 'ACTIVE', userId: user?.id },
+            create: { name: accountName, uid: accountId, userToken: token, status: 'ACTIVE', userId: user?.id }
+          }).catch(() => {});
+        }
+      } catch (_) {}
+
+      let createdForThisAccount = 0;
+      let accountHadError = false;
+
+      for (let pIdx = 0; pIdx < pagesPerAccount; pIdx++) {
+        let pageName = '';
+        if (customNameList.length > 0) {
+          pageName = customNameList.shift()!;
+        } else {
+          pageName = this.generateNichePageName(niche, globalPageCounter);
+        }
+        globalPageCounter++;
+
+        const pageBio = this.generateNicheBio(niche, pageName);
+
+        try {
+          const postData = new URLSearchParams();
+          postData.append('name', pageName);
+          postData.append('category_enum', categoryEnum);
+          postData.append('about', pageBio);
+          postData.append('access_token', token);
+
+          const createRes: any = await fetch('https://graph.facebook.com/v19.0/me/accounts', {
+            method: 'POST',
+            body: postData,
+            signal: AbortSignal.timeout(20000)
+          });
+
+          let createData: any = await createRes.json();
+
+          if (!createRes.ok || !createData.id) {
+            // Fallback retry with category ID (2201 = Video Creator) if category_enum failed
+            if (createData.error?.message?.toLowerCase().includes('category')) {
+              const retryData = new URLSearchParams();
+              retryData.append('name', pageName);
+              retryData.append('category', '2201');
+              retryData.append('about', pageBio);
+              retryData.append('access_token', token);
+
+              const retryRes: any = await fetch('https://graph.facebook.com/v19.0/me/accounts', {
+                method: 'POST',
+                body: retryData,
+                signal: AbortSignal.timeout(20000)
+              });
+              const retryJson: any = await retryRes.json();
+              if (retryRes.ok && retryJson.id) {
+                createData = retryJson;
+              } else {
+                throw new Error(retryJson.error?.message || createData.error?.message || 'Meta API rejected page creation');
+              }
+            } else {
+              throw new Error(createData.error?.message || `Facebook API error (${createRes.status})`);
+            }
+          }
+
+          const newPageId = String(createData.id);
+          const pageAccessToken = createData.access_token || token;
+
+          const pageRecord = await this.prisma.facebookPage.create({
+            data: {
+              pageId: newPageId,
+              name: pageName,
+              accessToken: pageAccessToken,
+              status: 'ACTIVE',
+              userId: user?.id,
+              videosPerDay: 2
+            }
+          });
+
+          const cloudSource = await this.prisma.source.create({
+            data: {
+              platform: 'MEGA_CLOUD',
+              name: `Cloud Upload (${pageName})`,
+              url: `cloud://${newPageId}`,
+              userId: user?.id
+            }
+          });
+
+          await this.prisma.mapping.create({
+            data: {
+              sourceId: cloudSource.id,
+              facebookPageId: pageRecord.id,
+              scheduledTime: '04:30,19:00',
+              status: 'ACTIVE'
+            }
+          });
+
+          createdForThisAccount++;
+          results.totalPagesCreated++;
+          results.createdPages.push({
+            pageId: newPageId,
+            pageName,
+            accountName,
+            accountId,
+            bio: pageBio
+          });
+
+          // Anti-Ban delay between pages on same ID: 3.5 seconds
+          if (pIdx < pagesPerAccount - 1) {
+            await new Promise(r => setTimeout(r, 3500));
+          }
+
+        } catch (err: any) {
+          accountHadError = true;
+          results.failedAccounts.push({
+            accountName,
+            tokenPreview,
+            intendedPageName: pageName,
+            error: err.message || 'Page creation failed'
+          });
+          break; // Stop further page creation on this account if rate-limited or error
+        }
+      }
+
+      if (createdForThisAccount > 0) {
+        results.successfulAccounts++;
+      } else if (accountHadError) {
+        results.failedAccountsCount++;
+      }
+
+      // Safe anti-ban pacing delay between accounts: 4 seconds
+      if (accIdx < tokensToProcess.length - 1) {
+        await new Promise(r => setTimeout(r, 4000));
+      }
+    }
+
+    return results;
+  }
+
+  private generateNichePageName(niche: string, counter: number): string {
+    const cleanNiche = niche.trim();
+    const creativeSuffixes = [
+      'Chronicles', 'Daily', 'Shorts', 'Reels', 'Universe', 'Spotlight',
+      'Central', 'Hub', 'Vibes', 'Clips', 'Stories', 'Sphere', 'Zone',
+      'Vault', 'Highlights', 'World', 'HQ', 'Media', 'Wave', 'Vision'
+    ];
+
+    const creativePrefixes = [
+      'The', 'Real', 'Epic', 'Pure', 'Top', 'Official', 'Daily', 'True',
+      'Deep', 'Ultimate', 'Prime', 'Hyper', 'Super', 'Viral'
+    ];
+
+    const prefix = creativePrefixes[(counter * 3) % creativePrefixes.length];
+    const suffix = creativeSuffixes[(counter * 7) % creativeSuffixes.length];
+
+    if (counter % 3 === 0) {
+      return `${cleanNiche} ${suffix}`;
+    } else if (counter % 3 === 1) {
+      return `${prefix} ${cleanNiche}`;
+    } else {
+      return `${prefix} ${cleanNiche} ${suffix}`;
+    }
+  }
+
+  private generateNicheBio(niche: string, pageName: string): string {
+    const lower = niche.toLowerCase();
+    if (lower.includes('skit') || lower.includes('comedy') || lower.includes('funny')) {
+      return `Welcome to ${pageName}! Your daily destination for the funniest skits, viral humor, and laugh-out-loud reels. Subscribe and enjoy!`;
+    }
+    if (lower.includes('mystery') || lower.includes('horror') || lower.includes('unexplained') || lower.includes('find')) {
+      return `Exploring bizarre mysteries, strange discoveries, and unexplained finds from around the world. Welcome to ${pageName}.`;
+    }
+    if (lower.includes('fact') || lower.includes('science') || lower.includes('learn')) {
+      return `Mind-bending facts, daily knowledge, and fascinating realities you never knew existed. Follow ${pageName} for daily updates!`;
+    }
+    return `The official home of ${niche} reels and viral shorts. Follow ${pageName} for the latest daily content and high quality video clips.`;
+  }
 }
+
