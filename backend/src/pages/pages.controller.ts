@@ -25,6 +25,16 @@ export class PagesController {
     return this.pagesService.bulkCreatePages(body, req.user);
   }
 
+  @Post('fetch-creator-info')
+  fetchCreatorInfo(@Body() body: { creatorUrl: string }) {
+    return this.pagesService.fetchCreatorInfo(body.creatorUrl);
+  }
+
+  @Post(':id/sync-creator-identity')
+  syncCreatorIdentity(@Param('id') id: string, @Body() body: any) {
+    return this.pagesService.syncCreatorIdentity(id, body);
+  }
+
   @Get('saved-accounts')
   getSavedAccounts(@Request() req: any) {
     return this.pagesService.getSavedAccounts(req.user);

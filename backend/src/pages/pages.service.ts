@@ -911,5 +911,179 @@ export class PagesService {
     }
     return `The official home of ${niche} reels and viral shorts. Follow ${pageName} for the latest daily content and high quality video clips.`;
   }
+
+  async fetchCreatorInfo(creatorUrl: string) {
+    if (!creatorUrl || !creatorUrl.trim()) {
+      throw new BadRequestException('Creator URL or username is required.');
+    }
+
+    let input = creatorUrl.trim();
+    let username = '';
+    let targetUrl = '';
+
+    if (input.startsWith('@')) {
+      username = input.substring(1);
+      targetUrl = `https://www.tiktok.com/@${username}`;
+    } else if (input.includes('tiktok.com/@')) {
+      const match = input.match(/@([a-zA-Z0-9_.-]+)/);
+      username = match ? match[1] : '';
+      targetUrl = input.split('?')[0];
+    } else if (input.includes('tiktok.com/')) {
+      targetUrl = input.split('?')[0];
+      const match = input.match(/@([a-zA-Z0-9_.-]+)/);
+      username = match ? match[1] : 'creator';
+    } else {
+      username = input.replace(/[^a-zA-Z0-9_.-]/g, '');
+      targetUrl = `https://www.tiktok.com/@${username}`;
+    }
+
+    let displayName = username.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    let bio = `Official Facebook page for ${displayName}. Watch the latest viral comedy skits, reels, and daily updates!`;
+    let avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(username || displayName)}`;
+
+    // Call TikTok official oEmbed API
+    try {
+      const oembedRes: any = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(targetUrl)}`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      if (oembedRes.ok) {
+        const oembedData: any = await oembedRes.json();
+        if (oembedData.author_name) {
+          displayName = oembedData.author_name.trim();
+        }
+        if (oembedData.thumbnail_url) {
+          avatarUrl = oembedData.thumbnail_url;
+        }
+      }
+    } catch (_) {}
+
+    bio = `Official Facebook page for ${displayName}. Follow for daily viral shorts, reels, and exclusive video updates!`;
+
+    return {
+      success: true,
+      creator: {
+        username,
+        name: displayName,
+        bio,
+        avatarUrl,
+        sourceUrl: targetUrl
+      }
+    };
+  }
+
+  async syncCreatorIdentity(id: string, body: { name: string; bio?: string; avatarUrl?: string; updateOnFacebook?: boolean }) {
+    const page = await this.prisma.facebookPage.findUnique({
+      where: { id }
+    });
+
+    if (!page) {
+      throw new BadRequestException('Facebook Page not found.');
+    }
+
+    const newName = (body.name || '').trim();
+    if (!newName) {
+      throw new BadRequestException('Page name cannot be empty.');
+    }
+
+    const newBio = (body.bio || '').trim();
+    const avatarUrl = (body.avatarUrl || '').trim();
+    const updateOnFacebook = body.updateOnFacebook !== false;
+
+    let metaNameUpdated = false;
+    let metaBioUpdated = false;
+    let metaPictureUpdated = false;
+    let metaWarning: string | null = null;
+
+    if (updateOnFacebook && page.accessToken) {
+      // 1. Update Name on Meta Graph API: POST /{page-id} with name={newName}
+      try {
+        const postData = new URLSearchParams();
+        postData.append('name', newName);
+        postData.append('access_token', page.accessToken);
+
+        const fbRes: any = await fetch(`https://graph.facebook.com/v19.0/${page.pageId}`, {
+          method: 'POST',
+          body: postData,
+          signal: AbortSignal.timeout(15000)
+        });
+        const fbJson: any = await fbRes.json();
+        if (fbRes.ok && (fbJson.success === true || fbJson.id)) {
+          metaNameUpdated = true;
+        } else if (fbJson.error) {
+          metaWarning = `Meta notice: ${fbJson.error.message || 'Facebook limits name changes on older pages'}`;
+        }
+      } catch (err: any) {
+        metaWarning = `Meta name update notice: ${err.message}`;
+      }
+
+      // 2. Update Bio / About on Meta Graph API
+      if (newBio) {
+        try {
+          const bioData = new URLSearchParams();
+          bioData.append('about', newBio);
+          bioData.append('description', newBio);
+          bioData.append('access_token', page.accessToken);
+
+          const fbBioRes: any = await fetch(`https://graph.facebook.com/v19.0/${page.pageId}`, {
+            method: 'POST',
+            body: bioData,
+            signal: AbortSignal.timeout(15000)
+          });
+          if (fbBioRes.ok) {
+            metaBioUpdated = true;
+          }
+        } catch (_) {}
+      }
+
+      // 3. Update Picture on Meta Graph API
+      if (avatarUrl && avatarUrl.startsWith('http')) {
+        try {
+          const picData = new URLSearchParams();
+          picData.append('url', avatarUrl);
+          picData.append('access_token', page.accessToken);
+
+          const fbPicRes: any = await fetch(`https://graph.facebook.com/v19.0/${page.pageId}/picture`, {
+            method: 'POST',
+            body: picData,
+            signal: AbortSignal.timeout(15000)
+          });
+          if (fbPicRes.ok) {
+            metaPictureUpdated = true;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Update in local DB
+    const updatedPage = await this.prisma.facebookPage.update({
+      where: { id },
+      data: {
+        name: newName
+      }
+    });
+
+    // Update associated MEGA_CLOUD Source name
+    try {
+      await this.prisma.source.updateMany({
+        where: {
+          platform: 'MEGA_CLOUD',
+          url: `cloud://${page.pageId}`
+        },
+        data: {
+          name: `Cloud Upload (${newName})`
+        }
+      });
+    } catch (_) {}
+
+    return {
+      success: true,
+      page: updatedPage,
+      metaNameUpdated,
+      metaBioUpdated,
+      metaPictureUpdated,
+      metaWarning
+    };
+  }
 }
 

@@ -165,6 +165,97 @@ export default function FacebookPagesPage() {
     }
   };
 
+  // 1-Click Creator Identity Syncer state
+  const [syncingPage, setSyncingPage] = useState<any>(null);
+  const [creatorInput, setCreatorInput] = useState('');
+  const [isFetchingCreator, setIsFetchingCreator] = useState(false);
+  const [creatorData, setCreatorData] = useState<any>(null);
+  const [syncNewName, setSyncNewName] = useState('');
+  const [syncNewBio, setSyncNewBio] = useState('');
+  const [syncAvatarUrl, setSyncAvatarUrl] = useState('');
+  const [syncOnFacebook, setSyncOnFacebook] = useState(true);
+  const [isApplyingSync, setIsApplyingSync] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncError, setSyncError] = useState('');
+
+  const openSyncModal = (page: any) => {
+    setSyncingPage(page);
+    setCreatorInput('');
+    setCreatorData(null);
+    setSyncNewName(page.name);
+    setSyncNewBio('');
+    setSyncAvatarUrl('');
+    setSyncOnFacebook(true);
+    setSyncResult(null);
+    setSyncError('');
+  };
+
+  const handleFetchCreator = async () => {
+    if (!creatorInput.trim()) return;
+    setIsFetchingCreator(true);
+    setSyncError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pages/fetch-creator-info', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ creatorUrl: creatorInput })
+      });
+      const data = await res.json();
+      if (res.ok && data.creator) {
+        setCreatorData(data.creator);
+        setSyncNewName(data.creator.name);
+        setSyncNewBio(data.creator.bio);
+        setSyncAvatarUrl(data.creator.avatarUrl);
+      } else {
+        setSyncError(data.message || 'Failed to fetch creator details.');
+      }
+    } catch (err: any) {
+      setSyncError(err.message || 'Network error fetching creator.');
+    } finally {
+      setIsFetchingCreator(false);
+    }
+  };
+
+  const handleApplyCreatorSync = async () => {
+    if (!syncingPage || !syncNewName.trim()) return;
+    setIsApplyingSync(true);
+    setSyncError('');
+    setSyncResult(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pages/${syncingPage.id}/sync-creator-identity`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: syncNewName,
+          bio: syncNewBio,
+          avatarUrl: syncAvatarUrl,
+          updateOnFacebook: syncOnFacebook
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncResult(data);
+        addToast(`Page rebranded to "${syncNewName}" successfully!`, 'success');
+        fetchPages();
+      } else {
+        setSyncError(data.message || 'Failed to rebrand page.');
+      }
+    } catch (err: any) {
+      setSyncError(err.message || 'Network error applying rebrand.');
+    } finally {
+      setIsApplyingSync(false);
+    }
+  };
+
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -392,17 +483,29 @@ export default function FacebookPagesPage() {
                   </div>
                 </div>
                 
-                <div className="pt-3 border-t border-gray-800/60 flex justify-between items-center text-sm">
-                  <span className="text-emerald-400 font-bold flex items-center gap-2 text-xs uppercase tracking-wider">
-                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-                    Token Active
-                  </span>
+                <div className="pt-3 border-t border-gray-800/60 flex flex-wrap justify-between items-center gap-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-400 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+                      Active
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openSyncModal(page);
+                      }}
+                      className="text-cyan-400 hover:text-cyan-300 font-bold px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg border border-cyan-500/30 transition text-xs flex items-center gap-1 z-20"
+                      title="Sync and rebrand this page with a TikTok/Social Creator name & avatar"
+                    >
+                      <span>🔄</span> Sync Creator
+                    </button>
+                  </div>
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
                       setDeleteConfirmId(page.id);
                     }} 
-                    className="text-red-400 hover:text-red-300 font-bold hover:underline px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition z-20"
+                    className="text-red-400 hover:text-red-300 font-bold hover:underline px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition text-xs z-20"
                   >
                     Disconnect
                   </button>
@@ -1404,6 +1507,258 @@ export default function FacebookPagesPage() {
                     className="py-2.5 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/25 transition text-sm"
                   >
                     Done & View All Pages
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* 1-Click Creator Identity Syncer Modal */}
+      {syncingPage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-gray-900 border border-cyan-500/30 rounded-3xl p-6 sm:p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl relative">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-5 border-b border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-cyan-500/20">
+                  🔄
+                </div>
+                <div>
+                  <h2 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                    Creator Identity Syncer
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      1-Click Rebrand
+                    </span>
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                    Sync and rebrand this Facebook Page to match your chosen TikTok / Social Media Creator.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isApplyingSync) setSyncingPage(null);
+                }}
+                disabled={isApplyingSync}
+                className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-gray-800 transition text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Target Page Info Box */}
+            <div className="mt-4 p-3.5 bg-gray-950/80 border border-gray-800 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">Currently Connected Page</span>
+                <span className="text-white font-bold text-sm">{syncingPage.name}</span>
+                <span className="text-gray-500 text-xs font-mono ml-2">(ID: {syncingPage.pageId})</span>
+              </div>
+              <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                Ready to Rebrand
+              </span>
+            </div>
+
+            {syncError && (
+              <div className="mt-4 bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-2xl text-sm flex items-start gap-3">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <p className="font-bold">Sync Failed</p>
+                  <p className="text-xs opacity-90">{syncError}</p>
+                </div>
+              </div>
+            )}
+
+            {!syncResult ? (
+              <div className="mt-6 space-y-5">
+                
+                {/* Step 1: Input Creator URL or @username */}
+                <div>
+                  <label className="text-sm font-semibold text-gray-200 block mb-1.5">
+                    Enter TikTok Creator Link or Username:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={creatorInput}
+                      onChange={(e) => setCreatorInput(e.target.value)}
+                      placeholder="e.g. https://www.tiktok.com/@mrbeast or @stickheadskits"
+                      className="flex-1 bg-gray-950/80 border border-gray-700/80 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleFetchCreator}
+                      disabled={isFetchingCreator || !creatorInput.trim()}
+                      className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm transition flex items-center gap-1.5 shrink-0"
+                    >
+                      {isFetchingCreator ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                          <span>Fetching...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🔍</span>
+                          <span>Fetch Creator</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    System extracts official creator name, bio, and avatar in real time.
+                  </p>
+                </div>
+
+                {/* Step 2: Editable Preview Fields */}
+                <div className="space-y-4 pt-3 border-t border-gray-800">
+                  <div className="flex items-center gap-4 p-3 bg-gray-950/60 border border-gray-800 rounded-2xl">
+                    <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-800 border-2 border-cyan-500/50 flex items-center justify-center shrink-0">
+                      {syncAvatarUrl ? (
+                        <img src={syncAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xl">👤</span>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs font-semibold text-gray-400 block mb-1">Avatar / Logo URL (Optional)</label>
+                      <input
+                        type="text"
+                        value={syncAvatarUrl}
+                        onChange={(e) => setSyncAvatarUrl(e.target.value)}
+                        placeholder="https://... (or leave blank)"
+                        className="w-full bg-gray-900 border border-gray-700/80 rounded-lg px-3 py-1.5 text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-300 block mb-1">
+                      New Page Name (Will be applied to Facebook Page):
+                    </label>
+                    <input
+                      type="text"
+                      value={syncNewName}
+                      onChange={(e) => setSyncNewName(e.target.value)}
+                      required
+                      placeholder="e.g. Stickhead Skits Official"
+                      className="w-full bg-gray-950/80 border border-gray-700/80 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-500 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-300 block mb-1">
+                      New Page Bio / Description:
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={syncNewBio}
+                      onChange={(e) => setSyncNewBio(e.target.value)}
+                      placeholder="Enter new bio or description for this page..."
+                      className="w-full bg-gray-950/80 border border-gray-700/80 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-cyan-500 custom-scrollbar"
+                    />
+                  </div>
+
+                  {/* Toggle Meta API update */}
+                  <label className="flex items-center gap-3 p-3 bg-gray-950/40 border border-gray-800 rounded-xl cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={syncOnFacebook}
+                      onChange={(e) => setSyncOnFacebook(e.target.checked)}
+                      className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500 border-gray-700 bg-gray-900"
+                    />
+                    <div className="text-xs">
+                      <span className="text-white font-semibold block">Update Live on Facebook via Meta Graph API</span>
+                      <span className="text-gray-400 text-[11px]">Directly changes Page Name and Bio on Facebook servers without manual login.</span>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex gap-4 pt-4 border-t border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setSyncingPage(null)}
+                    disabled={isApplyingSync}
+                    className="flex-1 py-3 px-4 rounded-xl font-semibold text-gray-400 bg-gray-800 hover:bg-gray-700 transition disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyCreatorSync}
+                    disabled={isApplyingSync || !syncNewName.trim()}
+                    className="flex-[2] py-3 px-4 rounded-xl font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/25 transition flex items-center justify-center gap-2"
+                  >
+                    {isApplyingSync ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        <span>Applying 1-Click Rebrand...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>⚡</span>
+                        <span>Apply 1-Click Rebrand</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </div>
+            ) : (
+              /* SYNC RESULT VIEW */
+              <div className="mt-6 space-y-5">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center gap-3">
+                  <span className="text-3xl">🎉</span>
+                  <div>
+                    <h3 className="font-extrabold text-white text-base">Page Rebranded Successfully!</h3>
+                    <p className="text-xs text-emerald-400">
+                      Facebook Page is now synchronized with Creator <strong>"{syncResult.page?.name}"</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-950/80 border border-gray-800 rounded-2xl space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">New Page Name:</span>
+                    <span className="text-white font-bold">{syncResult.page?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Meta API Status:</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {syncResult.metaNameUpdated ? 'Updated on Facebook' : 'Saved in AutoPost'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Cloud Folder Source:</span>
+                    <span className="text-blue-400 font-mono">cloud://{syncResult.page?.pageId}</span>
+                  </div>
+                  {syncResult.metaWarning && (
+                    <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 rounded-lg text-[11px] mt-2">
+                      ℹ️ {syncResult.metaWarning}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-gray-800 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSyncingPage(null);
+                      setSyncResult(null);
+                      fetchPages();
+                    }}
+                    className="py-2.5 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 transition text-sm"
+                  >
+                    Done & Return to Pages
                   </button>
                 </div>
               </div>
