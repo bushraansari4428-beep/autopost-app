@@ -1,9 +1,15 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 @Injectable()
 export class PagesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(PagesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private whatsappService: WhatsappService
+  ) {}
 
   async create(createPageDto: any) {
     const page = await this.prisma.facebookPage.create({
@@ -1083,6 +1089,279 @@ export class PagesService {
       metaBioUpdated,
       metaPictureUpdated,
       metaWarning
+    };
+  }
+
+  /**
+   * Feature 2: Custom Page Name & Bio Renamer
+   * Updates page name and bio on Meta Graph API and in local database
+   */
+  async updatePageIdentity(id: string, body: { name: string; bio?: string }) {
+    const page = await this.prisma.facebookPage.findUnique({
+      where: { id }
+    });
+
+    if (!page) {
+      throw new BadRequestException('Facebook Page not found.');
+    }
+
+    const newName = (body.name || '').trim();
+    if (!newName) {
+      throw new BadRequestException('Page name cannot be empty.');
+    }
+
+    const newBio = (body.bio || '').trim();
+    let metaNameUpdated = false;
+    let metaBioUpdated = false;
+    let metaWarning: string | null = null;
+
+    if (page.accessToken) {
+      // 1. Update Name on Meta Graph API: POST /{page-id} with name={newName}
+      try {
+        const postData = new URLSearchParams();
+        postData.append('name', newName);
+        postData.append('access_token', page.accessToken);
+
+        const fbRes: any = await fetch(`https://graph.facebook.com/v19.0/${page.pageId}`, {
+          method: 'POST',
+          body: postData,
+          signal: AbortSignal.timeout(15000)
+        });
+        const fbJson: any = await fbRes.json();
+        if (fbRes.ok && (fbJson.success === true || fbJson.id)) {
+          metaNameUpdated = true;
+          this.logger.log(`Successfully updated page name on Meta Graph API for ${page.pageId} -> ${newName}`);
+        } else if (fbJson.error) {
+          metaWarning = `Meta notice: ${fbJson.error.message || 'Facebook may limit name changes based on page age'}`;
+          this.logger.warn(`Meta name update returned notice for ${page.pageId}: ${metaWarning}`);
+        }
+      } catch (err: any) {
+        metaWarning = `Meta API request notice: ${err.message}`;
+        this.logger.error(`Error requesting Meta name update for ${page.pageId}:`, err);
+      }
+
+      // 2. Update Bio / About on Meta Graph API
+      if (newBio) {
+        try {
+          const bioData = new URLSearchParams();
+          bioData.append('about', newBio);
+          bioData.append('description', newBio);
+          bioData.append('access_token', page.accessToken);
+
+          const fbBioRes: any = await fetch(`https://graph.facebook.com/v19.0/${page.pageId}`, {
+            method: 'POST',
+            body: bioData,
+            signal: AbortSignal.timeout(15000)
+          });
+          const fbBioJson: any = await fbBioRes.json();
+          if (fbBioRes.ok && (fbBioJson.success === true || fbBioJson.id)) {
+            metaBioUpdated = true;
+            this.logger.log(`Successfully updated page bio on Meta Graph API for ${page.pageId}`);
+          }
+        } catch (err: any) {
+          this.logger.warn(`Meta bio update warning for ${page.pageId}: ${err.message}`);
+        }
+      }
+    }
+
+    // Update in local DB
+    const updatedPage = await this.prisma.facebookPage.update({
+      where: { id },
+      data: {
+        name: newName,
+        bio: newBio || page.bio || null
+      }
+    });
+
+    // Update associated MEGA_CLOUD Source name
+    try {
+      await this.prisma.source.updateMany({
+        where: {
+          platform: 'MEGA_CLOUD',
+          url: `cloud://${page.pageId}`
+        },
+        data: {
+          name: `Cloud Upload (${newName})`
+        }
+      });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: `Page "${newName}" updated successfully!`,
+      page: updatedPage,
+      metaNameUpdated,
+      metaBioUpdated,
+      metaWarning
+    };
+  }
+
+  /**
+   * Feature 1: Content Monetization (CM) Scanner & WhatsApp Notifier
+   * Checks Meta Graph API for Content Monetization eligibility and unread invites across pages.
+   */
+  async checkPagesMonetization(userId?: string) {
+    const whereClause: any = { status: 'ACTIVE' };
+    if (userId) {
+      whereClause.userId = userId;
+    }
+
+    const pages = await this.prisma.facebookPage.findMany({
+      where: whereClause,
+      include: { user: true }
+    });
+
+    this.logger.log(`Checking Content Monetization (CM) status for ${pages.length} pages...`);
+
+    const results: any[] = [];
+    let newInvitesDetected = 0;
+
+    for (const page of pages) {
+      if (!page.accessToken) continue;
+
+      let isInvited = false;
+      let statusFound = page.monetizationStatus || 'NONE';
+      let rawSignal: any = null;
+
+      try {
+        // Query Page Monetization Eligibility & Notifications from Graph API
+        const url = `https://graph.facebook.com/v19.0/${page.pageId}?fields=id,name,monetization_eligibility,is_eligible_for_branded_content,features&access_token=${page.accessToken}`;
+        const res: any = await fetch(url, { signal: AbortSignal.timeout(12000) });
+        
+        if (res.ok) {
+          const data = await res.json();
+          rawSignal = data;
+
+          if (data.monetization_eligibility) {
+            const elig = String(data.monetization_eligibility).toUpperCase();
+            if (elig.includes('ELIGIBLE') || elig.includes('INVITED') || elig.includes('ACTIVE')) {
+              isInvited = true;
+              statusFound = 'INVITED';
+            }
+          }
+
+          if (data.is_eligible_for_branded_content === true) {
+            isInvited = true;
+            if (statusFound === 'NONE') statusFound = 'ELIGIBLE';
+          }
+        }
+
+        // Also check recent page notifications for CM invitation keywords
+        try {
+          const notifUrl = `https://graph.facebook.com/v19.0/${page.pageId}/notifications?access_token=${page.accessToken}&limit=10`;
+          const notifRes: any = await fetch(notifUrl, { signal: AbortSignal.timeout(8000) });
+          if (notifRes.ok) {
+            const notifData = await notifRes.json();
+            const notifications = notifData.data || [];
+            for (const notif of notifications) {
+              const text = `${notif.title || ''} ${notif.message || ''}`.toLowerCase();
+              if (
+                text.includes('content monetization') ||
+                text.includes('monetization tool') ||
+                text.includes('performance bonus') ||
+                text.includes('in-stream ads') ||
+                text.includes('stars invitation') ||
+                text.includes('you are now eligible to earn')
+              ) {
+                isInvited = true;
+                statusFound = 'INVITED';
+                this.logger.log(`Found CM invite notification for page ${page.name}: "${notif.title || notif.message}"`);
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+
+      } catch (err: any) {
+        this.logger.warn(`Could not check monetization for ${page.name}: ${err.message}`);
+      }
+
+      // Check if newly unlocked or invited
+      const wasAlreadyNotified = !!page.monetizationNotifiedAt;
+      const shouldNotify = isInvited && (!wasAlreadyNotified || page.monetizationStatus !== 'INVITED');
+
+      if (isInvited) {
+        newInvitesDetected++;
+        // Update in DB
+        await this.prisma.facebookPage.update({
+          where: { id: page.id },
+          data: {
+            hasContentMonetization: true,
+            monetizationStatus: statusFound,
+            monetizationNotifiedAt: page.monetizationNotifiedAt || new Date()
+          }
+        });
+
+        // Trigger WhatsApp Notification
+        if (shouldNotify) {
+          this.logger.log(`Dispatching WhatsApp Content Monetization Alert for page: ${page.name}!`);
+          await this.whatsappService.sendContentMonetizationAlert(
+            page.name,
+            page.pageId,
+            statusFound,
+            page.userId || undefined
+          );
+        }
+      }
+
+      results.push({
+        pageId: page.pageId,
+        name: page.name,
+        hasContentMonetization: isInvited || !!page.hasContentMonetization,
+        status: statusFound,
+        notified: shouldNotify || wasAlreadyNotified,
+        rawSignal
+      });
+    }
+
+    return {
+      success: true,
+      totalChecked: pages.length,
+      newInvitesDetected,
+      results
+    };
+  }
+
+  /**
+   * Set or manually toggle Content Monetization status for a page (testing & manual confirmation)
+   */
+  async setPageMonetization(id: string, body: { hasContentMonetization: boolean; status?: string; sendWhatsApp?: boolean }) {
+    const page = await this.prisma.facebookPage.findUnique({
+      where: { id }
+    });
+
+    if (!page) {
+      throw new BadRequestException('Facebook Page not found.');
+    }
+
+    const hasCM = body.hasContentMonetization === true;
+    const status = (body.status || (hasCM ? 'INVITED' : 'NONE')).trim();
+    const shouldSendWhatsApp = body.sendWhatsApp !== false && hasCM;
+
+    const updated = await this.prisma.facebookPage.update({
+      where: { id },
+      data: {
+        hasContentMonetization: hasCM,
+        monetizationStatus: status,
+        monetizationNotifiedAt: hasCM ? new Date() : null
+      }
+    });
+
+    let waResult: any = null;
+    if (shouldSendWhatsApp) {
+      waResult = await this.whatsappService.sendContentMonetizationAlert(
+        page.name,
+        page.pageId,
+        status,
+        page.userId || undefined
+      );
+    }
+
+    return {
+      success: true,
+      message: `Content Monetization status updated for ${page.name}.`,
+      page: updated,
+      whatsAppResult: waResult
     };
   }
 }

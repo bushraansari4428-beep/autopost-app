@@ -256,6 +256,124 @@ export default function FacebookPagesPage() {
     }
   };
 
+  // Custom Page Name & Bio Renamer state
+  const [renamingPage, setRenamingPage] = useState<any>(null);
+  const [customPageName, setCustomPageName] = useState('');
+  const [customPageBio, setCustomPageBio] = useState('');
+  const [isRenamingPage, setIsRenamingPage] = useState(false);
+  const [renameResult, setRenameResult] = useState<any>(null);
+  const [renameError, setRenameError] = useState('');
+
+  const openRenameModal = (page: any) => {
+    setRenamingPage(page);
+    setCustomPageName(page.name || '');
+    setCustomPageBio(page.bio || '');
+    setRenameResult(null);
+    setRenameError('');
+  };
+
+  const handleApplyRename = async () => {
+    if (!renamingPage || !customPageName.trim()) {
+      addToast('Page name cannot be empty.', 'error');
+      return;
+    }
+    setIsRenamingPage(true);
+    setRenameError('');
+    setRenameResult(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pages/${renamingPage.id}/update-identity`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: customPageName.trim(),
+          bio: customPageBio.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setRenameResult(data);
+        addToast(`Page name updated to "${customPageName.trim()}" successfully!`, 'success');
+        fetchPages();
+      } else {
+        setRenameError(data.message || 'Failed to update page name.');
+        addToast(`Update error: ${data.message || 'Failed'}`, 'error');
+      }
+    } catch (err: any) {
+      setRenameError(err.message || 'Network error');
+      addToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setIsRenamingPage(false);
+    }
+  };
+
+  // Content Monetization (CM) Scanner state
+  const [isScanningCM, setIsScanningCM] = useState(false);
+  const [cmModalPage, setCmModalPage] = useState<any>(null);
+
+  const handleScanMonetization = async () => {
+    setIsScanningCM(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pages/check-monetization', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.newInvitesDetected > 0) {
+          addToast(`🎉 Mubarak Ho! ${data.newInvitesDetected} Content Monetization invite(s) detected! WhatsApp alert sent.`, 'success');
+        } else {
+          addToast(`Checked ${data.totalChecked} pages. No new CM invites right now.`, 'info');
+        }
+        fetchPages();
+      } else {
+        addToast(data.message || 'Failed to scan CM status', 'error');
+      }
+    } catch (err: any) {
+      addToast(`Error scanning: ${err.message}`, 'error');
+    } finally {
+      setIsScanningCM(false);
+    }
+  };
+
+  const handleToggleCM = async (page: any, targetStatus: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pages/${page.id}/set-monetization`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          hasContentMonetization: targetStatus,
+          status: targetStatus ? 'INVITED' : 'NONE',
+          sendWhatsApp: targetStatus
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (targetStatus) {
+          addToast(`🎉 ${page.name} marked as CM Unlocked! WhatsApp alert dispatched.`, 'success');
+        } else {
+          addToast(`${page.name} CM status reset.`, 'info');
+        }
+        fetchPages();
+      }
+    } catch (err: any) {
+      addToast(`Error: ${err.message}`, 'error');
+    }
+  };
+
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -378,6 +496,15 @@ export default function FacebookPagesPage() {
             <span>🏭</span> AI Bulk Page Creator
           </button>
           <button 
+            onClick={handleScanMonetization}
+            disabled={isScanningCM}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 hover:from-yellow-300 hover:to-amber-500 text-black font-extrabold shadow-lg shadow-yellow-500/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            title="Scan Facebook Graph API across all connected pages for Content Monetization (CM) tool invites and send WhatsApp notifications"
+          >
+            <span>{isScanningCM ? '⏳' : '💰'}</span>
+            <span>{isScanningCM ? 'Scanning CM...' : 'Scan CM Invites'}</span>
+          </button>
+          <button 
             onClick={() => {
               setShowBulkModal(true);
               setBulkResults(null);
@@ -445,11 +572,18 @@ export default function FacebookPagesPage() {
                         }}
                       />
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      page.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                    } border shadow-sm`}>
-                      {page.status}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        page.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                      } border shadow-sm`}>
+                        {page.status}
+                      </span>
+                      {page.hasContentMonetization && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-gradient-to-r from-amber-400 to-yellow-500 text-black border border-amber-300 shadow-md animate-pulse flex items-center gap-1">
+                          <span>💰</span> CM Unlocked
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{page.name}</h3>
                   <p className="text-gray-500 text-xs font-mono mb-4">ID: {page.pageId}</p>
@@ -484,7 +618,7 @@ export default function FacebookPagesPage() {
                 </div>
                 
                 <div className="pt-3 border-t border-gray-800/60 flex flex-wrap justify-between items-center gap-2 text-sm">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-emerald-400 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider">
                       <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
                       Active
@@ -492,12 +626,37 @@ export default function FacebookPagesPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        openRenameModal(page);
+                      }}
+                      className="text-amber-400 hover:text-amber-300 font-bold px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/30 transition text-xs flex items-center gap-1 z-20 cursor-pointer"
+                      title="Rename this page and update its bio on Facebook & AutoPost"
+                    >
+                      <span>✏️</span> Rename & Bio
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         openSyncModal(page);
                       }}
-                      className="text-cyan-400 hover:text-cyan-300 font-bold px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg border border-cyan-500/30 transition text-xs flex items-center gap-1 z-20"
+                      className="text-cyan-400 hover:text-cyan-300 font-bold px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg border border-cyan-500/30 transition text-xs flex items-center gap-1 z-20 cursor-pointer"
                       title="Sync and rebrand this page with a TikTok/Social Creator name & avatar"
                     >
                       <span>🔄</span> Sync Creator
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleCM(page, !page.hasContentMonetization);
+                      }}
+                      className={`font-bold px-2 py-1 rounded-lg border transition text-xs flex items-center gap-1 z-20 cursor-pointer ${
+                        page.hasContentMonetization
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                          : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border-slate-700'
+                      }`}
+                      title={page.hasContentMonetization ? "Click to toggle/reset CM" : "Click to test Content Monetization & send WhatsApp Alert!"}
+                    >
+                      <span>{page.hasContentMonetization ? '⭐' : '💰'}</span>
+                      <span>{page.hasContentMonetization ? 'CM Active' : 'Test CM'}</span>
                     </button>
                   </div>
                   <button 
@@ -505,7 +664,7 @@ export default function FacebookPagesPage() {
                       e.stopPropagation();
                       setDeleteConfirmId(page.id);
                     }} 
-                    className="text-red-400 hover:text-red-300 font-bold hover:underline px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition text-xs z-20"
+                    className="text-red-400 hover:text-red-300 font-bold hover:underline px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition text-xs z-20 cursor-pointer"
                   >
                     Disconnect
                   </button>
@@ -1764,6 +1923,184 @@ export default function FacebookPagesPage() {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* Custom Page Name & Bio Renamer Modal */}
+      {renamingPage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-[#0b0f19] border border-amber-500/40 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl shadow-amber-500/10 p-6 md:p-8">
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-2xl shadow-lg">
+                  ✏️
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold text-white">Edit Page Name & Bio</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Directly updates the Page Name & About/Bio on Facebook servers and local database.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setRenamingPage(null);
+                  setRenameResult(null);
+                  setRenameError('');
+                }}
+                className="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {!renameResult ? (
+              <div className="space-y-5">
+                {renameError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
+                    ⚠️ {renameError}
+                  </div>
+                )}
+
+                <div className="p-3.5 bg-gray-950/80 border border-gray-800 rounded-2xl flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-gray-400 block text-[11px]">Current Page Name</span>
+                    <span className="text-white font-bold text-sm">{renamingPage.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-gray-400 block text-[11px]">Page ID</span>
+                    <span className="text-blue-400 font-mono text-xs">{renamingPage.pageId}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-200 block mb-1.5 flex items-center justify-between">
+                    <span>New Page Name <span className="text-red-400">*</span></span>
+                    <span className="text-[11px] text-gray-400 font-normal">Displayed on Facebook</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={customPageName}
+                    onChange={(e) => setCustomPageName(e.target.value)}
+                    required
+                    placeholder="Enter your custom page name..."
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-400 font-bold transition shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-200 block mb-1.5 flex items-center justify-between">
+                    <span>Page Bio / About Description</span>
+                    <span className="text-[11px] text-gray-400 font-normal">Optional</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={customPageBio}
+                    onChange={(e) => setCustomPageBio(e.target.value)}
+                    placeholder="Enter an engaging page bio (e.g. Welcome to my page! Daily viral reels, comedy skits & entertainment. Follow for more!)..."
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3.5 text-white text-xs focus:outline-none focus:border-amber-400 transition shadow-inner custom-scrollbar"
+                  />
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setCustomPageBio(`Welcome to ${customPageName || 'our page'}! Your daily home for top viral reels, comedy skits, and entertainment clips. Follow and turn on notifications!`)}
+                      className="px-2.5 py-1 bg-gray-800/80 hover:bg-gray-700 text-amber-300 rounded-lg text-[11px] border border-gray-700 transition cursor-pointer"
+                    >
+                      💡 Insert Comedy/Skit Bio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomPageBio(`The official Facebook page of ${customPageName || 'our brand'}. Discover mind-blowing facts, daily discoveries, and trending shorts!`)}
+                      className="px-2.5 py-1 bg-gray-800/80 hover:bg-gray-700 text-amber-300 rounded-lg text-[11px] border border-gray-700 transition cursor-pointer"
+                    >
+                      💡 Insert Facts/Educational Bio
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-300 text-xs flex items-center gap-2">
+                  <span>ℹ️</span>
+                  <span>Both Facebook Graph API and your AutoPost database will be updated automatically.</span>
+                </div>
+
+                <div className="pt-4 border-t border-gray-800 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRenamingPage(null)}
+                    className="py-2.5 px-5 rounded-xl font-semibold text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 transition text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyRename}
+                    disabled={isRenamingPage || !customPageName.trim()}
+                    className="py-2.5 px-6 rounded-xl font-extrabold text-black bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 transition text-xs shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isRenamingPage ? (
+                      <>
+                        <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        <span>Updating on Facebook...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>💾</span>
+                        <span>Save & Apply on Facebook</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* RENAME SUCCESS VIEW */
+              <div className="space-y-5">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center gap-3">
+                  <span className="text-3xl">🎉</span>
+                  <div>
+                    <h3 className="font-extrabold text-white text-base">Page Updated Successfully!</h3>
+                    <p className="text-xs text-emerald-400">
+                      Page name is now set to <strong>"{renameResult.page?.name}"</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-950/80 border border-gray-800 rounded-2xl space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">New Page Name:</span>
+                    <span className="text-white font-bold">{renameResult.page?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Meta Graph API Status:</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {renameResult.metaNameUpdated ? 'Updated on Meta Servers' : 'Updated in AutoPost'}
+                    </span>
+                  </div>
+                  {renameResult.metaWarning && (
+                    <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 rounded-lg text-[11px] mt-2">
+                      ℹ️ {renameResult.metaWarning}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-gray-800 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenamingPage(null);
+                      setRenameResult(null);
+                      fetchPages();
+                    }}
+                    className="py-2.5 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 transition text-sm cursor-pointer"
+                  >
+                    Done & Return to Pages
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

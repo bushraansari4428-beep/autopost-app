@@ -13,7 +13,7 @@ import Link from 'next/link';
 
 export interface AlertItem {
   id: string;
-  type: 'TOKEN_INVALID' | 'UPLOAD_FAILED' | 'SYSTEM_WARN';
+  type: 'TOKEN_INVALID' | 'UPLOAD_FAILED' | 'SYSTEM_WARN' | 'MONETIZATION_INVITE';
   severity: 'CRITICAL' | 'WARNING';
   title: string;
   message: string;
@@ -106,12 +106,16 @@ export default function NotificationDrawer({
               </div>
             ) : (
               alerts.map((alert) => {
-                const isCritical = alert.severity === 'CRITICAL';
+                const isMonetization = alert.type === 'MONETIZATION_INVITE';
+                const isCritical = alert.severity === 'CRITICAL' && !isMonetization;
+
                 return (
                   <div 
                     key={alert.id}
                     className={`rounded-xl p-4 border transition-all ${
-                      isCritical
+                      isMonetization
+                        ? 'bg-gradient-to-br from-amber-950/50 via-yellow-950/40 to-slate-900 border-amber-500/60 shadow-lg shadow-amber-500/15 ring-1 ring-amber-500/30'
+                        : isCritical
                         ? 'bg-red-950/20 border-red-500/30 hover:border-red-500/50'
                         : 'bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50'
                     }`}
@@ -119,16 +123,31 @@ export default function NotificationDrawer({
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2.5">
                         <div className={`p-1.5 rounded-lg mt-0.5 shrink-0 ${
-                          isCritical ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
+                          isMonetization
+                            ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-black shadow-md'
+                            : isCritical 
+                            ? 'bg-red-500/20 text-red-400' 
+                            : 'bg-amber-500/20 text-amber-400'
                         }`}>
-                          {isCritical ? (
+                          {isMonetization ? (
+                            <span className="text-sm">💰</span>
+                          ) : isCritical ? (
                             <ShieldAlert className="w-4 h-4" />
                           ) : (
                             <AlertTriangle className="w-4 h-4" />
                           )}
                         </div>
                         <div>
-                          <h4 className="font-bold text-sm text-slate-100">{alert.title}</h4>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className={`font-bold text-sm ${isMonetization ? 'text-amber-200' : 'text-slate-100'}`}>
+                              {alert.title}
+                            </h4>
+                            {isMonetization && (
+                              <span className="px-1.5 py-0.2 text-[9px] font-black bg-amber-400 text-black rounded uppercase tracking-wider">
+                                CM Alert
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                             {alert.message}
                           </p>
@@ -153,7 +172,11 @@ export default function NotificationDrawer({
                           href={alert.actionUrl}
                           onClick={onClose}
                           className={`font-semibold flex items-center gap-1 hover:underline ${
-                            isCritical ? 'text-red-400 hover:text-red-300' : 'text-amber-400 hover:text-amber-300'
+                            isMonetization 
+                              ? 'text-amber-300 hover:text-amber-200 font-extrabold'
+                              : isCritical 
+                              ? 'text-red-400 hover:text-red-300' 
+                              : 'text-amber-400 hover:text-amber-300'
                           }`}
                         >
                           <span>{alert.actionText || 'Fix Issue'}</span>

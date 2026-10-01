@@ -65,6 +65,30 @@ export class PagesController {
     return this.pagesService.update(id, updatePageDto);
   }
 
+  @Post(':id/update-identity')
+  updatePageIdentity(@Param('id') id: string, @Body() body: { name: string; bio?: string }) {
+    return this.pagesService.updatePageIdentity(id, body);
+  }
+
+  @Put(':id/identity')
+  putPageIdentity(@Param('id') id: string, @Body() body: { name: string; bio?: string }) {
+    return this.pagesService.updatePageIdentity(id, body);
+  }
+
+  @Post('check-monetization')
+  checkMonetization(@Request() req: any) {
+    const userId = req.user?.role === 'ADMIN' ? undefined : req.user?.id;
+    return this.pagesService.checkPagesMonetization(userId);
+  }
+
+  @Post(':id/set-monetization')
+  setPageMonetization(
+    @Param('id') id: string,
+    @Body() body: { hasContentMonetization: boolean; status?: string; sendWhatsApp?: boolean }
+  ) {
+    return this.pagesService.setPageMonetization(id, body);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.pagesService.remove(id);

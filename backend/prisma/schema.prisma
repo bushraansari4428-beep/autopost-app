@@ -56,6 +56,12 @@ model FacebookPage {
   scheduledTime    String?
   lastDriveSyncRun DateTime?
 
+  // Content Monetization Tracking
+  hasContentMonetization Boolean?        @default(false)
+  monetizationStatus     String?         @default("NONE")
+  monetizationNotifiedAt DateTime?
+  bio                    String?
+
   createdAt        DateTime        @default(now())
 }
 

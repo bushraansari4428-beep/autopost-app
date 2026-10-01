@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [logs, setLogs] = useState<any[]>([]);
   const [upcomingSchedules, setUpcomingSchedules] = useState<any[]>([]);
   const [lowQueuePages, setLowQueuePages] = useState<any[]>([]);
+  const [cmPages, setCmPages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [isClearing, setIsClearing] = useState(false);
@@ -57,7 +58,13 @@ export default function Dashboard() {
       let pagesList: any[] = [];
       if (resPages && resPages.ok) {
         pagesList = await resPages.json();
-        if (Array.isArray(pagesList)) pagesCount = pagesList.length;
+        if (Array.isArray(pagesList)) {
+          pagesCount = pagesList.length;
+          const monetized = pagesList.filter(
+            (p: any) => p.hasContentMonetization || p.monetizationStatus === 'INVITED' || p.monetizationStatus === 'ACTIVE'
+          );
+          setCmPages(monetized);
+        }
       }
 
       let successCount = 0;
@@ -205,6 +212,46 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* Content Monetization (CM) Celebration & Action Alert Banner */}
+      {cmPages.length > 0 && (
+        <div className="relative overflow-hidden bg-gradient-to-r from-amber-500/25 via-yellow-500/15 to-emerald-500/25 border-2 border-amber-500/60 rounded-2xl shadow-2xl p-4 sm:p-5 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-yellow-600 rounded-2xl text-black shadow-lg flex items-center justify-center shrink-0 text-2xl font-black shadow-amber-500/30">
+                💰
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 text-[11px] font-black bg-gradient-to-r from-amber-400 to-yellow-500 text-black rounded-full uppercase tracking-wider shadow-sm">
+                    🎉 Content Monetization (CM) Alert!
+                  </span>
+                  <span className="text-xs text-amber-300 font-bold bg-amber-950/60 px-2 py-0.5 rounded-md border border-amber-500/40">
+                    {cmPages.length} {cmPages.length === 1 ? 'Page' : 'Pages'} Unlocked
+                  </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-extrabold text-white mt-1">
+                  Mubarak Ho! CM Tool / Invitation Available on:{' '}
+                  <span className="text-amber-300 underline decoration-amber-400 font-black">
+                    {cmPages.map((p: any) => p.name).join(', ')}
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  ixBrowser mein apni US IP ke sath is page ki ID open karein aur payout/bank details setup karein taake dollars mein earnings shuru ho sakein!
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/dashboard/pages"
+              className="px-4 py-2.5 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-500 hover:from-amber-300 hover:to-yellow-400 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/30 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <span>View Pages in Detail</span>
+              <span>➔</span>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Enterprise-Grade Low Video Inventory Alert */}
       {lowQueuePages.length > 0 && (

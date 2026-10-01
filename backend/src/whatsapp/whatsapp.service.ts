@@ -1079,4 +1079,64 @@ ${data.details ? `📝 *Details:* ${data.details}\n` : ''}🕒 *Time:* ${pktTime
 
     return this.dispatchWhatsAppMessage(phoneNumber, testMessage, apiKey);
   }
+
+  /**
+   * Send high-priority Content Monetization (CM) Alert when a page unlocks monetization or receives invite
+   */
+  async sendContentMonetizationAlert(pageName: string, pageId: string, status = 'INVITED / ELIGIBLE', userId?: string) {
+    const activeConfigs = await this.prisma.whatsAppConfig.findMany({
+      where: {
+        enabled: true,
+      },
+    });
+
+    if (!activeConfigs || activeConfigs.length === 0) {
+      this.logger.warn(`Cannot send WhatsApp CM alert for page ${pageName}: No active WhatsApp configuration found.`);
+      return { success: false, message: 'No active WhatsApp recipient configured.' };
+    }
+
+    const now = new Date();
+    const pktTimeStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }).format(now);
+
+    const message =
+`🎉 *CONGRATULATIONS! Content Monetization (CM) Alert!* 🎉
+━━━━━━━━━━━━━━━━━━━━
+Mubarak Ho! Aapke Facebook Page par *Content Monetization (CM)* ka tool unlock / invite ho gaya hai! 💰✨
+
+📄 *Page Details:*
+• *Page Name:* ${pageName}
+• *Page ID:* \`${pageId}\`
+• *Status:* *${status}*
+🕒 *Detected At:* ${pktTimeStr} PKT
+━━━━━━━━━━━━━━━━━━━━
+🚀 *Agla Zaroori Qadam (Action Required):*
+1. Foran ixBrowser kholein (apni US Proxy / VPN ke sath).
+2. Is page ki ID open karke Meta Business Suite / Professional Dashboard par jayein.
+3. Apna Payout Account aur Tax Information attach karein taake aapki earnings shuru ho sakein!
+
+🤖 _AutoPost Intelligent Monitoring Engine_`;
+
+    let sentCount = 0;
+    for (const config of activeConfigs) {
+      if (!config.phoneNumber) continue;
+      if (userId && config.userId && config.userId !== userId) continue;
+
+      try {
+        await this.dispatchWhatsAppMessage(config.phoneNumber, message, config.apiKey || undefined);
+        sentCount++;
+      } catch (err: any) {
+        this.logger.error(`Failed to dispatch CM WhatsApp alert to ${config.phoneNumber}:`, err.message);
+      }
+    }
+
+    return { success: sentCount > 0, message: `Dispatched CM alert to ${sentCount} recipient(s).` };
+  }
 }

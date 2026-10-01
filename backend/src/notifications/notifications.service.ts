@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export interface AlertItem {
   id: string;
-  type: 'TOKEN_INVALID' | 'UPLOAD_FAILED' | 'SYSTEM_WARN';
+  type: 'TOKEN_INVALID' | 'UPLOAD_FAILED' | 'SYSTEM_WARN' | 'MONETIZATION_INVITE';
   severity: 'CRITICAL' | 'WARNING';
   title: string;
   message: string;
@@ -22,6 +22,35 @@ export class NotificationsService {
 
   async getActiveAlerts(): Promise<{ count: number; alerts: AlertItem[] }> {
     const alerts: AlertItem[] = [];
+
+    // 0. Check for Content Monetization (CM) invites / unlocks
+    try {
+      const cmPages = await this.prisma.facebookPage.findMany({
+        where: {
+          OR: [
+            { hasContentMonetization: true },
+            { monetizationStatus: { in: ['INVITED', 'ELIGIBLE', 'ACTIVE'] } }
+          ]
+        }
+      });
+
+      for (const page of cmPages) {
+        const alertId = `cm_${page.id}`;
+        if (!this.dismissedAlertIds.has(alertId)) {
+          alerts.push({
+            id: alertId,
+            type: 'MONETIZATION_INVITE',
+            severity: 'CRITICAL',
+            title: `🎉 Content Monetization (CM) Unlocked: ${page.name}`,
+            message: `Mubarak ho! Page "${page.name}" par Content Monetization (CM) ka tool invite / eligible ho chuka hai! ixBrowser khol kar payout details attach karein taake earning shuru ho sake.`,
+            pageName: page.name,
+            timestamp: (page.monetizationNotifiedAt || page.createdAt).toISOString(),
+            actionText: 'View Page in ixBrowser',
+            actionUrl: '/dashboard/pages'
+          });
+        }
+      }
+    } catch (_) {}
 
     // 1. Check for Facebook Page Access Token invalidations
     const pages = await this.prisma.facebookPage.findMany();

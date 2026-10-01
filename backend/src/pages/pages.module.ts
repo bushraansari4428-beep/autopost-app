@@ -3,9 +3,10 @@ import { PagesService } from './pages.service';
 import { PagesController } from './pages.controller';
 import { LocalUploadController } from './local-upload.controller';
 import { WorkersModule } from '../workers/workers.module';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [forwardRef(() => WorkersModule)],
+  imports: [forwardRef(() => WorkersModule), WhatsappModule],
   controllers: [PagesController, LocalUploadController],
   providers: [PagesService],
   exports: [PagesService],
