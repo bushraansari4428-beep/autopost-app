@@ -1364,5 +1364,233 @@ export class PagesService {
       whatsAppResult: waResult
     };
   }
+
+  /**
+   * 1-Click Facebook OAuth Flow
+   * Exchanges authorization code for long-lived user token and imports all authorized pages.
+   */
+  async handleFacebookOAuthCallback(code: string, redirectUri: string, user: any) {
+    if (!code) {
+      throw new BadRequestException('Authorization code is required.');
+    }
+
+    const appId = process.env.FACEBOOK_APP_ID || '911473734693149';
+    const appSecret = process.env.FACEBOOK_APP_SECRET || 'afcbf926cfc7b6d92cf83acddc78ce21';
+
+    this.logger.log(`Exchanging OAuth code with redirectUri: ${redirectUri}`);
+
+    // 1. Exchange authorization code for short-lived user access token
+    const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
+    
+    let tokenRes: any;
+    let tokenData: any;
+    try {
+      tokenRes = await fetch(tokenUrl, { signal: AbortSignal.timeout(15000) });
+      tokenData = await tokenRes.json();
+    } catch (err: any) {
+      this.logger.error('Failed to contact Meta for token exchange:', err);
+      throw new BadRequestException(`Meta connection error: ${err.message}`);
+    }
+
+    if (!tokenRes.ok || tokenData.error) {
+      this.logger.error('Meta OAuth exchange error:', tokenData.error);
+      throw new BadRequestException(tokenData.error?.message || 'Failed to exchange authorization code with Meta.');
+    }
+
+    const shortLivedToken = tokenData.access_token;
+    if (!shortLivedToken) {
+      throw new BadRequestException('No access token returned by Meta OAuth.');
+    }
+
+    // 2. Exchange short-lived token for long-lived user access token (60 days)
+    let longLivedToken = shortLivedToken;
+    try {
+      const exchangeUrl = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`;
+      const exchangeRes = await fetch(exchangeUrl, { signal: AbortSignal.timeout(15000) });
+      if (exchangeRes.ok) {
+        const exchangeData = await exchangeRes.json();
+        if (exchangeData.access_token) {
+          longLivedToken = exchangeData.access_token;
+          this.logger.log('Successfully acquired long-lived Facebook User Access Token.');
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Could not exchange for long-lived token, falling back to short-lived token: ${err.message}`);
+    }
+
+    // 3. Identify user account name and ID
+    let accountName = 'Facebook User';
+    let accountId = 'user_oauth';
+    try {
+      const meRes = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${longLivedToken}`, {
+        signal: AbortSignal.timeout(10000)
+      });
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        accountName = meData.name || accountName;
+        accountId = meData.id || accountId;
+      }
+    } catch (_) {}
+
+    // Save FacebookAccount in database
+    try {
+      const existingAcc = await this.prisma.facebookAccount.findFirst({
+        where: { OR: [{ uid: accountId }, { userToken: longLivedToken }] }
+      });
+      if (existingAcc) {
+        await this.prisma.facebookAccount.update({
+          where: { id: existingAcc.id },
+          data: {
+            name: accountName,
+            uid: accountId,
+            userToken: longLivedToken,
+            status: 'ACTIVE',
+            userId: user?.id
+          }
+        });
+      } else {
+        await this.prisma.facebookAccount.create({
+          data: {
+            name: accountName,
+            uid: accountId,
+            userToken: longLivedToken,
+            status: 'ACTIVE',
+            userId: user?.id
+          }
+        });
+      }
+    } catch (_) {}
+
+    // 4. Fetch all Pages managed by this user
+    let nextUrl: string | null = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,category,picture&limit=250&access_token=${longLivedToken}`;
+    const fetchedPages: any[] = [];
+
+    while (nextUrl) {
+      const res: any = await fetch(nextUrl, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new BadRequestException(errData.error?.message || 'Failed to fetch pages from Facebook accounts endpoint.');
+      }
+      const data = await res.json();
+      if (data.data && Array.isArray(data.data)) {
+        fetchedPages.push(...data.data);
+      }
+      nextUrl = data.paging?.next || null;
+    }
+
+    if (fetchedPages.length === 0) {
+      return {
+        success: true,
+        accountName,
+        accountId,
+        pagesImported: 0,
+        pagesUpdated: 0,
+        pages: [],
+        message: `Account "${accountName}" connected, but no Facebook Pages were found under this account.`
+      };
+    }
+
+    let pagesImported = 0;
+    let pagesUpdated = 0;
+    const syncedPages: any[] = [];
+
+    for (const fbPage of fetchedPages) {
+      const pageId = String(fbPage.id);
+      const pageName = fbPage.name || `Facebook Page ${pageId}`;
+      const pageAccessToken = fbPage.access_token || longLivedToken;
+
+      const existing = await this.prisma.facebookPage.findFirst({
+        where: { pageId }
+      });
+
+      let pageRecord: any;
+      if (existing) {
+        pageRecord = await this.prisma.facebookPage.update({
+          where: { id: existing.id },
+          data: {
+            name: pageName,
+            accessToken: pageAccessToken,
+            status: 'ACTIVE',
+            userId: user?.id || existing.userId
+          }
+        });
+        pagesUpdated++;
+      } else {
+        pageRecord = await this.prisma.facebookPage.create({
+          data: {
+            pageId,
+            name: pageName,
+            accessToken: pageAccessToken,
+            status: 'ACTIVE',
+            userId: user?.id,
+            videosPerDay: 2
+          }
+        });
+        pagesImported++;
+      }
+
+      // Auto-create / ensure MEGA_CLOUD source
+      let cloudSource = await this.prisma.source.findFirst({
+        where: { platform: 'MEGA_CLOUD', url: `cloud://${pageId}` }
+      });
+      if (!cloudSource) {
+        cloudSource = await this.prisma.source.create({
+          data: {
+            platform: 'MEGA_CLOUD',
+            name: `Cloud Upload (${pageName})`,
+            url: `cloud://${pageId}`,
+            userId: user?.id
+          }
+        });
+      } else {
+        await this.prisma.source.update({
+          where: { id: cloudSource.id },
+          data: {
+            name: `Cloud Upload (${pageName})`,
+            userId: user?.id || cloudSource.userId
+          }
+        });
+      }
+
+      // Auto-create / ensure Mapping
+      const existingMapping = await this.prisma.mapping.findFirst({
+        where: {
+          facebookPageId: pageRecord.id,
+          sourceId: cloudSource.id
+        }
+      });
+      if (!existingMapping) {
+        await this.prisma.mapping.create({
+          data: {
+            facebookPageId: pageRecord.id,
+            sourceId: cloudSource.id,
+            status: 'ACTIVE',
+            scheduledTime: '04:30, 19:00'
+          }
+        });
+      }
+
+      syncedPages.push({
+        id: pageRecord.id,
+        pageId,
+        name: pageName,
+        status: pageRecord.status
+      });
+    }
+
+    this.logger.log(`1-Click OAuth Sync Complete: ${pagesImported} new pages, ${pagesUpdated} updated for ${accountName}`);
+
+    return {
+      success: true,
+      accountName,
+      accountId,
+      pagesImported,
+      pagesUpdated,
+      totalCount: fetchedPages.length,
+      pages: syncedPages,
+      message: `Successfully connected ${fetchedPages.length} pages from ${accountName}!`
+    };
+  }
 }
+
 

@@ -20,6 +20,18 @@ export class PagesController {
     return this.pagesService.bulkImportTokens(body.tokens, req.user);
   }
 
+  @Post('facebook/oauth-callback')
+  facebookOAuthCallback(@Body() body: { code: string; redirectUri: string }, @Request() req: any) {
+    return this.pagesService.handleFacebookOAuthCallback(body.code, body.redirectUri, req.user);
+  }
+
+  @Get('facebook/oauth-config')
+  getFacebookOAuthConfig() {
+    return {
+      appId: process.env.FACEBOOK_APP_ID || '911473734693149',
+    };
+  }
+
   @Post('bulk-create-pages')
   bulkCreatePages(@Body() body: any, @Request() req: any) {
     return this.pagesService.bulkCreatePages(body, req.user);

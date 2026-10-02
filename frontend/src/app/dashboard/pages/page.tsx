@@ -30,6 +30,46 @@ export default function FacebookPagesPage() {
   const [accessToken, setAccessToken] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 1-Click Facebook OAuth state
+  const [isConnectingOAuth, setIsConnectingOAuth] = useState(false);
+
+  const initiateFacebookOAuth = () => {
+    const appId = '911473734693149';
+    const redirectUri = encodeURIComponent(window.location.origin + '/dashboard/pages');
+    const scope = encodeURIComponent('pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata');
+    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+    window.location.href = oauthUrl;
+  };
+
+  const handleOAuthCode = async (code: string) => {
+    setIsConnectingOAuth(true);
+    try {
+      const token = localStorage.getItem('token');
+      const redirectUri = window.location.origin + '/dashboard/pages';
+      const res = await fetch('/api/pages/facebook/oauth-callback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ code, redirectUri })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(`🎉 Facebook Connected! ${data.pagesImported} new pages added, ${data.pagesUpdated} updated for ${data.accountName}!`, 'success');
+        fetchPages();
+      } else {
+        addToast(`Facebook Connection Failed: ${data.message || 'Unknown error'}`, 'error');
+      }
+    } catch (err: any) {
+      console.error('Failed to handle OAuth callback:', err);
+      addToast(`OAuth Error: ${err.message}`, 'error');
+    } finally {
+      setIsConnectingOAuth(false);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  };
+
   // Bulk Import state
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkInput, setBulkInput] = useState('');
@@ -395,6 +435,19 @@ export default function FacebookPagesPage() {
 
   useEffect(() => {
     fetchPages();
+
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const fbError = urlParams.get('error') || urlParams.get('error_description');
+
+      if (fbError) {
+        addToast(`Facebook Login Notice: ${fbError}`, 'error');
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (code) {
+        handleOAuthCode(code);
+      }
+    }
   }, []);
 
   const deletePage = async (id: string) => {
@@ -484,6 +537,29 @@ export default function FacebookPagesPage() {
           <p className="text-gray-400 mt-1">Click on any connected Facebook Page card to view live real-time statistics & analytics.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={initiateFacebookOAuth}
+            disabled={isConnectingOAuth}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            title="Connect any Facebook Account in 1-Click without copying tokens or developer accounts"
+          >
+            {isConnectingOAuth ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span>Linking Facebook...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                <span>Connect Facebook (1-Click)</span>
+              </>
+            )}
+          </button>
           <button 
             onClick={() => {
               setShowCreateModal(true);
@@ -2101,6 +2177,20 @@ export default function FacebookPagesPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {isConnectingOAuth && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-gray-900 border border-blue-500/40 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl shadow-blue-500/20">
+            <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+            <div>
+              <h3 className="text-xl font-extrabold text-white">Linking with Facebook...</h3>
+              <p className="text-xs text-gray-400 mt-1">Exchanging official credentials with Meta and linking all your authorized Facebook Pages to AutoPost App.</p>
+            </div>
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-300">
+              ⚡ This takes about 3 to 5 seconds. Please do not close this window.
+            </div>
           </div>
         </div>
       )}
