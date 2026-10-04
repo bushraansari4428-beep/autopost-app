@@ -339,7 +339,8 @@ export class SyncService {
                 OR: [
                   { status: 'PENDING' },
                   { status: 'PROCESSING' },
-                  { status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+                  { status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } },
+                  { status: 'FAILED' }
                 ]
               } 
             }
@@ -679,7 +680,8 @@ export class SyncService {
                 OR: [
                   { status: 'PENDING' },
                   { status: 'PROCESSING' },
-                  { status: 'COMPLETED' }
+                  { status: 'COMPLETED' },
+                  { status: 'FAILED' }
                 ]
               }
             }
@@ -1246,19 +1248,47 @@ export class SyncService {
         try {
           await this.downloadAndUpload(pendingUpload);
         } catch (err: any) {
-          this.logsService.log('ERROR', `Upload failed for ${pendingUpload.video.title}: ${err.message}`);
+          const currentAttempts = (pendingUpload.attempts || 0) + 1;
+          const isPermanent = 
+            err.message?.includes('[PERMANENT_DELETED_VIDEO]') ||
+            err.message?.includes('Url parsing is failed') ||
+            err.message?.includes('deleted or set to private') ||
+            err.message?.includes('longer available') ||
+            currentAttempts >= 2;
+
+          const errorNote = isPermanent 
+            ? `[PERMANENT_SKIP] ${err.message}`
+            : err.message;
+
+          this.logsService.log('ERROR', `Upload failed for ${pendingUpload.video.title} (Attempt ${currentAttempts}): ${errorNote}`);
           await this.prisma.uploadHistory.update({
             where: { id: pendingUpload.id },
-            data: { status: 'FAILED', errorMessage: err.message }
+            data: { 
+              status: 'FAILED', 
+              attempts: currentAttempts,
+              errorMessage: errorNote 
+            }
           });
-          this.whatsappService.sendVideoActivityAlert({
-            pageName: pendingUpload.facebookPage?.name,
-            videoTitle: pendingUpload.video?.title,
-            sourcePlatform: pendingUpload.video?.source?.platform,
-            action: 'Upload Failed! ⚠️',
-            details: err.message,
-            isError: true,
-          }).catch(() => {});
+
+          if (isPermanent) {
+            this.whatsappService.sendVideoActivityAlert({
+              pageName: pendingUpload.facebookPage?.name,
+              videoTitle: pendingUpload.video?.title,
+              sourcePlatform: pendingUpload.video?.source?.platform,
+              action: 'Video Skipped (Source Unavailable) ⚠️',
+              details: `Source creator ne ye video delete ya private kar di hai. Auto-poster is video ko skip kar ke aglay video par move kar raha hai.`,
+              isError: false,
+            }).catch(() => {});
+          } else {
+            this.whatsappService.sendVideoActivityAlert({
+              pageName: pendingUpload.facebookPage?.name,
+              videoTitle: pendingUpload.video?.title,
+              sourcePlatform: pendingUpload.video?.source?.platform,
+              action: 'Upload Failed! ⚠️',
+              details: err.message,
+              isError: true,
+            }).catch(() => {});
+          }
         }
       }
 
@@ -1338,24 +1368,66 @@ export class SyncService {
 
       // TikWM direct HTTP fallback for single video download URL if yt-dlp did not resolve
       if (!videoUrl && targetUrl) {
-        try {
-          this.logsService.log('INFO', 'Attempting to extract HD TikTok MP4 stream via TikWM HTTP API...');
-          const axios = require('axios');
-          const tikwmRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(targetUrl)}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-            timeout: 10000
-          });
-          if (tikwmRes.data?.data?.hdplay || tikwmRes.data?.data?.play) {
-            videoUrl = tikwmRes.data.data.hdplay || tikwmRes.data.data.play;
-            this.logsService.log('INFO', 'Successfully obtained HD TikTok video stream via TikWM API!');
+        this.logsService.log('INFO', 'Attempting to extract HD TikTok MP4 stream via TikWM API...');
+        const axios = require('axios');
+        const apiEndpoints = [
+          'https://tikwm.com/api/',
+          'https://www.tikwm.com/api/'
+        ];
+
+        let isPermanentlyUnavailable = false;
+        let extractionErrorMsg = '';
+
+        for (const ep of apiEndpoints) {
+          if (videoUrl || isPermanentlyUnavailable) break;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            if (videoUrl || isPermanentlyUnavailable) break;
+            try {
+              const res = await axios.get(`${ep}?url=${encodeURIComponent(targetUrl)}`, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                  'Accept': 'application/json, text/plain, */*'
+                },
+                timeout: 12000
+              });
+
+              if (res.data?.data?.hdplay || res.data?.data?.play) {
+                videoUrl = res.data.data.hdplay || res.data.data.play;
+                this.logsService.log('INFO', `Successfully obtained HD TikTok video stream via TikWM (${ep})!`);
+                break;
+              }
+
+              // Check if rate limited
+              if (res.data?.code === -1 && res.data?.msg?.includes('Limit')) {
+                this.logsService.log('WARN', `TikWM rate limit encountered on ${ep}, waiting 1.5s before retry...`);
+                await this.delay(1500);
+                continue;
+              }
+
+              // Check if permanently unavailable (deleted or private)
+              if (res.data?.code === -1 && (res.data?.msg?.includes('Url parsing is failed') || res.data?.msg?.includes('check url') || res.data?.msg?.includes('Video deleted'))) {
+                isPermanentlyUnavailable = true;
+                extractionErrorMsg = `TikTok video is no longer available (deleted or set to private by creator): ${res.data.msg}`;
+                break;
+              }
+
+              if (res.data?.msg) {
+                extractionErrorMsg = res.data.msg;
+              }
+            } catch (err: any) {
+              extractionErrorMsg = err.message;
+              await this.delay(1000);
+            }
           }
-        } catch (err: any) {
-          this.logsService.log('ERROR', `TikWM API stream fallback failed: ${err.message}`);
+        }
+
+        if (isPermanentlyUnavailable) {
+          throw new Error(`[PERMANENT_DELETED_VIDEO] ${extractionErrorMsg}`);
         }
       }
 
       if (!videoUrl) {
-        throw new Error(`Failed to extract TikTok video stream. Playwright/TikWM both failed and no fallback available.`);
+        throw new Error(`Failed to extract TikTok video stream. Source video may be deleted, private, or region-restricted.`);
       }
     } else if (targetUrl.includes('instagram.com')) {
       const match = targetUrl.match(/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);

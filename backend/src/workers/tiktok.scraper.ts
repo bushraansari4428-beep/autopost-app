@@ -249,36 +249,39 @@ export async function getLatestTikTokVideos(inputUrl: string, limit = 50): Promi
 
   // 2. Direct HTTP TikWM fallback (zero browser overhead)
   if (uname) {
-    try {
-      console.log(`Attempting direct HTTP TikWM API for @${uname}...`);
-      const tikwmUrl = `https://www.tikwm.com/api/user/posts?unique_id=${encodeURIComponent(uname)}&count=${limit}`;
-      const res = await axios.get(tikwmUrl, {
-        timeout: 10000,
-        headers: {
-          'User-Agent': DEFAULT_USER_AGENT,
-          'Accept': 'application/json, text/plain, */*'
-        }
-      });
-      if (res.data && res.data.data && Array.isArray(res.data.data.videos) && res.data.data.videos.length > 0) {
-        const validVideos = res.data.data.videos.filter((v: any) => {
-          if (v.images && Array.isArray(v.images) && v.images.length > 0) return false;
-          if (!v.hdplay && !v.play) return false;
-          return true;
+    const tikwmHosts = ['https://tikwm.com', 'https://www.tikwm.com'];
+    for (const host of tikwmHosts) {
+      try {
+        console.log(`Attempting direct HTTP TikWM API via ${host} for @${uname}...`);
+        const tikwmUrl = `${host}/api/user/posts?unique_id=${encodeURIComponent(uname)}&count=${limit}`;
+        const res = await axios.get(tikwmUrl, {
+          timeout: 10000,
+          headers: {
+            'User-Agent': DEFAULT_USER_AGENT,
+            'Accept': 'application/json, text/plain, */*'
+          }
         });
-        console.log(`Successfully extracted ${validVideos.length} valid video(s) from TikWM API.`);
-        return validVideos.slice(0, limit).map((v: any) => ({
-          id: v.video_id,
-          caption: v.title || `TikTok Video ${v.video_id}`,
-          hashtags: [],
-          playUrl: v.hdplay || v.play,
-          downloadUrl: v.hdplay || v.play,
-          author: v.author?.unique_id || uname,
-          createTime: v.create_time || Math.floor(Date.now() / 1000),
-          url: `https://www.tiktok.com/@${v.author?.unique_id || uname}/video/${v.video_id}`
-        }));
+        if (res.data && res.data.data && Array.isArray(res.data.data.videos) && res.data.data.videos.length > 0) {
+          const validVideos = res.data.data.videos.filter((v: any) => {
+            if (v.images && Array.isArray(v.images) && v.images.length > 0) return false;
+            if (!v.hdplay && !v.play) return false;
+            return true;
+          });
+          console.log(`Successfully extracted ${validVideos.length} valid video(s) from TikWM API (${host}).`);
+          return validVideos.slice(0, limit).map((v: any) => ({
+            id: v.video_id,
+            caption: v.title || `TikTok Video ${v.video_id}`,
+            hashtags: [],
+            playUrl: v.hdplay || v.play,
+            downloadUrl: v.hdplay || v.play,
+            author: v.author?.unique_id || uname,
+            createTime: v.create_time || Math.floor(Date.now() / 1000),
+            url: `https://www.tiktok.com/@${v.author?.unique_id || uname}/video/${v.video_id}`
+          }));
+        }
+      } catch (e: any) {
+        console.log(`TikWM direct HTTP failed on ${host}:`, e.message);
       }
-    } catch (e: any) {
-      console.log(`TikWM direct HTTP failed:`, e.message);
     }
   }
 
