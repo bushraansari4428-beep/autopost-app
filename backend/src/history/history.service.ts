@@ -7,9 +7,10 @@ export class HistoryService {
 
   async getStats(user?: any) {
     const notCloudQueue = {
-      NOT: {
-        facebookPostId: 'MEGA_CLOUD_UPLOAD'
-      }
+      OR: [
+        { facebookPostId: null },
+        { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+      ]
     };
 
     const userCondition = (!user || user.role === 'ADMIN') ? {} : {
@@ -68,9 +69,10 @@ export class HistoryService {
 
   findAll(user?: any, limit?: number) {
     const notCloudQueue = {
-      NOT: {
-        facebookPostId: 'MEGA_CLOUD_UPLOAD'
-      }
+      OR: [
+        { facebookPostId: null },
+        { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+      ]
     };
 
     const takeLimit = limit ? Math.min(Math.max(Number(limit), 1), 2000) : 500;
