@@ -1374,8 +1374,8 @@ export class PagesService {
       throw new BadRequestException('Authorization code is required.');
     }
 
-    const appId = process.env.FACEBOOK_APP_ID || '911473734693149';
-    const appSecret = process.env.FACEBOOK_APP_SECRET || 'afcbf926cfc7b6d92cf83acddc78ce21';
+    const appId = process.env.FACEBOOK_APP_ID || '';
+    const appSecret = process.env.FACEBOOK_APP_SECRET || '';
 
     this.logger.log(`Exchanging OAuth code with redirectUri: ${redirectUri}`);
 
