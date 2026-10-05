@@ -1,0 +1,2 @@
+# Keep Hugging Face Space alive 24/7 by pinging every 20 minutes
+*/20 * * * * ubuntu curl -fsS https://bushraa2-my-ai-brain.hf.space > /dev/null 2>&1
