@@ -8,6 +8,7 @@ import threading
 import customtkinter as ctk
 from PIL import Image
 from agent_core import agent
+from voice_service import voice_listener
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -215,13 +216,20 @@ class FloatingChatBar(ctk.CTk):
         self.on_submit()
 
     def activate_voice_typing(self):
-        """Focus the entry box and activate Windows Voice Typing (Win+H)"""
-        self.entry.focus_set()
-        import ctypes
-        ctypes.windll.user32.keybd_event(0x5B, 0, 0, 0) # Win down
-        ctypes.windll.user32.keybd_event(0x48, 0, 0, 0) # H down
-        ctypes.windll.user32.keybd_event(0x48, 0, 2, 0) # H up
-        ctypes.windll.user32.keybd_event(0x5B, 0, 2, 0) # Win up
+        """Modern 2026 In-App Voice Listener: No Windows popup, neural Urdu/English recognition"""
+        self.badge_status.configure(text="🎙️ Listening to Voice...", text_color="#38BDF8")
+        self.expand()
+        self.output_box.delete("1.0", "end")
+        self.output_box.insert("1.0", "🎙️ Voice Listener Active... Microphone me bolein (Urdu / English)!\n")
+
+        def on_speech(recognized_text):
+            def update():
+                self.entry.delete(0, "end")
+                self.entry.insert(0, recognized_text)
+                self.on_submit()
+            self.after(0, update)
+
+        voice_listener.listen(on_speech)
 
     def _execute_worker(self, prompt: str):
         result = agent.execute(prompt)
