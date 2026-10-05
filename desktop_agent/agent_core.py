@@ -11,6 +11,7 @@ from tools.video_downloader import video_downloader
 from tools.bill_checker import bill_checker
 from tools.browser_tool import browser_tool
 from tools.mobile_tool import mobile_tool
+from tools.weather_tool import weather_tool
 
 class UniversalAgent:
     def __init__(self):
@@ -44,7 +45,29 @@ class UniversalAgent:
             }
 
         # -------------------------------------------------------------
-        # 2. ELECTRICITY BILL CHECKER
+        # 2. LIVE REAL-TIME WEATHER
+        # -------------------------------------------------------------
+        weather_words = ["weather", "mosam", "mausam", "temperature", "taapmaan", "rain", "barish", "dhoop", "sardi", "garmi"]
+        if any(w in prompt_lower for w in weather_words):
+            pak_cities = ["faisalabad", "lahore", "karachi", "islamabad", "rawalpindi", "multan", "peshawar", "quetta", "sialkot", "gujranwala", "sargodha", "bahawalpur", "sukkur", "hyderabad"]
+            target_city = "Faisalabad" # default
+            for c in pak_cities:
+                if c in prompt_lower:
+                    target_city = c.title()
+                    break
+
+            city_match = re.search(r'(?:in|of|ka|ke|ki|for)\s+([A-Za-z]+)', prompt, re.IGNORECASE)
+            if city_match and city_match.group(1).lower() not in ["weather", "today", "aaj", "kaisa", "hai", "batao", "update"]:
+                target_city = city_match.group(1).title()
+
+            w_res = weather_tool.get_weather(target_city)
+            if w_res["success"]:
+                return {"text": w_res["message"], "status": "Complete"}
+            else:
+                return {"text": f"⚠️ {w_res['error']}", "status": "Error"}
+
+        # -------------------------------------------------------------
+        # 3. ELECTRICITY BILL CHECKER
         # -------------------------------------------------------------
         bill_keywords = ["bill", "bijli", "lesco", "mepco", "gepco", "fesco", "iesco", "pesco", "kelectric", "k-electric"]
         if any(w in prompt_lower for w in bill_keywords) and re.search(r'\d{10,16}', prompt):
@@ -66,7 +89,7 @@ class UniversalAgent:
                     return {"text": f"⚠️ {bill_res['error']}", "status": "Error"}
 
         # -------------------------------------------------------------
-        # 3. VIDEO DOWNLOADER (YouTube / TikTok / FB)
+        # 4. VIDEO DOWNLOADER (YouTube / TikTok / FB)
         # -------------------------------------------------------------
         url_match = re.search(r'https?://[^\s]+', prompt)
         if any(w in prompt_lower for w in ["download", "video lao", "save video", "video download"]):
@@ -95,17 +118,17 @@ class UniversalAgent:
                     return {"text": f"❌ Video Search Failed: {v_res.get('error')}", "status": "Error"}
 
         # -------------------------------------------------------------
-        # 4. WEB SEARCH / BROWSING
+        # 5. LIVE WEB SEARCH / NEWS / REAL-TIME INFO
         # -------------------------------------------------------------
-        if any(w in prompt_lower for w in ["search", "google", "dhoondo", "find info", "browse", "talaash"]):
-            search_query = re.sub(r'(search|google|karo|dhoondo|find|please|about)', '', prompt, flags=re.IGNORECASE).strip()
+        search_triggers = ["search", "google", "dhoondo", "find info", "browse", "talaash", "news", "khabar", "rate", "price", "today", "aaj", "current"]
+        if any(w in prompt_lower for w in search_triggers):
+            search_query = re.sub(r'(search|google|karo|dhoondo|find|please|about|tell me)', '', prompt, flags=re.IGNORECASE).strip()
             web_res = browser_tool.search_web(search_query)
             if web_res["success"] and web_res["results"]:
-                # Synthesize with Qwen3-8B
-                synth_prompt = f"Summarize the following search results for the user query '{search_query}':\n{web_res['summary']}"
+                synth_prompt = f"Summarize the following live search results for the user query '{search_query}':\n{web_res['summary']}"
                 summary = self.ai.reason(synth_prompt)
                 return {
-                    "text": f"🌐 **Search Results for:** *{search_query}*\n\n{summary}\n\n**Sources:**\n{web_res['summary']}",
+                    "text": f"🌐 **Live Search Results for:** *{search_query}*\n\n{summary}\n\n**Sources:**\n{web_res['summary']}",
                     "status": "Complete"
                 }
 
