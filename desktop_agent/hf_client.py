@@ -84,10 +84,15 @@ class HfAiEngine:
                             data = json.loads(raw_json)
                             if isinstance(data, list) and len(data) > 0:
                                 return str(data[0])
-                            elif isinstance(data, dict) and "error" in data:
-                                return f"⚠️ Hugging Face Error: {data['error']}"
+                            elif isinstance(data, dict) and data.get("error"):
+                                err_msg = data["error"]
+                                if "quota" in str(err_msg).lower():
+                                    return f"⚠️ ZeroGPU Quota Notice: Please add your free HF Token to config.json (https://huggingface.co/settings/tokens) for high-limit access.\nDetails: {err_msg}"
+                                return f"⚠️ Hugging Face Error: {err_msg}"
                         except Exception:
                             pass
+                    elif decoded.startswith("event: error"):
+                        last_event = "error"
 
             return "⚠️ Notice: Hugging Face response stream finished without data."
 

@@ -98,7 +98,20 @@ class FloatingChatBar(ctk.CTk):
             corner_radius=10,
             command=self.quick_screenshot
         )
-        self.btn_shot.pack(side="left", padx=3)
+        self.btn_shot.pack(side="left", padx=2)
+
+        # Voice Input Button (Win+H Voice Typing)
+        self.btn_mic = ctk.CTkButton(
+            self.top_bar,
+            text="🎙️",
+            width=36,
+            height=36,
+            fg_color="#313244",
+            hover_color="#10B981",
+            corner_radius=10,
+            command=self.activate_voice_typing
+        )
+        self.btn_mic.pack(side="left", padx=2)
 
         # Send / Run Button
         self.btn_send = ctk.CTkButton(
@@ -200,6 +213,15 @@ class FloatingChatBar(ctk.CTk):
         self.entry.delete(0, "end")
         self.entry.insert(0, "PC screen ka screenshot lo aur batao kya khula hai")
         self.on_submit()
+
+    def activate_voice_typing(self):
+        """Focus the entry box and activate Windows Voice Typing (Win+H)"""
+        self.entry.focus_set()
+        import ctypes
+        ctypes.windll.user32.keybd_event(0x5B, 0, 0, 0) # Win down
+        ctypes.windll.user32.keybd_event(0x48, 0, 0, 0) # H down
+        ctypes.windll.user32.keybd_event(0x48, 0, 2, 0) # H up
+        ctypes.windll.user32.keybd_event(0x5B, 0, 2, 0) # Win up
 
     def _execute_worker(self, prompt: str):
         result = agent.execute(prompt)
