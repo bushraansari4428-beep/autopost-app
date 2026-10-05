@@ -8,7 +8,7 @@ import threading
 import customtkinter as ctk
 from PIL import Image
 from agent_core import agent
-from voice_service import voice_listener
+from voice_service import voice_engine
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -101,7 +101,7 @@ class FloatingChatBar(ctk.CTk):
         )
         self.btn_shot.pack(side="left", padx=2)
 
-        # Voice Input Button (Win+H Voice Typing)
+        # Voice Input Button (In-App Native Mic)
         self.btn_mic = ctk.CTkButton(
             self.top_bar,
             text="🎙️",
@@ -110,7 +110,7 @@ class FloatingChatBar(ctk.CTk):
             fg_color="#313244",
             hover_color="#10B981",
             corner_radius=10,
-            command=self.activate_voice_typing
+            command=self.toggle_mic
         )
         self.btn_mic.pack(side="left", padx=2)
 
@@ -215,21 +215,36 @@ class FloatingChatBar(ctk.CTk):
         self.entry.insert(0, "PC screen ka screenshot lo aur batao kya khula hai")
         self.on_submit()
 
-    def activate_voice_typing(self):
-        """Modern 2026 In-App Voice Listener: No Windows popup, neural Urdu/English recognition"""
-        self.badge_status.configure(text="🎙️ Listening to Voice...", text_color="#38BDF8")
-        self.expand()
-        self.output_box.delete("1.0", "end")
-        self.output_box.insert("1.0", "🎙️ Voice Listener Active... Microphone me bolein (Urdu / English)!\n")
+    def toggle_mic(self):
+        """In-App Voice Engine: toggles microphone recording and transcription directly in-app"""
+        def on_status_change(status, extra=None):
+            def update():
+                if status == "recording":
+                    self.btn_mic.configure(text="⏹️", fg_color="#EF4444", hover_color="#DC2626")
+                    self.badge_status.configure(text="🔴 Sun raha hoon... Bol kar [⏹️] dabayein", text_color="#EF4444")
+                    self.expand()
+                    self.output_box.delete("1.0", "end")
+                    self.output_box.insert("1.0", "🎙️ **Microphone is ACTIVE!**\n\nApni aawaz mein bolein (Urdu / Roman Urdu / English)...\nJab baat khatam ho jaye to [⏹️] button dabayein ya 5 seconds khamosh rahein.\n")
+                elif status == "processing":
+                    self.btn_mic.configure(text="🎙️", fg_color="#313244", hover_color="#10B981")
+                    self.badge_status.configure(text="⏳ Aawaz samajh raha hoon...", text_color="#F59E0B")
+                    self.output_box.insert("end", "\n🔄 Audio recorded! Neural transcription in progress...\n")
+                elif status == "idle":
+                    self.btn_mic.configure(text="🎙️", fg_color="#313244", hover_color="#10B981")
+                elif status == "error":
+                    self.btn_mic.configure(text="🎙️", fg_color="#313244", hover_color="#10B981")
+                    self.badge_status.configure(text=f"⚠️ {extra or 'Voice error'}", text_color="#EF4444")
+                    self.output_box.insert("end", f"\n⚠️ {extra or 'Aawaz samajh nahi aayi'}\n")
+            self.after(0, update)
 
-        def on_speech(recognized_text):
+        def on_result(recognized_text):
             def update():
                 self.entry.delete(0, "end")
                 self.entry.insert(0, recognized_text)
                 self.on_submit()
             self.after(0, update)
 
-        voice_listener.listen(on_speech)
+        voice_engine.toggle(on_status_change, on_result)
 
     def _execute_worker(self, prompt: str):
         result = agent.execute(prompt)

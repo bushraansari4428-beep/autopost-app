@@ -1,217 +1,126 @@
 """
-Modern 2026 Web Speech Voice Listener for AI Universal Agent
-Uses Microsoft Edge's Neural Speech Engine (Zero dependency, high Urdu/Roman Urdu accuracy).
+In-App Native Neural Voice Recognition Engine (2026 Edition)
+Uses sounddevice + Google Neural Speech Recognizer for high accuracy Roman Urdu / Urdu / English.
+Completely in-app: NO pop-ups, NO browser windows, NO Windows dictation bars!
 """
 
-import os
-import json
-import subprocess
+import io
+import wave
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import time
+import numpy as np
+import sounddevice as sd
+import speech_recognition as sr
 
-HTML_CONTENT = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>AI Voice Listener</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
-        body {
-            background: #11111b;
-            color: #cdd6f4;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-            border: 2px solid #89b4fa;
-            border-radius: 16px;
-        }
-        .mic-container {
-            position: relative;
-            width: 80px;
-            height: 80px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 12px;
-        }
-        .mic-wave {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: rgba(137, 180, 250, 0.25);
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { transform: scale(0.9); opacity: 0.8; }
-            50% { transform: scale(1.3); opacity: 0.2; }
-            100% { transform: scale(0.9); opacity: 0.8; }
-        }
-        .mic-icon {
-            font-size: 38px;
-            z-index: 2;
-        }
-        .status {
-            font-size: 13px;
-            color: #a6adc8;
-            margin-bottom: 6px;
-            font-weight: 500;
-        }
-        .live-text {
-            font-size: 14px;
-            color: #89b4fa;
-            font-weight: bold;
-            padding: 0 16px;
-            text-align: center;
-            min-height: 24px;
-        }
-        .btn-stop {
-            margin-top: 10px;
-            background: #313244;
-            border: 1px solid #45475a;
-            color: #cdd6f4;
-            padding: 4px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-        .btn-stop:hover { background: #f38ba8; color: #11111b; }
-    </style>
-</head>
-<body>
-    <div class="mic-container">
-        <div class="mic-wave"></div>
-        <div class="mic-icon">🎙️</div>
-    </div>
-    <div class="status" id="status">Sun raha hoon... Bolein (Urdu / English)</div>
-    <div class="live-text" id="transcript">...</div>
-    <button class="btn-stop" onclick="window.close()">Cancel</button>
+class NativeVoiceEngine:
+    def __init__(self):
+        self.samplerate = 16000
+        self.channels = 1
+        self.is_recording = False
+        self.stream = None
+        self.audio_frames = []
+        self.recognizer = sr.Recognizer()
+        self.recognizer.energy_threshold = 300
+        self.recognizer.dynamic_energy_threshold = True
 
-    <script>
-        const statusEl = document.getElementById('status');
-        const transcriptEl = document.getElementById('transcript');
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            statusEl.innerText = "Speech Recognition not supported in this browser.";
-        } else {
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'ur-PK'; // Urdu & Roman Urdu priority
-            recognition.interimResults = true;
-            recognition.continuous = false;
-
-            recognition.onstart = () => {
-                statusEl.innerText = "🎙️ Sun raha hoon... Bolein!";
-            };
-
-            recognition.onresult = (event) => {
-                let current = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    current += event.results[i][0].transcript;
-                }
-                transcriptEl.innerText = current;
-
-                if (event.results[0].isFinal) {
-                    statusEl.innerText = "✅ Sending to Agent...";
-                    fetch('/speech_result', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: current })
-                    }).then(() => {
-                        setTimeout(() => window.close(), 400);
-                    }).catch(() => window.close());
-                }
-            };
-
-            recognition.onerror = (e) => {
-                statusEl.innerText = "⚠️ Voice error: " + (e.error || "Retry");
-                // Fallback to English if Urdu error
-                if (e.error === 'no-speech') {
-                    setTimeout(() => window.close(), 1500);
-                }
-            };
-
-            recognition.onend = () => {
-                // If closed without final
-                setTimeout(() => window.close(), 500);
-            };
-
-            try {
-                recognition.start();
-            } catch (err) {
-                console.error(err);
-            }
-        }
-    </script>
-</body>
-</html>
-"""
-
-class VoiceRequestHandler(BaseHTTPRequestHandler):
-    on_text_received = None
-
-    def do_GET(self):
-        if self.path == "/voice" or self.path == "/":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(HTML_CONTENT.encode("utf-8"))
+    def toggle(self, on_status_change, on_result):
+        """Toggle recording on/off on button click."""
+        if not self.is_recording:
+            self.start_recording(on_status_change, on_result)
         else:
-            self.send_response(404)
-            self.end_headers()
+            self.stop_recording(on_status_change, on_result)
 
-    def do_POST(self):
-        if self.path == "/speech_result":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length).decode("utf-8")
-            try:
-                data = json.loads(body)
-                text = data.get("text", "").strip()
-                if text and VoiceRequestHandler.on_text_received:
-                    VoiceRequestHandler.on_text_received(text)
-            except Exception:
-                pass
-            self.send_response(200)
-            self.end_headers()
-        else:
-            self.send_response(404)
-            self.end_headers()
+    def start_recording(self, on_status_change, on_result):
+        if self.is_recording:
+            return
 
-    def log_message(self, format, *args):
-        # Suppress logging
-        pass
+        self.audio_frames = []
+        self.is_recording = True
+        on_status_change("recording")
 
-class ModernVoiceListener:
-    def __init__(self, port: int = 8765):
-        self.port = port
-        self.server = None
-        self.edge_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-        self._start_server()
+        def audio_callback(indata, frames, time_info, status):
+            if self.is_recording:
+                self.audio_frames.append(indata.copy())
 
-    def _start_server(self):
         try:
-            VoiceRequestHandler.on_text_received = self._handle_incoming_text
-            self.server = HTTPServer(("127.0.0.1", self.port), VoiceRequestHandler)
-            threading.Thread(target=self.server.serve_forever, daemon=True).start()
+            self.stream = sd.InputStream(
+                samplerate=self.samplerate,
+                channels=self.channels,
+                dtype="int16",
+                callback=audio_callback
+            )
+            self.stream.start()
+
+            # Auto-stop after 8 seconds if user doesn't manually click stop
+            def auto_timer():
+                time.sleep(8)
+                if self.is_recording:
+                    self.stop_recording(on_status_change, on_result)
+
+            threading.Thread(target=auto_timer, daemon=True).start()
+
         except Exception as e:
-            print(f"Voice server notice: {e}")
+            self.is_recording = False
+            on_status_change("error", f"Microphone error: {e}")
 
-    def _handle_incoming_text(self, text: str):
-        if hasattr(self, "callback") and self.callback:
-            self.callback(text)
+    def stop_recording(self, on_status_change, on_result):
+        if not self.is_recording:
+            return
 
-    def listen(self, callback):
-        """Open the sleek voice popup and listen for speech."""
-        self.callback = callback
-        url = f"http://127.0.0.1:{self.port}/voice"
-        if os.path.exists(self.edge_path):
-            cmd = f'"{self.edge_path}" --app="{url}" --window-size=360,250'
-            subprocess.Popen(cmd, shell=True)
-        else:
-            import webbrowser
-            webbrowser.open(url)
+        self.is_recording = False
+        on_status_change("processing")
 
-voice_listener = ModernVoiceListener()
+        try:
+            if self.stream:
+                self.stream.stop()
+                self.stream.close()
+                self.stream = None
+        except Exception:
+            pass
+
+        # Process audio in background thread so UI doesn't hang
+        threading.Thread(target=self._transcribe_worker, args=(self.audio_frames, on_status_change, on_result), daemon=True).start()
+
+    def _transcribe_worker(self, frames, on_status_change, on_result):
+        if not frames:
+            on_status_change("error", "No audio recorded.")
+            return
+
+        try:
+            audio_array = np.concatenate(frames, axis=0)
+            wav_bytes = io.BytesIO()
+            with wave.open(wav_bytes, "wb") as wf:
+                wf.setnchannels(self.channels)
+                wf.setsampwidth(2)
+                wf.setframerate(self.samplerate)
+                wf.writeframes(audio_array.tobytes())
+            wav_bytes.seek(0)
+
+            with sr.AudioFile(wav_bytes) as source:
+                audio = self.recognizer.record(source)
+
+            # Transcribe: First try Urdu (Pakistan), then fallback to English
+            text = None
+            try:
+                text = self.recognizer.recognize_google(audio, language="ur-PK")
+            except sr.UnknownValueError:
+                try:
+                    text = self.recognizer.recognize_google(audio, language="en-US")
+                except Exception:
+                    text = None
+            except Exception:
+                try:
+                    text = self.recognizer.recognize_google(audio, language="en-US")
+                except Exception:
+                    text = None
+
+            if text and text.strip():
+                on_status_change("idle")
+                on_result(text.strip())
+            else:
+                on_status_change("error", "Aawaz samajh nahi aayi. Baraye meherbani dubara bolein.")
+
+        except Exception as e:
+            on_status_change("error", f"Transcription error: {e}")
+
+voice_engine = NativeVoiceEngine()
