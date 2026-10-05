@@ -7,3 +7,4 @@ dist/
 *.db
 scratch/
 scratch_*.py
+desktop_agent/config.json
