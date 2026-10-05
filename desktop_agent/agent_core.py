@@ -1,6 +1,7 @@
 """
 Universal Autonomous Agent Core
 Powered by Hugging Face ZeroGPU: Qwen3-8B (Brain) + Qwen2.5-VL (Eyes)
+Equipped with 2026 Real-Time Live Internet Search & Weather Engine.
 """
 
 import re
@@ -11,7 +12,7 @@ from tools.video_downloader import video_downloader
 from tools.bill_checker import bill_checker
 from tools.browser_tool import browser_tool
 from tools.mobile_tool import mobile_tool
-from tools.weather_tool import weather_tool
+from tools.weather_tool import weather_tool, URDU_CITY_MAP
 
 class UniversalAgent:
     def __init__(self):
@@ -20,9 +21,9 @@ class UniversalAgent:
     def execute(self, user_prompt: str) -> dict:
         """
         Process any user instruction end-to-end:
-        1. Classify intent (Tool vs Reasoning)
+        1. Classify intent (Tool vs Live Search vs Reasoning)
         2. Execute tool if needed
-        3. Consult Qwen3-8B / Qwen2.5-VL
+        3. Consult Qwen3-8B / Qwen2.5-VL with live data
         4. Return unified result
         """
         prompt = user_prompt.strip()
@@ -45,22 +46,31 @@ class UniversalAgent:
             }
 
         # -------------------------------------------------------------
-        # 2. LIVE REAL-TIME WEATHER
+        # 2. LIVE REAL-TIME WEATHER & FORECAST (English + Urdu Script)
         # -------------------------------------------------------------
-        weather_words = ["weather", "mosam", "mausam", "temperature", "taapmaan", "rain", "barish", "dhoop", "sardi", "garmi"]
-        if any(w in prompt_lower for w in weather_words):
-            pak_cities = ["faisalabad", "lahore", "karachi", "islamabad", "rawalpindi", "multan", "peshawar", "quetta", "sialkot", "gujranwala", "sargodha", "bahawalpur", "sukkur", "hyderabad"]
+        weather_words = [
+            "weather", "mosam", "mausam", "temperature", "taapmaan", "rain", "barish", "dhoop", "sardi", "garmi",
+            "thand", "humidity", "forecast", "hawa",
+            "موسم", "بارش", "درجہ حرارت", "گرمی", "سردی", "دھوپ", "طوفان", "بادل", "ٹھنڈ", "پیشگوئی", "ہوا"
+        ]
+        if any(w in prompt_lower or w in prompt for w in weather_words):
+            # Check if user asked about tomorrow
+            is_tomorrow = any(k in prompt_lower or k in prompt for k in ["kal", "tomorrow", "future", "aane wale", "کل", "اگلا دن", "اگلے دن", "آئندہ"])
+
+            # Detect city from Urdu or English
             target_city = "Faisalabad" # default
+            for urdu_name, eng_name in URDU_CITY_MAP.items():
+                if urdu_name in prompt:
+                    target_city = eng_name
+                    break
+
+            pak_cities = ["faisalabad", "lahore", "karachi", "islamabad", "rawalpindi", "multan", "peshawar", "quetta", "sialkot", "gujranwala", "sargodha", "bahawalpur", "sukkur", "hyderabad"]
             for c in pak_cities:
                 if c in prompt_lower:
                     target_city = c.title()
                     break
 
-            city_match = re.search(r'(?:in|of|ka|ke|ki|for)\s+([A-Za-z]+)', prompt, re.IGNORECASE)
-            if city_match and city_match.group(1).lower() not in ["weather", "today", "aaj", "kaisa", "hai", "batao", "update"]:
-                target_city = city_match.group(1).title()
-
-            w_res = weather_tool.get_weather(target_city)
+            w_res = weather_tool.get_weather(target_city, is_tomorrow=is_tomorrow)
             if w_res["success"]:
                 return {"text": w_res["message"], "status": "Complete"}
             else:
@@ -69,9 +79,8 @@ class UniversalAgent:
         # -------------------------------------------------------------
         # 3. ELECTRICITY BILL CHECKER
         # -------------------------------------------------------------
-        bill_keywords = ["bill", "bijli", "lesco", "mepco", "gepco", "fesco", "iesco", "pesco", "kelectric", "k-electric"]
-        if any(w in prompt_lower for w in bill_keywords) and re.search(r'\d{10,16}', prompt):
-            # Extract company and reference number
+        bill_keywords = ["bill", "bijli", "lesco", "mepco", "gepco", "fesco", "iesco", "pesco", "kelectric", "k-electric", "بل", "بجلی"]
+        if any(w in prompt_lower or w in prompt for w in bill_keywords) and re.search(r'\d{10,16}', prompt):
             companies = ["lesco", "mepco", "gepco", "fesco", "iesco", "pesco", "hesco", "sepco", "qesco"]
             found_company = "lesco" # default
             for c in companies:
@@ -105,7 +114,6 @@ class UniversalAgent:
                 else:
                     return {"text": f"❌ Video Download Failed: {v_res.get('error')}", "status": "Error"}
             elif any(w in prompt_lower for w in ["youtube", "tiktok", "video"]):
-                # Search and download top video
                 clean_query = re.sub(r'(download|video|youtube|tiktok|please|karo|lao)', '', prompt, flags=re.IGNORECASE).strip()
                 v_res = video_downloader.search_and_download(clean_query)
                 if v_res["success"]:
@@ -116,21 +124,6 @@ class UniversalAgent:
                     }
                 else:
                     return {"text": f"❌ Video Search Failed: {v_res.get('error')}", "status": "Error"}
-
-        # -------------------------------------------------------------
-        # 5. LIVE WEB SEARCH / NEWS / REAL-TIME INFO
-        # -------------------------------------------------------------
-        search_triggers = ["search", "google", "dhoondo", "find info", "browse", "talaash", "news", "khabar", "rate", "price", "today", "aaj", "current"]
-        if any(w in prompt_lower for w in search_triggers):
-            search_query = re.sub(r'(search|google|karo|dhoondo|find|please|about|tell me)', '', prompt, flags=re.IGNORECASE).strip()
-            web_res = browser_tool.search_web(search_query)
-            if web_res["success"] and web_res["results"]:
-                synth_prompt = f"Summarize the following live search results for the user query '{search_query}':\n{web_res['summary']}"
-                summary = self.ai.reason(synth_prompt)
-                return {
-                    "text": f"🌐 **Live Search Results for:** *{search_query}*\n\n{summary}\n\n**Sources:**\n{web_res['summary']}",
-                    "status": "Complete"
-                }
 
         # -------------------------------------------------------------
         # 5. PC LAUNCH APPLICATIONS
@@ -145,7 +138,6 @@ class UniversalAgent:
         # 6. REMINDERS
         # -------------------------------------------------------------
         if any(w in prompt_lower for w in ["remind", "reminder", "yaad dilana"]):
-            # Look for minutes / seconds
             time_match = re.search(r'(\d+)\s*(minute|min|sec|second|ghanta|hour)', prompt_lower)
             seconds = 60 # default 1 min
             if time_match:
@@ -183,12 +175,37 @@ class UniversalAgent:
             return {"text": f"📱 Connected Devices: {devs['devices']}", "status": "Complete"}
 
         # -------------------------------------------------------------
-        # 8. GENERAL AI REASONING / BRAIN (Qwen3-8B)
+        # 8. LIVE INTERNET SEARCH & GENERAL BRAIN (Qwen3-8B Grounded)
         # -------------------------------------------------------------
-        ai_resp = self.ai.reason(prompt)
-        return {
-            "text": ai_resp,
-            "status": "Complete"
-        }
+        # For general knowledge, news, and queries, perform live web search
+        search_res = browser_tool.search_web(prompt, max_results=4)
+        if search_res.get("success") and search_res.get("results"):
+            grounded_prompt = (
+                f"You are JARVIS, an autonomous personal AI assistant operating in 2026.\n"
+                f"Use the following real-time live web facts to answer the user's question directly, accurately, and concisely.\n"
+                f"- If the question is in Roman Urdu, answer in natural Roman Urdu.\n"
+                f"- If the question is in Urdu script, answer in Urdu script.\n"
+                f"- If the question is in English, answer in English.\n"
+                f"- Answer directly without mentioning any knowledge cutoff or internal reasoning.\n\n"
+                f"Live Search Facts:\n{search_res['summary']}\n\n"
+                f"User Question:\n{prompt}"
+            )
+            ai_resp = self.ai.reason(grounded_prompt)
+            return {
+                "text": f"{ai_resp}\n\n🌐 *Live Sources:*\n{search_res['summary']}",
+                "status": "Complete"
+            }
+        else:
+            # Fallback to pure Brain
+            pure_prompt = (
+                f"You are JARVIS, an autonomous personal AI assistant operating in 2026.\n"
+                f"Answer the user directly and concisely in the language of the prompt (Roman Urdu, Urdu, or English).\n\n"
+                f"User Question:\n{prompt}"
+            )
+            ai_resp = self.ai.reason(pure_prompt)
+            return {
+                "text": ai_resp,
+                "status": "Complete"
+            }
 
 agent = UniversalAgent()

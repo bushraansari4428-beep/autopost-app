@@ -6,6 +6,7 @@ Connects directly to https://bushraa2-my-ai-brain.hf.space
 import json
 import base64
 import os
+import re
 import requests
 from io import BytesIO
 from PIL import Image
@@ -30,6 +31,22 @@ class HfAiEngine:
         self.base_url = cfg.get("hf_space_url", "https://bushraa2-my-ai-brain.hf.space").rstrip("/")
         self.token = cfg.get("hf_token", "").strip()
         self.endpoint = f"{self.base_url}/gradio_api/call/process_ai_request"
+
+    def _clean_output(self, raw_text: str) -> str:
+        """Strip internal think blocks and Gradio headings for pristine UI presentation"""
+        if not raw_text:
+            return ""
+        # Remove Gradio mode headings like 🧠 [BRAIN (Qwen3-8B) OUTPUT]:
+        text = re.sub(r'^(?:🧠|👁️)\s*\[.*?\]\s*:\s*', '', raw_text.strip(), flags=re.MULTILINE)
+        # Handle <think> tags
+        if "<think>" in text:
+            cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text).strip()
+            if cleaned:
+                text = cleaned
+            else:
+                # If only think block was generated, strip the tags themselves
+                text = re.sub(r'</?think>', '', text).strip()
+        return text.strip()
 
     def ask(self, prompt: str, mode: str = "⚡ Auto", image=None) -> str:
         """
@@ -83,7 +100,7 @@ class HfAiEngine:
                         try:
                             data = json.loads(raw_json)
                             if isinstance(data, list) and len(data) > 0:
-                                return str(data[0])
+                                return self._clean_output(str(data[0]))
                             elif isinstance(data, dict) and data.get("error"):
                                 err_msg = data["error"]
                                 if "quota" in str(err_msg).lower():
