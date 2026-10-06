@@ -82,7 +82,9 @@ class UniversalAgent:
         # -------------------------------------------------------------
         # 0.2 GREETINGS & VOICE / IDENTITY (Instant 0.001s Local Response)
         # -------------------------------------------------------------
-        if any(v in prompt_lower for v in ["aawaz aa rahi", "awaz aa rahi", "sun rahe ho", "sun rahay ho", "sunai de raha", "can you hear me", "am i audible", "hear me"]) or any(k in prompt for k in ["آواز", "سن رہے", "سن رہے ہو"]):
+        voice_words = ["awaz", "aawaz", "aoaz", "awaaz", "hear me", "audible", "sun rahe", "sun rahay", "sun sakte", "sun sakty", "sunai"]
+        is_voice_check = any(w in prompt_lower for w in voice_words) or any(k in prompt for k in ["آواز", "سن رہے", "سنائی", "سن سکتے"])
+        if is_voice_check and any(v in prompt_lower or v in prompt for v in ["aa rahi", "arahi", "arhi", "sun", "kya", "hear", "سکتے", "آ رہی", "سنتے"]):
             return {
                 "text": "Jee haan! Aap ki aawaz bilkul saaf aur clear aa rahi hai. Main sun raha hoon, hukum karein!",
                 "status": "Complete"
