@@ -205,12 +205,12 @@ class HfAiEngine:
             return f"⚠️ Unexpected Error: {str(e)}"
 
     def reason(self, prompt: str) -> str:
-        """Direct call to Brain (Qwen3-8B)"""
-        return self.ask(prompt=prompt, mode="🧠 Brain (Qwen3-8B)")
+        """Direct call to Brain (Qwen)"""
+        return self.ask(prompt=prompt, mode="🧠 Brain (Qwen)")
 
     def inspect_visual(self, prompt: str, image) -> str:
-        """Direct call to Eyes (Qwen2.5-VL)"""
-        return self.ask(prompt=prompt, mode="👁️ Eyes (Qwen2.5-VL)", image=image)
+        """Direct call to Eyes (Qwen-VL)"""
+        return self.ask(prompt=prompt, mode="👁️ Eyes (Qwen-VL)", image=image)
 
 # Singleton instance
 ai_engine = HfAiEngine()

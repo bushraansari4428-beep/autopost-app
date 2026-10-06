@@ -8,3 +8,5 @@ dist/
 scratch/
 scratch_*.py
 desktop_agent/config.json
+**/__pycache__/
+*.pyc
