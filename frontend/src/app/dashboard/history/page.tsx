@@ -462,7 +462,7 @@ export default function HistoryPage() {
                           </span>
 
                           {/* Error Message for Failed Uploads */}
-                          {item.errorMessage && (
+                          {(item.status === 'FAILED' || item.status === 'ERROR') && item.errorMessage && (
                             <p className="text-[11px] font-medium text-rose-400 truncate mt-0.5 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20" title={item.errorMessage}>
                               {item.errorMessage}
                             </p>

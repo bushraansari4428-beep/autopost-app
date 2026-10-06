@@ -124,31 +124,28 @@ export class SyncService {
   }
 
   /**
-   * Checks if two titles are cross-platform duplicates
+   * Checks if two titles are genuine cross-platform duplicates.
+   * Strictly matches identical titles (>= 8 chars) or very high word overlap (>= 90% Dice coefficient with >= 5 words).
+   * Loose substring containment is disabled to prevent blocking recurring video series or catchphrases.
    */
   public isDuplicateTitle(titleA?: string | null, titleB?: string | null): boolean {
     const cleanA = this.cleanTitleForComparison(titleA);
     const cleanB = this.cleanTitleForComparison(titleB);
     if (!cleanA || !cleanB) return false;
 
-    // 1. Exact clean match
-    if (cleanA === cleanB) return true;
+    // 1. Exact clean match (require at least 8 characters)
+    if (cleanA === cleanB && cleanA.length >= 8) return true;
 
-    // 2. Substring containment for titles with meaningful length (>= 12 characters)
-    if (cleanA.length >= 12 && cleanB.length >= 12) {
-      if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
-    }
-
-    // 3. High word overlap (Dice coefficient on words)
+    // 2. High word overlap (Dice coefficient >= 0.90 with at least 5 meaningful words)
     const wordsA = new Set(cleanA.split(' ').filter(w => w.length > 2));
     const wordsB = new Set(cleanB.split(' ').filter(w => w.length > 2));
-    if (wordsA.size >= 2 && wordsB.size >= 2) {
+    if (wordsA.size >= 5 && wordsB.size >= 5) {
       let intersection = 0;
       for (const w of wordsA) {
         if (wordsB.has(w)) intersection++;
       }
       const overlap = (2 * intersection) / (wordsA.size + wordsB.size);
-      if (overlap >= 0.75) return true;
+      if (overlap >= 0.90) return true;
     }
 
     return false;
@@ -657,15 +654,18 @@ export class SyncService {
           }
         }
 
-        // 1. Fetch all past uploads to this Facebook Page across ALL sources to prevent cross-platform duplicates
+        // 1. Fetch past uploads to this Facebook Page strictly across OTHER sources (different sourceId) to prevent cross-platform duplicates
         const pastUploads = await this.prisma.uploadHistory.findMany({
           where: {
             facebookPageId: mapping.facebookPageId,
-            status: { in: ['COMPLETED', 'PROCESSING', 'PENDING'] }
+            status: { in: ['COMPLETED', 'PROCESSING', 'PENDING'] },
+            video: {
+              sourceId: { not: source.id } // Only check other sources (never compare a source against itself)
+            }
           },
           select: {
             video: {
-              select: { id: true, title: true, description: true }
+              select: { id: true, title: true, description: true, sourceId: true }
             }
           }
         });
@@ -696,25 +696,21 @@ export class SyncService {
         let oldestUnpostedVideo: any = null;
 
         for (const candidate of candidateVideos) {
-          // Check if candidate video matches ANY previously posted video on this Facebook Page
+          // Check if candidate video matches ANY previously posted video on this Facebook Page from a DIFFERENT source
           const duplicateMatch = pastUploads.find(u => 
-            u.video && (
-              this.isDuplicateTitle(candidate.title, u.video.title) ||
-              this.isDuplicateTitle(candidate.description, u.video.title) ||
-              this.isDuplicateTitle(candidate.title, u.video.description)
-            )
+            u.video && this.isDuplicateTitle(candidate.title, u.video.title)
           );
 
           if (duplicateMatch && duplicateMatch.video) {
-            // Auto-mark duplicate candidate as COMPLETED so it is permanently skipped and never repeated!
-            this.logger.log(`Cross-Platform Deduplication: Skipping duplicate video '${candidate.title}' (already posted as '${duplicateMatch.video.title}')`);
-            await this.logsService.log('INFO', `Deduplication: Skipped duplicate video '${candidate.title}' (already posted on this page).`);
+            // Auto-mark duplicate candidate as FAILED so it is permanently skipped without showing fake SUCCESS
+            this.logger.log(`Cross-Platform Deduplication: Skipping duplicate video '${candidate.title}' (already posted from another source as '${duplicateMatch.video.title}')`);
+            await this.logsService.log('INFO', `Deduplication: Skipped duplicate video '${candidate.title}' (already posted on this page from another source).`);
             
             await this.prisma.uploadHistory.create({
               data: {
                 videoId: candidate.id,
                 facebookPageId: mapping.facebookPageId,
-                status: 'COMPLETED',
+                status: 'FAILED',
                 errorMessage: `Cross-platform duplicate of '${duplicateMatch.video.title}'`
               }
             });
