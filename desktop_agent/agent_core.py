@@ -256,9 +256,8 @@ class UniversalAgent:
             return {"text": f"📱 Connected Devices: {devs['devices']}", "status": "Complete"}
 
         # -------------------------------------------------------------
-        # 8. LIVE INTERNET SEARCH & GENERAL BRAIN (Qwen3-8B Fast Direct)
+        # 8. LIVE INTERNET SEARCH & GENERAL BRAIN (Fast Direct & Quota-Proof)
         # -------------------------------------------------------------
-        # For general queries, perform fast live web search and return direct answer
         search_res = browser_tool.search_web(prompt, max_results=2)
         if search_res.get("success") and search_res.get("results"):
             grounded_prompt = (
@@ -268,6 +267,14 @@ class UniversalAgent:
                 f"Question: {prompt}"
             )
             ai_resp = self.ai.reason(grounded_prompt)
+            # If cloud AI hit quota or failed, synthesize immediately from live search facts!
+            if not ai_resp or "quota" in str(ai_resp).lower() or "error" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
+                top_facts = [r["snippet"] for r in search_res["results"][:2]]
+                clean_summary = "\n".join([f"• {s}" for s in top_facts])
+                return {
+                    "text": f"🌐 **Live Web Information:**\n{clean_summary}",
+                    "status": "Complete"
+                }
             return {
                 "text": ai_resp,
                 "status": "Complete"
@@ -280,6 +287,11 @@ class UniversalAgent:
                 f"Question: {prompt}"
             )
             ai_resp = self.ai.reason(pure_prompt)
+            if not ai_resp or "quota" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
+                return {
+                    "text": "Hugging Face ZeroGPU ka daily free quota is waqt cooldown par hai (A100 GPU limit). Aap 'config.json' mein free Google Gemini API key daal sakte hain (https://aistudio.google.com) taake AI 24/7 bila-rukawat chaley. Baqi tamam features (weather, bills, video downloads, apps launch, web search) bilkul active hain!",
+                    "status": "Complete"
+                }
             return {
                 "text": ai_resp,
                 "status": "Complete"

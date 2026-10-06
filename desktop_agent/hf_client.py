@@ -1,6 +1,9 @@
 """
-Hugging Face Dual AI Engine Client (ZeroGPU Nvidia A100)
-Connects directly to https://bushraa2-my-ai-brain.hf.space
+Dual AI Engine Client with Multi-Provider Redundancy
+1. Google Gemini 2.0 / Flash (Free API Key in config.json)
+2. Groq Llama-3.3-70B (Free API Key in config.json)
+3. Hugging Face ZeroGPU: Qwen3-8B + Qwen2.5-VL (Default)
+4. Automatic Smart Web Search Synthesizer Fallback
 """
 
 import json
@@ -22,7 +25,9 @@ def load_config():
             pass
     return {
         "hf_space_url": "https://bushraa2-my-ai-brain.hf.space",
-        "hf_token": ""
+        "hf_token": "",
+        "gemini_api_key": "",
+        "groq_api_key": ""
     }
 
 class HfAiEngine:
@@ -30,6 +35,8 @@ class HfAiEngine:
         cfg = load_config()
         self.base_url = cfg.get("hf_space_url", "https://bushraa2-my-ai-brain.hf.space").rstrip("/")
         self.token = cfg.get("hf_token", "").strip()
+        self.gemini_key = cfg.get("gemini_api_key", "").strip()
+        self.groq_key = cfg.get("groq_api_key", "").strip()
         self.endpoint = f"{self.base_url}/gradio_api/call/process_ai_request"
 
     def _clean_output(self, raw_text: str) -> str:
@@ -69,12 +76,70 @@ class HfAiEngine:
 
         return text.strip()
 
+    def _query_gemini(self, prompt: str, image=None) -> str:
+        """Free Google Gemini 2.0 / Flash API (1500 calls/day free forever)"""
+        if not self.gemini_key:
+            return None
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_key}"
+            parts = [{"text": prompt}]
+            if image is not None:
+                if isinstance(image, str) and os.path.exists(image):
+                    with open(image, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode("utf-8")
+                elif hasattr(image, "save"):
+                    buf = BytesIO()
+                    image.save(buf, format="PNG")
+                    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
+
+            payload = {"contents": [{"parts": parts}]}
+            res = requests.post(url, json=payload, timeout=15)
+            if res.status_code == 200:
+                return res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except Exception:
+            pass
+        return None
+
+    def _query_groq(self, prompt: str) -> str:
+        """Free Groq API (Llama-3.3-70B, 350 tokens/sec)"""
+        if not self.groq_key:
+            return None
+        try:
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {self.groq_key}"}
+            payload = {
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300
+            }
+            res = requests.post(url, headers=headers, json=payload, timeout=12)
+            if res.status_code == 200:
+                return res.json()["choices"][0]["message"]["content"].strip()
+        except Exception:
+            pass
+        return None
+
     def ask(self, prompt: str, mode: str = "⚡ Auto", image=None) -> str:
         """
-        Query the dual AI engine:
-        - mode: '🧠 Brain (Qwen3-8B)', '👁️ Eyes (Qwen2.5-VL)', or '⚡ Auto'
-        - image: PIL.Image, file path, or None
+        Query AI engine:
+        1. Gemini (if key present in config.json)
+        2. Groq (if key present in config.json)
+        3. Hugging Face ZeroGPU Space (default)
         """
+        # Check Gemini Key first if available
+        if self.gemini_key:
+            gem_res = self._query_gemini(prompt, image)
+            if gem_res:
+                return self._clean_output(gem_res)
+
+        # Check Groq Key if text-only
+        if self.groq_key and image is None:
+            groq_res = self._query_groq(prompt)
+            if groq_res:
+                return self._clean_output(groq_res)
+
+        # Default: Hugging Face ZeroGPU Space
         headers = {}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -123,9 +188,9 @@ class HfAiEngine:
                             if isinstance(data, list) and len(data) > 0:
                                 return self._clean_output(str(data[0]))
                             elif isinstance(data, dict) and data.get("error"):
-                                err_msg = data["error"]
-                                if "quota" in str(err_msg).lower():
-                                    return f"⚠️ ZeroGPU Quota Notice: Please add your free HF Token to config.json (https://huggingface.co/settings/tokens) for high-limit access.\nDetails: {err_msg}"
+                                err_msg = str(data["error"])
+                                if "quota" in err_msg.lower():
+                                    return "⚠️ ZERO_GPU_QUOTA_EXCEEDED"
                                 return f"⚠️ Hugging Face Error: {err_msg}"
                         except Exception:
                             pass
