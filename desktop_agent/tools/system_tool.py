@@ -249,6 +249,20 @@ class SystemTool:
         p_clean = prompt.strip()
         p_lower = p_clean.lower()
 
+        # Action intent check: Do not hijack prompts intended for account creation,
+        # typing, clicking, form filling, login, or posting.
+        has_account_noun = any(w in p_lower for w in ["account", "id", "profile", "اکاؤنٹ", "آئی ڈی"])
+        has_creation_verb = any(w in p_lower for w in [
+            "create", "new", "banao", "banayein", "banani", "banana", "naya", "nayi",
+            "register", "registration", "signup", "sign up", "sign-up"
+        ])
+        is_account_action = (has_account_noun and has_creation_verb) or any(w in p_lower for w in ["signup", "sign up", "register", "registration"])
+        is_login_action = any(w in p_lower for w in ["login", "log in", "signin", "sign in", "sign-in"])
+        is_hands_action = any(w in p_lower for w in ["type", "likho", "likh do", "click", "dabao", "press", "scroll", "alt tab"])
+
+        if is_account_action or is_login_action or is_hands_action:
+            return {"success": False, "reason": "action_intent"}
+
         # 1. Match against registered Web Services and PC Apps
         for key, target in self.registry.items():
             for alias in target["aliases"]:
@@ -276,6 +290,9 @@ class SystemTool:
                                 webbrowser.open(s_url)
                                 return {
                                     "success": True,
+                                    "target": key,
+                                    "target_name": target_name,
+                                    "type": "web",
                                     "message": f"🎬 {target_name} par **'{sub_query}'** search kar ke open kar diya gaya hai!"
                                 }
                             except Exception as e:
@@ -286,6 +303,9 @@ class SystemTool:
                             webbrowser.open(target["url"])
                             return {
                                 "success": True,
+                                "target": key,
+                                "target_name": target_name,
+                                "type": "web",
                                 "message": f"🌐 **{target_name}** ({target['url']}) aapke browser mein open kar diya gaya hai!"
                             }
                         except Exception as e:
@@ -297,6 +317,9 @@ class SystemTool:
                             subprocess.Popen(target["cmd"], shell=True)
                             return {
                                 "success": True,
+                                "target": key,
+                                "target_name": target_name,
+                                "type": "app",
                                 "message": f"🚀 **{target_name}** open kar diya gaya hai!"
                             }
                         except Exception as e:
