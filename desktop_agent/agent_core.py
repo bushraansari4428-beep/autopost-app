@@ -1,11 +1,13 @@
 """
 Universal Autonomous Agent Core
 Powered by Hugging Face ZeroGPU: Qwen3-8B (Brain) + Qwen2.5-VL (Eyes)
-Equipped with 2026 Real-Time Live Internet Search & Weather Engine.
+Equipped with Instant Local Intelligence & 2026 Live Web Engine.
 """
 
 import re
 import json
+from datetime import datetime
+import psutil
 from hf_client import ai_engine
 from tools.system_tool import system_tool
 from tools.video_downloader import video_downloader
@@ -21,13 +23,70 @@ class UniversalAgent:
     def execute(self, user_prompt: str) -> dict:
         """
         Process any user instruction end-to-end:
-        1. Classify intent (Tool vs Live Search vs Reasoning)
+        1. Classify intent (Instant Local Tools vs Apps vs Weather vs Live Search)
         2. Execute tool if needed
-        3. Consult Qwen3-8B / Qwen2.5-VL with live data
-        4. Return unified result
+        3. Consult Qwen3-8B / Qwen2.5-VL with clean fast prompts
+        4. Return clean, pristine result without thinking junk
         """
         prompt = user_prompt.strip()
         prompt_lower = prompt.lower()
+
+        # -------------------------------------------------------------
+        # 0. DATE, TIME & CALENDAR (Instant 0.001s Local Response)
+        # -------------------------------------------------------------
+        is_time_word = any(w in prompt_lower or w in prompt for w in ["time", "waqt", "وقت", "ghanta", "baje"])
+        is_date_word = any(w in prompt_lower or w in prompt for w in ["date", "tarikh", "taareekh", "تاریخ", "calendar", "mahina", "month", "year", "saal", "din", "day"])
+        is_query_intent = any(w in prompt_lower or w in prompt for w in ["kya", "batao", "what", "is", "hai", "hoga", "today", "aaj", "aj", "current", "کون", "کیا", "آج", "ابھی", "konsa", "kon sa"])
+
+        if (is_time_word or is_date_word) and is_query_intent:
+            now = datetime.now()
+            day_name_en = now.strftime("%A")
+            day_map_ur = {
+                "Monday": "Peer (پیر)",
+                "Tuesday": "Mangal (منگل)",
+                "Wednesday": "Budh (بدھ)",
+                "Thursday": "Jumerat (جمعرات)",
+                "Friday": "Jumma (جمعہ)",
+                "Saturday": "Hafta (ہفتہ)",
+                "Sunday": "Itwar (اتوار)"
+            }
+            day_ur = day_map_ur.get(day_name_en, day_name_en)
+            date_str = now.strftime("%d %B %Y")
+            time_str = now.strftime("%I:%M %p")
+
+            if is_time_word and not is_date_word:
+                return {
+                    "text": f"⏰ **Current Time:** {time_str} (Pakistan Time)\n📅 **Date:** {date_str} ({day_ur})",
+                    "status": "Complete"
+                }
+            else:
+                return {
+                    "text": f"📅 **Aaj Ki Date:** {date_str} ({day_ur})\n⏰ **Waqt:** {time_str} (Pakistan Time)",
+                    "status": "Complete"
+                }
+
+        # -------------------------------------------------------------
+        # 0.1 PC SYSTEM STATUS & BATTERY (Instant 0.001s Local Response)
+        # -------------------------------------------------------------
+        if any(w in prompt_lower for w in ["battery", "ram", "cpu", "specs", "system info"]) and any(w in prompt_lower for w in ["pc", "laptop", "check", "kitni", "kya", "batao", "status", "dekho"]):
+            battery = psutil.sensors_battery()
+            batt_str = f"{battery.percent}% ({'Charging ⚡' if battery.power_plugged else 'Discharging 🔋'})" if battery else "Desktop PC (Plugged in ⚡)"
+            ram = psutil.virtual_memory()
+            ram_str = f"{ram.percent}% used ({round(ram.used/(1024**3), 1)}GB / {round(ram.total/(1024**3), 1)}GB)"
+            return {
+                "text": f"💻 **PC System Status:**\n🔋 **Battery:** {batt_str}\n🧠 **RAM:** {ram_str}\n⚙️ **OS:** Windows PC",
+                "status": "Complete"
+            }
+
+        # -------------------------------------------------------------
+        # 0.2 GREETINGS & IDENTITY (Instant 0.001s Local Response)
+        # -------------------------------------------------------------
+        clean_greet = prompt_lower.strip().rstrip("?!.,")
+        if clean_greet in ["salam", "assalam o alaikum", "assalamu alaikum", "hello", "hi", "hey", "kaise ho", "kya haal hai", "tum kon ho", "who are you"]:
+            return {
+                "text": "Walaikum Assalam! Main aapka personal AI assistant hoon. Main aapke hukam par LESCO/MEPCO bijli bills check kar sakta hoon, YouTube/TikTok videos download kar sakta hoon, PC apps/websites khol sakta hoon, live mosam bata sakta hoon, aur internet se sawalaat ke fori jawabaat de sakta hoon. Hukum karein!",
+                "status": "Complete"
+            }
 
         # -------------------------------------------------------------
         # 1. SCREENSHOT & VISION INSPECTION
@@ -197,32 +256,28 @@ class UniversalAgent:
             return {"text": f"📱 Connected Devices: {devs['devices']}", "status": "Complete"}
 
         # -------------------------------------------------------------
-        # 8. LIVE INTERNET SEARCH & GENERAL BRAIN (Qwen3-8B Grounded)
+        # 8. LIVE INTERNET SEARCH & GENERAL BRAIN (Qwen3-8B Fast Direct)
         # -------------------------------------------------------------
-        # For general knowledge, news, and queries, perform live web search
-        search_res = browser_tool.search_web(prompt, max_results=4)
+        # For general queries, perform fast live web search and return direct answer
+        search_res = browser_tool.search_web(prompt, max_results=2)
         if search_res.get("success") and search_res.get("results"):
             grounded_prompt = (
-                f"You are JARVIS, an autonomous personal AI assistant operating in 2026.\n"
-                f"Use the following real-time live web facts to answer the user's question directly, accurately, and concisely.\n"
-                f"- If the question is in Roman Urdu, answer in natural Roman Urdu.\n"
-                f"- If the question is in Urdu script, answer in Urdu script.\n"
-                f"- If the question is in English, answer in English.\n"
-                f"- Answer directly without mentioning any knowledge cutoff or internal reasoning.\n\n"
-                f"Live Search Facts:\n{search_res['summary']}\n\n"
-                f"User Question:\n{prompt}"
+                f"IMPORTANT: Answer directly and concisely in 1-2 sentences in Roman Urdu (or English/Urdu matching user).\n"
+                f"CRITICAL: Do NOT output any <think> tags. Do NOT show reasoning steps. Output only the final clean answer.\n\n"
+                f"Facts:\n{search_res['summary']}\n\n"
+                f"Question: {prompt}"
             )
             ai_resp = self.ai.reason(grounded_prompt)
             return {
-                "text": f"{ai_resp}\n\n🌐 *Live Sources:*\n{search_res['summary']}",
+                "text": ai_resp,
                 "status": "Complete"
             }
         else:
-            # Fallback to pure Brain
+            # Direct Brain call
             pure_prompt = (
-                f"You are JARVIS, an autonomous personal AI assistant operating in 2026.\n"
-                f"Answer the user directly and concisely in the language of the prompt (Roman Urdu, Urdu, or English).\n\n"
-                f"User Question:\n{prompt}"
+                f"IMPORTANT: Answer directly and concisely in 1-2 sentences in Roman Urdu (or English/Urdu matching user).\n"
+                f"CRITICAL: Do NOT output any <think> tags. Do NOT show reasoning steps. Output only the final clean answer.\n\n"
+                f"Question: {prompt}"
             )
             ai_resp = self.ai.reason(pure_prompt)
             return {

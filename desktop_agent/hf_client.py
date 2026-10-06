@@ -33,19 +33,40 @@ class HfAiEngine:
         self.endpoint = f"{self.base_url}/gradio_api/call/process_ai_request"
 
     def _clean_output(self, raw_text: str) -> str:
-        """Strip internal think blocks and Gradio headings for pristine UI presentation"""
+        """Strip internal think blocks, Gradio headings, and any unclosed scratchpads"""
         if not raw_text:
             return ""
-        # Remove Gradio mode headings like 🧠 [BRAIN (Qwen3-8B) OUTPUT]:
+        # 1. Remove Gradio mode headings
         text = re.sub(r'^(?:🧠|👁️)\s*\[.*?\]\s*:\s*', '', raw_text.strip(), flags=re.MULTILINE)
-        # Handle <think> tags
+
+        # 2. If closed </think> tag exists, take ONLY the clean answer after </think>
+        if "</think>" in text:
+            parts = text.split("</think>")
+            after_think = parts[-1].strip()
+            if after_think:
+                return after_think
+
+        # 3. If unclosed <think> exists (cut off mid-thinking)
         if "<think>" in text:
-            cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text).strip()
-            if cleaned:
-                text = cleaned
-            else:
-                # If only think block was generated, strip the tags themselves
-                text = re.sub(r'</?think>', '', text).strip()
+            before_think = text.split("<think>")[0].strip()
+            if before_think:
+                return before_think
+            
+            inside = text.replace("<think>", "").strip()
+            matches = re.findall(r'(?:So|Therefore|The answer is|Answer|Jawab)[:\s]+([^\n\.]+[\.\!]?)', inside, re.IGNORECASE)
+            if matches:
+                return matches[-1].strip()
+            
+            sentences = [s.strip() for s in re.split(r'[\n\.]+', inside) if s.strip()]
+            filtered = [
+                s for s in sentences
+                if len(s) > 10 and not any(s.lower().startswith(p) for p in ["okay", "let me", "i need to", "looking at", "wait", "the user", "since", "however"])
+            ]
+            if filtered:
+                return filtered[-1] + "."
+
+            return "Sawāl ka jawāb tayyār nahi ho sakā, barāh-e-karam dobāra pūchhein."
+
         return text.strip()
 
     def ask(self, prompt: str, mode: str = "⚡ Auto", image=None) -> str:

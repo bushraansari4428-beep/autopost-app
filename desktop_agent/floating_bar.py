@@ -74,10 +74,10 @@ class FloatingChatBar(ctk.CTk):
         )
         self.status_label.pack(side="left", padx=(5, 8))
 
-        # Text Input Entry
+        # Text Input Entry (Clean, no unwanted placeholder text)
         self.entry = ctk.CTkEntry(
             self.top_bar,
-            placeholder_text="Hukum dein: LESCO bill, YouTube/TikTok video download, PC search...",
+            placeholder_text="",
             font=("Segoe UI", 13),
             fg_color="#11111B",
             border_color="#45475A",
@@ -203,9 +203,9 @@ class FloatingChatBar(ctk.CTk):
 
         self.entry.delete(0, "end")
         self.expand()
-        self.badge_status.configure(text="🧠 Thinking on A100 GPU...", text_color="#F59E0B")
+        self.badge_status.configure(text="⚡ Processing...", text_color="#F59E0B")
         self.output_box.delete("1.0", "end")
-        self.output_box.insert("1.0", f"⚡ Instruction: {prompt}\n\n⏳ Contacting AI Brain on Hugging Face...\n")
+        self.output_box.insert("1.0", "⏳ Processing...\n")
 
         # Run execution in background thread to prevent UI freezing
         threading.Thread(target=self._execute_worker, args=(prompt,), daemon=True).start()
