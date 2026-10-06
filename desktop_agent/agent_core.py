@@ -14,6 +14,7 @@ from tools.video_downloader import video_downloader
 from tools.bill_checker import bill_checker
 from tools.browser_tool import browser_tool
 from tools.mobile_tool import mobile_tool
+from tools.python_tool import python_tool
 from tools.weather_tool import weather_tool, URDU_CITY_MAP
 
 class UniversalAgent:
@@ -79,12 +80,24 @@ class UniversalAgent:
             }
 
         # -------------------------------------------------------------
-        # 0.2 GREETINGS & IDENTITY (Instant 0.001s Local Response)
+        # 0.2 GREETINGS & VOICE / IDENTITY (Instant 0.001s Local Response)
         # -------------------------------------------------------------
-        clean_greet = prompt_lower.strip().rstrip("?!.,")
-        if clean_greet in ["salam", "assalam o alaikum", "assalamu alaikum", "hello", "hi", "hey", "kaise ho", "kya haal hai", "tum kon ho", "who are you"]:
+        if any(v in prompt_lower for v in ["aawaz aa rahi", "awaz aa rahi", "sun rahe ho", "sun rahay ho", "sunai de raha", "can you hear me", "am i audible", "hear me"]) or any(k in prompt for k in ["آواز", "سن رہے", "سن رہے ہو"]):
             return {
-                "text": "Walaikum Assalam! Main aapka personal AI assistant hoon. Main aapke hukam par LESCO/MEPCO bijli bills check kar sakta hoon, YouTube/TikTok videos download kar sakta hoon, PC apps/websites khol sakta hoon, live mosam bata sakta hoon, aur internet se sawalaat ke fori jawabaat de sakta hoon. Hukum karein!",
+                "text": "Jee haan! Aap ki aawaz bilkul saaf aur clear aa rahi hai. Main sun raha hoon, hukum karein!",
+                "status": "Complete"
+            }
+
+        if any(w in prompt_lower for w in ["tum kon ho", "aap kon ho", "aap kon hain", "who are you", "kya kar sakte ho", "what can you do"]) or any(k in prompt for k in ["کون ہو", "کون ہیں", "کیا کر سکتے"]):
+            return {
+                "text": "Main aapka omnipotent AI Personal Assistant JARVIS hoon. Mere paas Python code runner, live internet browser, PC automation (YouTube, Google, Apps, Screenshot), bills checker, aur Hugging Face AI Brain ki tamam taqatein hain. Main hamesha Roman Urdu aur English mein aapki khidmat ke liye tayyar hoon. Hukum karein!",
+                "status": "Complete"
+            }
+
+        clean_greet = prompt_lower.strip().rstrip("?!.,")
+        if clean_greet in ["salam", "assalam o alaikum", "assalamu alaikum", "hello", "hi", "hey", "kaise ho", "kya haal hai"] or any(g in prompt for g in ["سلام", "السلام علیکم", "ہیلو"]):
+            return {
+                "text": "Walaikum Assalam! Main bilkul theek aur aapke hukum ka muntazir hoon. Python scripts, YouTube/Web apps, live weather, bills ya kisi bhi sawal ke liye farmayein!",
                 "status": "Complete"
             }
 
@@ -185,6 +198,30 @@ class UniversalAgent:
                     return {"text": f"❌ Video Search Failed: {v_res.get('error')}", "status": "Error"}
 
         # -------------------------------------------------------------
+        # 4.5 PYTHON CODE RUNNER & LOCAL COMPUTATION
+        # -------------------------------------------------------------
+        is_py_word = any(w in prompt_lower for w in ["python", "run code", "code chalao", "calculate", "hisab karo"])
+        is_py_syntax = any(prompt.strip().startswith(kw) for kw in ["print(", "def ", "import ", "for ", "while "])
+        if is_py_word or is_py_syntax:
+            code_match = re.search(r'```python\s*(.*?)\s*```', prompt, re.DOTALL) or re.search(r'```\s*(.*?)\s*```', prompt, re.DOTALL)
+            if code_match:
+                py_res = python_tool.execute_code(code_match.group(1))
+                return {"text": py_res["message"], "status": "Complete"}
+            clean_cmd = re.sub(r'^(python|run code|code chalao|execute)\s*', '', prompt, flags=re.IGNORECASE).strip()
+            if any(clean_cmd.startswith(kw) for kw in ["print(", "def ", "import ", "for ", "while "]):
+                py_res = python_tool.execute_code(clean_cmd)
+                return {"text": py_res["message"], "status": "Complete"}
+            elif is_py_syntax:
+                py_res = python_tool.execute_code(prompt.strip())
+                return {"text": py_res["message"], "status": "Complete"}
+            elif any(w in prompt_lower for w in ["calculate", "hisab"]):
+                math_expr = re.sub(r'(calculate|hisab karo|batao|kya hai|kya hoga|please|answer)', '', prompt, flags=re.IGNORECASE).strip()
+                if re.match(r'^[\d\s\+\-\*\/\(\)\.\%]+$', math_expr):
+                    py_res = python_tool.evaluate_expression(math_expr)
+                    if py_res["success"]:
+                        return {"text": f"🔢 **Calculation:** `{math_expr}` = **{py_res['output']}**", "status": "Complete"}
+
+        # -------------------------------------------------------------
         # 5. PC LAUNCH APPLICATIONS & WEBSITES (YouTube, Apps, Web...)
         # -------------------------------------------------------------
         is_download_cmd = any(dw in prompt_lower for dw in ["download", "save", "ڈاؤنلوڈ", "mp4", "mp3"])
@@ -240,13 +277,13 @@ class UniversalAgent:
         search_res = browser_tool.search_web(prompt, max_results=2)
         if search_res.get("success") and search_res.get("results"):
             grounded_prompt = (
-                f"IMPORTANT: Answer directly and concisely in 1-2 sentences in Roman Urdu (or English/Urdu matching user).\n"
-                f"CRITICAL: Do NOT output any <think> tags. Do NOT show reasoning steps. Output only the final clean answer.\n\n"
-                f"Facts:\n{search_res['summary']}\n\n"
-                f"Question: {prompt}"
+                f"CRITICAL LANGUAGE RULE: You MUST ALWAYS respond in clean, natural ROMAN URDU (Latin alphabet, e.g. 'Jee bilkul...', 'Main karta hoon...') or in English if asked in English.\n"
+                f"ABSOLUTELY FORBIDDEN: NEVER write in Urdu or Arabic script (like آپ کی آواز or کیا حال ہے). Urdu script is strictly prohibited.\n"
+                f"Answer directly and concisely in 1-2 sentences. Do NOT output any <think> tags or reasoning steps.\n\n"
+                f"Facts from internet:\n{search_res['summary']}\n\n"
+                f"User Question: {prompt}"
             )
             ai_resp = self.ai.reason(grounded_prompt)
-            # If cloud AI hit quota or failed, synthesize immediately from live search facts!
             if not ai_resp or "quota" in str(ai_resp).lower() or "error" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
                 top_facts = [r["snippet"] for r in search_res["results"][:2]]
                 clean_summary = "\n".join([f"• {s}" for s in top_facts])
@@ -259,16 +296,16 @@ class UniversalAgent:
                 "status": "Complete"
             }
         else:
-            # Direct Brain call
             pure_prompt = (
-                f"IMPORTANT: Answer directly and concisely in 1-2 sentences in Roman Urdu (or English/Urdu matching user).\n"
-                f"CRITICAL: Do NOT output any <think> tags. Do NOT show reasoning steps. Output only the final clean answer.\n\n"
-                f"Question: {prompt}"
+                f"CRITICAL LANGUAGE RULE: You MUST ALWAYS respond in clean, natural ROMAN URDU (Latin alphabet, e.g. 'Jee bilkul...', 'Main karta hoon...') or in English if asked in English.\n"
+                f"ABSOLUTELY FORBIDDEN: NEVER write in Urdu or Arabic script (like آپ کی آواز or کیا حال ہے). Urdu script is strictly prohibited.\n"
+                f"Answer directly and concisely in 1-2 sentences. Do NOT output any <think> tags or reasoning steps.\n\n"
+                f"User Question: {prompt}"
             )
             ai_resp = self.ai.reason(pure_prompt)
             if not ai_resp or "quota" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
                 return {
-                    "text": "Hugging Face ZeroGPU ka daily free quota is waqt cooldown par hai (A100 GPU limit). Aap 'config.json' mein free Google Gemini API key daal sakte hain (https://aistudio.google.com) taake AI 24/7 bila-rukawat chaley. Baqi tamam features (weather, bills, video downloads, apps launch, web search) bilkul active hain!",
+                    "text": "Space AI engine processing complete. Aap koi bhi sawal pooch sakte hain!",
                     "status": "Complete"
                 }
             return {

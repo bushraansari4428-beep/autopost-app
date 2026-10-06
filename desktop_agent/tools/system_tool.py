@@ -214,6 +214,27 @@ TARGET_REGISTRY = {
     }
 }
 
+def alias_matches(alias: str, text: str) -> bool:
+    """Check if alias matches as a whole distinct token or word."""
+    alias_clean = alias.strip().lower()
+    text_lower = text.lower()
+
+    # Urdu / Arabic characters: match distinct token
+    if re.search(r'[\u0600-\u06FF]', alias):
+        pattern = r'(?:^|[\s،؟\.!۔])' + re.escape(alias.strip()) + r'(?:$|[\s،؟\.!۔])'
+        return bool(re.search(pattern, text))
+
+    # Short English tokens (e.g. 'yt', 'fb', 'x', 'calc')
+    if len(alias_clean) <= 4:
+        pattern = r'\b' + re.escape(alias_clean) + r'\b'
+        return bool(re.search(pattern, text_lower))
+
+    # Longer English words: check word boundary
+    pattern = r'\b' + re.escape(alias_clean) + r'\b'
+    if re.search(pattern, text_lower):
+        return True
+    return alias_clean in text_lower
+
 class SystemTool:
     def __init__(self):
         self.reminders = []
@@ -231,7 +252,7 @@ class SystemTool:
         # 1. Match against registered Web Services and PC Apps
         for key, target in self.registry.items():
             for alias in target["aliases"]:
-                if alias in p_lower or alias in p_clean:
+                if alias_matches(alias, prompt):
                     # Target matched!
                     target_name = target["name"]
 
