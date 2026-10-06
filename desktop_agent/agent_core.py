@@ -187,33 +187,12 @@ class UniversalAgent:
         # -------------------------------------------------------------
         # 5. PC LAUNCH APPLICATIONS & WEBSITES (YouTube, Apps, Web...)
         # -------------------------------------------------------------
-        launch_triggers = [
-            "open", "kholo", "khol do", "launch", "chalao", "chalana", "start", "run",
-            "کھولو", "کھول دو", "چلاؤ", "اوپن"
-        ]
-        is_launch_cmd = any(w in prompt_lower or w in prompt for w in launch_triggers)
         is_download_cmd = any(dw in prompt_lower for dw in ["download", "save", "ڈاؤنلوڈ", "mp4", "mp3"])
 
         if not is_download_cmd:
-            all_known = list(system_tool.WEB_SERVICES.keys()) + list(system_tool.WINDOWS_APPS.keys())
-            for key in all_known:
-                if key in prompt_lower or key in prompt:
-                    if is_launch_cmd or prompt_lower.strip() == key or prompt.strip() == key:
-                        res = system_tool.open_target(key)
-                        if res["success"]:
-                            return {"text": f"{res['message']}", "status": "Complete"}
-
-            if is_launch_cmd:
-                clean_target = re.sub(
-                    r'(open|khol do|kholo|launch|chalao|start|run|please|bhai|bhi|kar do|karo|کھولو|کھول دو|چلاؤ|اوپن)',
-                    '',
-                    prompt,
-                    flags=re.IGNORECASE
-                ).strip()
-                if clean_target and len(clean_target) > 2:
-                    res = system_tool.open_target(clean_target)
-                    if res["success"]:
-                        return {"text": f"{res['message']}", "status": "Complete"}
+            launch_res = system_tool.resolve_and_execute(prompt)
+            if launch_res.get("success"):
+                return {"text": launch_res["message"], "status": "Complete"}
 
         # -------------------------------------------------------------
         # 6. REMINDERS
