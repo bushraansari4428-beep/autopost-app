@@ -59,10 +59,34 @@ COMMON_URDU_PHRASES = {
     'جی نہیں': 'Jee nahi'
 }
 
-def urdu_to_roman(text: str) -> str:
-    """Converts any Arabic/Urdu script into clean, readable Roman Urdu."""
-    if not text or not re.search(r'[\u0600-\u06FF]', text):
+DEVA_TO_ROMAN = {
+    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'n',
+    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'n',
+    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+    'प': 'p', 'फ': 'f', 'ब': 'b', 'भ': 'bh', 'م': 'm', 'म': 'm',
+    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh',
+    'ष': 'sh', 'स': 's', 'ह': 'h', 'अ': 'a', 'आ': 'aa',
+    'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo', 'ए': 'e',
+    'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ा': 'a', 'ि': 'i',
+    'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'े': 'e', 'ै': 'ai',
+    'ो': 'o', 'ौ': 'au', '्': '', 'ं': 'n', 'ः': 'h', 'ँ': 'n'
+}
+
+def deva_to_roman(text: str) -> str:
+    """Converts any Devanagari/Hindi script into readable Roman Urdu."""
+    if not text or not re.search(r'[\u0900-\u097F]', text):
         return text
+    res = []
+    for ch in text:
+        res.append(DEVA_TO_ROMAN.get(ch, ch))
+    clean_str = ''.join(res)
+    return clean_str
+
+def urdu_to_roman(text: str) -> str:
+    """Converts any Arabic/Urdu or Devanagari script into clean, readable Roman Urdu."""
+    if not text:
+        return ""
 
     # First replace common whole phrases
     for u_phrase, r_phrase in COMMON_URDU_PHRASES.items():
@@ -79,6 +103,8 @@ def urdu_to_roman(text: str) -> str:
             res.append(ch)
     
     clean_str = ''.join(res)
+    # Also transliterate any Devanagari characters
+    clean_str = deva_to_roman(clean_str)
     clean_str = re.sub(r'\s+', ' ', clean_str).strip()
     return clean_str
 

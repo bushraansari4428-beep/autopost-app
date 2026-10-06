@@ -16,6 +16,7 @@ from tools.browser_tool import browser_tool
 from tools.mobile_tool import mobile_tool
 from tools.python_tool import python_tool
 from tools.weather_tool import weather_tool, URDU_CITY_MAP
+from roman_urdu_kb import ROMAN_URDU_SYSTEM_CONTEXT
 
 class UniversalAgent:
     def __init__(self):
@@ -122,12 +123,12 @@ class UniversalAgent:
         # -------------------------------------------------------------
         # 2. LIVE REAL-TIME WEATHER & FORECAST (English + Urdu Script)
         # -------------------------------------------------------------
-        weather_words = [
-            "weather", "mosam", "mausam", "temperature", "taapmaan", "rain", "barish", "dhoop", "sardi", "garmi",
-            "thand", "humidity", "forecast", "hawa",
-            "موسم", "بارش", "درجہ حرارت", "گرمی", "سردی", "دھوپ", "طوفان", "بادل", "ٹھنڈ", "پیشگوئی", "ہوا"
-        ]
-        if any(w in prompt_lower or w in prompt for w in weather_words):
+        weather_triggers = ["weather", "mosam", "mausam", "barish", "rain", "forecast", "taapmaan", "darja hararat", "موسم", "بارش", "پیشگوئی", "درجہ حرارت"]
+        is_weather = any(w in prompt_lower or w in prompt for w in weather_triggers)
+        if not is_weather and "temperature" in prompt_lower and not any(k in prompt_lower for k in ["pc", "cpu", "gpu"]):
+            is_weather = True
+
+        if is_weather:
             # Check if user asked about tomorrow
             is_tomorrow = any(k in prompt_lower or k in prompt for k in ["kal", "tomorrow", "future", "aane wale", "کل", "اگلا دن", "اگلے دن", "آئندہ"])
 
@@ -198,6 +199,27 @@ class UniversalAgent:
                     }
                 else:
                     return {"text": f"❌ Video Search Failed: {v_res.get('error')}", "status": "Error"}
+
+        # -------------------------------------------------------------
+        # 4.4 CLOSE / TERMINATE RUNNING APPLICATIONS
+        # -------------------------------------------------------------
+        close_triggers = [
+            "band kar do", "band karo", "band karde", "band kardo", "close kar do", "close karo",
+            "kill karo", "exit karo", "hata do", "hatao", "shut down", "band karna", "close karna",
+            "بند کرو", "بند کر دو", "بند کریں", "کلوز"
+        ]
+        is_close_cmd = any(ct in prompt_lower or ct in prompt for ct in close_triggers)
+        if is_close_cmd:
+            known_apps = [
+                "chrome", "google chrome", "edge", "browser", "notepad", "calculator", "calc",
+                "vlc", "vscode", "code", "spotify", "word", "excel", "powerpoint", "paint",
+                "کروم", "نوٹ پیڈ", "کیلکولیٹر"
+            ]
+            for app in known_apps:
+                if app in prompt_lower or app in prompt:
+                    target_to_close = "chrome" if app == "browser" else app
+                    c_res = system_tool.close_application(target_to_close)
+                    return {"text": c_res["message"], "status": "Complete"}
 
         # -------------------------------------------------------------
         # 4.5 PYTHON CODE RUNNER & LOCAL COMPUTATION
@@ -276,43 +298,45 @@ class UniversalAgent:
         # -------------------------------------------------------------
         # 8. LIVE INTERNET SEARCH & GENERAL BRAIN (Fast Direct & Quota-Proof)
         # -------------------------------------------------------------
-        search_res = browser_tool.search_web(prompt, max_results=2)
-        if search_res.get("success") and search_res.get("results"):
-            grounded_prompt = (
-                f"CRITICAL LANGUAGE RULE: You MUST ALWAYS respond in clean, natural ROMAN URDU (Latin alphabet, e.g. 'Jee bilkul...', 'Main karta hoon...') or in English if asked in English.\n"
-                f"ABSOLUTELY FORBIDDEN: NEVER write in Urdu or Arabic script (like آپ کی آواز or کیا حال ہے). Urdu script is strictly prohibited.\n"
-                f"Answer directly and concisely in 1-2 sentences. Do NOT output any <think> tags or reasoning steps.\n\n"
-                f"Facts from internet:\n{search_res['summary']}\n\n"
-                f"User Question: {prompt}"
-            )
-            ai_resp = self.ai.reason(grounded_prompt)
-            if not ai_resp or "quota" in str(ai_resp).lower() or "error" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
-                top_facts = [r["snippet"] for r in search_res["results"][:2]]
-                clean_summary = "\n".join([f"• {s}" for s in top_facts])
+        # Only search internet if the prompt contains informational/question keywords
+        info_keywords = ["kya", "kyun", "kab", "kahan", "kaun", "kon", "news", "price", "match", "score", "latest", "update", "facts", "what", "who", "when", "where", "why", "how", "کیوں", "کہاں", "کب", "کون"]
+        needs_web_search = any(w in prompt_lower or w in prompt for w in info_keywords) and len(prompt.split()) >= 3
+
+        if needs_web_search:
+            search_res = browser_tool.search_web(prompt, max_results=2)
+            if search_res.get("success") and search_res.get("results"):
+                grounded_prompt = (
+                    f"{ROMAN_URDU_SYSTEM_CONTEXT}\n\n"
+                    f"Facts from internet:\n{search_res['summary']}\n\n"
+                    f"User: {prompt}\nAssistant:"
+                )
+                ai_resp = self.ai.reason(grounded_prompt)
+                if not ai_resp or "quota" in str(ai_resp).lower() or "error" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
+                    top_facts = [r["snippet"] for r in search_res["results"][:2]]
+                    clean_summary = "\n".join([f"• {s}" for s in top_facts])
+                    return {
+                        "text": f"🌐 **Live Web Information:**\n{clean_summary}",
+                        "status": "Complete"
+                    }
                 return {
-                    "text": f"🌐 **Live Web Information:**\n{clean_summary}",
+                    "text": ai_resp,
                     "status": "Complete"
                 }
+
+        # Direct Brain call with full Roman Urdu contextual knowledge
+        pure_prompt = (
+            f"{ROMAN_URDU_SYSTEM_CONTEXT}\n\n"
+            f"User: {prompt}\nAssistant:"
+        )
+        ai_resp = self.ai.reason(pure_prompt)
+        if not ai_resp or "quota" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
             return {
-                "text": ai_resp,
+                "text": "Space AI engine processing complete. Aap koi bhi sawal pooch sakte hain!",
                 "status": "Complete"
             }
-        else:
-            pure_prompt = (
-                f"CRITICAL LANGUAGE RULE: You MUST ALWAYS respond in clean, natural ROMAN URDU (Latin alphabet, e.g. 'Jee bilkul...', 'Main karta hoon...') or in English if asked in English.\n"
-                f"ABSOLUTELY FORBIDDEN: NEVER write in Urdu or Arabic script (like آپ کی آواز or کیا حال ہے). Urdu script is strictly prohibited.\n"
-                f"Answer directly and concisely in 1-2 sentences. Do NOT output any <think> tags or reasoning steps.\n\n"
-                f"User Question: {prompt}"
-            )
-            ai_resp = self.ai.reason(pure_prompt)
-            if not ai_resp or "quota" in str(ai_resp).lower() or "zero_gpu" in str(ai_resp).lower():
-                return {
-                    "text": "Space AI engine processing complete. Aap koi bhi sawal pooch sakte hain!",
-                    "status": "Complete"
-                }
-            return {
-                "text": ai_resp,
-                "status": "Complete"
-            }
+        return {
+            "text": ai_resp,
+            "status": "Complete"
+        }
 
 agent = UniversalAgent()

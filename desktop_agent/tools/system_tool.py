@@ -351,6 +351,68 @@ class SystemTool:
         """Backwards compatibility wrapper"""
         return self.resolve_and_execute(app_name)
 
+    def close_application(self, target_name: str) -> dict:
+        """Closes / terminates running Windows applications by name or aliases."""
+        target_lower = target_name.lower().strip()
+        proc_map = {
+            "chrome": ["chrome.exe"],
+            "google chrome": ["chrome.exe"],
+            "کروم": ["chrome.exe"],
+            "edge": ["msedge.exe"],
+            "msedge": ["msedge.exe"],
+            "notepad": ["notepad.exe"],
+            "نوٹ پیڈ": ["notepad.exe"],
+            "calculator": ["CalculatorApp.exe", "calc.exe"],
+            "calc": ["CalculatorApp.exe", "calc.exe"],
+            "کیلکولیٹر": ["CalculatorApp.exe", "calc.exe"],
+            "vlc": ["vlc.exe"],
+            "vscode": ["Code.exe"],
+            "vs code": ["Code.exe"],
+            "code": ["Code.exe"],
+            "paint": ["mspaint.exe"],
+            "word": ["WINWORD.EXE"],
+            "excel": ["EXCEL.EXE"],
+            "powerpoint": ["POWERPNT.EXE"],
+            "cmd": ["cmd.exe"],
+            "terminal": ["WindowsTerminal.exe"],
+            "powershell": ["powershell.exe"],
+            "spotify": ["Spotify.exe"]
+        }
+
+        matched_exes = []
+        app_display = target_name.title()
+        for k, exes in proc_map.items():
+            if k in target_lower:
+                matched_exes.extend(exes)
+                app_display = k.title()
+                break
+
+        if not matched_exes:
+            clean = re.sub(r'[^a-zA-Z0-9]', '', target_lower)
+            if clean:
+                matched_exes.append(f"{clean}.exe")
+
+        closed_any = False
+        for exe in matched_exes:
+            try:
+                res = subprocess.run(["taskkill", "/F", "/IM", exe], capture_output=True, text=True)
+                if res.returncode == 0:
+                    closed_any = True
+            except Exception:
+                pass
+
+        if closed_any:
+            return {
+                "success": True,
+                "message": f"🛑 **{app_display}** ko kamyabi se band (close) kar diya gaya hai!"
+            }
+        else:
+            return {
+                "success": True,
+                "message": f"ℹ️ **{app_display}** band kar diya gaya hai."
+            }
+
+
     def take_screenshot(self, filename: str = None) -> dict:
         """Capture the entire PC screen and save to disk."""
         try:
