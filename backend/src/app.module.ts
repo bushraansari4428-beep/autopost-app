@@ -18,6 +18,7 @@ import { UsersModule } from './users/users.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TiktokYoutubeModule } from './tiktok-youtube/tiktok-youtube.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { PromptsModule } from './prompts/prompts.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     NotificationsModule,
     TiktokYoutubeModule,
     WhatsappModule,
+    PromptsModule,
   ],
   controllers: [AppController, WebhooksController],
   providers: [AppService],
