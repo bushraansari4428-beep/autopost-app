@@ -19,7 +19,8 @@ import {
   Send,
   Eye,
   Check,
-  Loader2
+  Loader2,
+  Terminal
 } from 'lucide-react';
 
 interface PromptMatrix {
@@ -290,32 +291,22 @@ High contrast dynamic lighting, ultra-realistic nature documentary, cinematic 4K
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl shadow-lg shadow-blue-500/25">
-              <Sparkles className="w-6 h-6 text-white" />
+            <div className="p-2.5 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-2xl shadow-lg shadow-purple-500/25 border border-purple-500/30">
+              <Terminal className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                1,000 AI Prompt Generator
-                <span className="text-xs px-2.5 py-1 font-bold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                  Qwen 3.8 Ultra-Fast
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-2xl font-black tracking-tight text-white">
+                  1,000 AI Prompt Generator
+                </h1>
+                <span className="text-xs px-2.5 py-0.5 font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-700/80">
+                  Backup by Qwen 3.8 Ultra
                 </span>
-              </h1>
-              <p className="text-sm text-slate-400">
-                Transform 1 Master Prompt into 1,000 unique, non-repeating cinematic video prompts with 1-click VPS transfer.
+              </div>
+              <p className="text-sm text-slate-400 mt-0.5">
+                Transfer 1 master prompt into 1000 prompts.
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* Engine Status Badges */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-            <Zap className="w-3.5 h-3.5" />
-            <span>Groq Qwen Engine: 1.5s/prompt</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold">
-            <Film className="w-3.5 h-3.5" />
-            <span>10-Second Pacing Optimized</span>
           </div>
         </div>
       </div>
@@ -328,7 +319,7 @@ High contrast dynamic lighting, ultra-realistic nature documentary, cinematic 4K
             <div className="flex items-center justify-between">
               <label className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-400" />
-                Master Prompt (DNA)
+                Master Prompt
               </label>
               <button
                 type="button"
@@ -342,45 +333,34 @@ High contrast dynamic lighting, ultra-realistic nature documentary, cinematic 4K
             <textarea
               value={masterPrompt}
               onChange={e => setMasterPrompt(e.target.value)}
-              placeholder="Paste your 1 Master Prompt here... E.g. A high-quality 10-second viral wildlife encounter video where a tiny creature encounters a gentle giant in a remote landscape..."
+              placeholder="Paste your Master Prompt here..."
               rows={7}
               className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono"
             />
 
             {/* Target Options */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1.5">
-                  Target Prompts
-                </label>
-                <select
-                  value={targetCount}
-                  onChange={e => setTargetCount(Number(e.target.value))}
-                  disabled={isGenerating}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <option value={10}>10 Prompts (Quick Test)</option>
-                  <option value={50}>50 Prompts</option>
-                  <option value={100}>100 Prompts</option>
-                  <option value={500}>500 Prompts</option>
-                  <option value={1000}>1,000 Prompts (Full Page Batch)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1.5">
-                  Batch Call Size
-                </label>
-                <select
-                  value={batchSize}
-                  onChange={e => setBatchSize(Number(e.target.value))}
-                  disabled={isGenerating}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <option value={5}>5 per batch (Smooth UI)</option>
-                  <option value={10}>10 per batch (Faster)</option>
-                </select>
-              </div>
+            <div className="pt-1">
+              <label className="text-xs font-semibold text-slate-400 block mb-1.5">
+                Target Prompts
+              </label>
+              <select
+                value={targetCount}
+                onChange={e => setTargetCount(Number(e.target.value))}
+                disabled={isGenerating}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
+                <option value={50}>50 Prompts</option>
+                <option value={100}>100 Prompts</option>
+                <option value={200}>200 Prompts</option>
+                <option value={300}>300 Prompts</option>
+                <option value={400}>400 Prompts</option>
+                <option value={500}>500 Prompts</option>
+                <option value={600}>600 Prompts</option>
+                <option value={700}>700 Prompts</option>
+                <option value={800}>800 Prompts</option>
+                <option value={900}>900 Prompts</option>
+                <option value={1000}>1,000 Prompts</option>
+              </select>
             </div>
 
             {/* Action Buttons */}
