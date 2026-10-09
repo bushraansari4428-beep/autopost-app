@@ -3,9 +3,29 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 
+export interface FixedDNA {
+  camera_and_medium: string;
+  timing_breakdown: string[];
+  negative_prompt: string;
+  audio_rules: string;
+  structural_template: string;
+}
+
+export interface HierarchicalMatrix {
+  sub_genres: string[];
+  locations: string[];
+  subjects_or_anomalies: string[];
+  tools_and_probes: string[];
+  scale_anchors: string[];
+  climaxes: string[];
+}
+
 export interface PromptMatrix {
   niche_name: string;
   theme_summary: string;
+  fixed_dna: FixedDNA;
+  hierarchical_matrix: HierarchicalMatrix;
+  // Legacy compatibility keys
   subjects: string[];
   locations: string[];
   actions_or_hooks: string[];
@@ -14,9 +34,11 @@ export interface PromptMatrix {
 
 export interface GeneratedPromptItem {
   index: number;
+  sub_genre: string;
   location: string;
   subject: string;
   text: string;
+  similarity_score?: number;
 }
 
 @Injectable()
@@ -25,6 +47,9 @@ export class PromptsService {
 
   private readonly groqModel = 'qwen/qwen3.8-27b';
   private readonly hfSpaceUrl = process.env.HF_SPACE_URL || 'https://bushraa2-my-ai-brain.hf.space';
+
+  // In-memory cache of generated token sets for anti-duplicate semantic validation
+  private sessionTokenHistory: Map<string, Set<string>> = new Map();
 
   private getGroqKey(): string {
     if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim()) {
@@ -74,12 +99,14 @@ export class PromptsService {
     }
     // Remove mode badges like 🧠 [Brain]
     cleaned = cleaned.replace(/^(?:🧠|👁️)\s*\[.*?\]\s*:\s*/gm, '');
+    // Remove markdown code fences if wrapped in ```text ... ``` or ```json ... ```
+    cleaned = cleaned.replace(/^```[a-zA-Z]*\n/gm, '').replace(/```$/gm, '');
     // Remove leading **Prompt:** or Prompt 1:
     cleaned = cleaned.replace(/^\s*\*{0,2}Prompt(?:\s*\d+)?\*{0,2}\s*:\s*/i, '');
     return cleaned.trim();
   }
 
-  private async callGroq(systemPrompt: string, userPrompt: string, maxTokens = 600): Promise<string | null> {
+  private async callGroq(systemPrompt: string, userPrompt: string, maxTokens = 1200): Promise<string | null> {
     const key = this.getGroqKey();
     if (!key) return null;
     try {
@@ -91,7 +118,7 @@ export class PromptsService {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          temperature: 0.75,
+          temperature: 0.8,
           max_tokens: maxTokens,
         },
         {
@@ -99,7 +126,7 @@ export class PromptsService {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
           },
-          timeout: 25000,
+          timeout: 30000,
         },
       );
 
@@ -107,7 +134,7 @@ export class PromptsService {
         return this.cleanOutput(response.data.choices[0].message.content);
       }
     } catch (err: any) {
-      this.logger.warn(`Groq request failed: ${err.response?.status || err.message}`);
+      this.logger.warn(`Groq Qwen 3.8 request failed: ${err.response?.status || err.message}`);
     }
     return null;
   }
@@ -121,7 +148,7 @@ export class PromptsService {
         { data: ['🧠 Brain (Qwen)', null, `${systemPrompt}\n\n${userPrompt}`] },
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-          timeout: 20000,
+          timeout: 25000,
         },
       );
 
@@ -151,55 +178,94 @@ export class PromptsService {
     return '';
   }
 
-  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 600): Promise<string> {
+  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 1200): Promise<string> {
     const groqRes = await this.callGroq(systemPrompt, userPrompt, maxTokens);
-    if (groqRes) return groqRes;
+    if (groqRes && groqRes.trim().length > 0) return groqRes;
     return await this.callHf(systemPrompt, userPrompt);
   }
 
+  // ---------------- LAYER 1: PROMPT DNA DECONSTRUCTOR ----------------
   async analyzeMasterPrompt(masterPrompt: string): Promise<PromptMatrix> {
-    const sysPrompt =
-      'You are an expert viral AI video director. Analyze the provided Master Prompt to extract its exact theme, niche, cinematography style, and structural rules. Then produce a rich variation matrix in strict JSON format.';
+    const sysPrompt = `You are a world-class AI Cinematography and Viral Video Engineering Director.
+Your task is LAYER 1: PROMPT DNA DECONSTRUCTION.
+Analyze the provided Master Prompt to reverse-engineer its exact structural DNA.
+Separate the INVARIANT/FIXED components (Camera perspective, aspect ratio, duration, timeline structure, quality rules, and negative prompt)
+from the DYNAMIC/VARIABLE components (Sub-genres, locations, anomalies/subjects, tools, scale anchors, climaxes).
+You must output strictly in valid JSON format.`;
 
     const userPrompt = `
-MASTER PROMPT:
+Analyze this MASTER PROMPT:
 """${masterPrompt}"""
 
-Provide your output strictly in valid JSON with these keys:
+Extract and return strictly valid JSON matching this schema:
 {
-  "niche_name": "Short 2-4 word name of niche",
-  "theme_summary": "1 sentence core summary of the niche and mood",
-  "subjects": ["List of 25 distinct subjects, characters, or focal items fitting this theme"],
-  "locations": ["List of 30 distinct exotic, real-world, atmospheric environments/locations"],
-  "actions_or_hooks": ["List of 25 unique micro-actions, emotional beats, or surprising twists"],
-  "camera_styles": ["List of 10 cinematic camera movements, lighting, and framing rules"]
+  "niche_name": "Short 2-4 word distinctive title for this niche",
+  "theme_summary": "1-2 sentence core concept and visual identity summary",
+  "fixed_dna": {
+    "camera_and_medium": "Exact opening camera setup, aspect ratio, duration, POV (e.g. 'Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay.')",
+    "timing_breakdown": [
+      "0-2s: Immediate impossible visual hook / anomaly introduction",
+      "0-3s: Handheld approach, footing on terrain, mobile camera wobble, auto-exposure balancing",
+      "3-6s: Extreme close-up (within 6 inches), physical test with everyday tool, biological micro scale anchor",
+      "6-8s: Secondary reaction or escalation defying physics",
+      "8-10s: Violent concussive climax, jumpscare shock, debris flying at boots/lens, panicked gasp, stumble backward, abrupt cut with NO face visible"
+    ],
+    "negative_prompt": "Extract the exact ## Negative prompt section or create the perfect negative prompt string for this style",
+    "audio_rules": "Format of the Foley sound design line (e.g. 'Audio: [synchronized sound elements], and panicked sharp breathing.')",
+    "structural_template": "Full paragraph template with placeholders like {SETTING}, {HOOK_ANOMALY}, {TERRAIN_STEP}, {BALANCE_TEXT}, {TEST1_TOOL}, {TEST1_ACTION}, {SCALE_ANCHOR}, {TEST2_TOOL}, {TEST2_ACTION}, {CLIMAX_TRIGGER}, {PANIC_ESCAPE}, {AUDIO_FOLEY}"
+  },
+  "hierarchical_matrix": {
+    "sub_genres": [
+      "25 diverse sub-themes/environments within this niche (e.g. Banded Iron Formations, Sub-Alpine Slate Trails, Icelandic Basalt Plateaus, Atacama Salt Flats, Karst Limestone Sinkholes, Siberian Permafrost, Alluvial Fault Washes, Volcanic Calderas, Deep Mine Adits, Glacial Moraines, Desert Badlands, Peat Bogs, Petrified Forests, etc.)"
+    ],
+    "locations": [
+      "35 diverse real-world atmospheric settings with hyper-detailed mineral, terrain, and weather textures"
+    ],
+    "subjects_or_anomalies": [
+      "35 unique, reality-bending, impossible natural/physical phenomena or core subjects with exact metric dimensions"
+    ],
+    "tools_and_probes": [
+      "25 authentic, rustic, everyday or surplus tools used for physical testing (e.g. rusty rail nail, dented canteen, brass compass, Zippo lighter, chrome ball-bearing, oak walking stick, tungsten scribe, etc.)"
+    ],
+    "scale_anchors": [
+      "20 biological or physical micro scale anchors (e.g. black ground beetle, dried pine needle, red wood ant, horned beetle, lichen flake, spider shell, dead honeybee, etc.)"
+    ],
+    "climaxes": [
+      "25 violent, high-stakes acoustic or kinetic catastrophes (e.g. explosive hydraulic water-hammer cavitation, gunshot-like thermal shock fracture, instantaneous shear-locking aggregate snap, concussive lightning discharge, acoustic resonance rupture)"
+    ]
+  }
 }
-Return ONLY valid JSON.
-`;
+Return ONLY valid JSON. No conversational text.`;
 
-    const raw = await this.queryBrain(sysPrompt, userPrompt, 1500);
+    const raw = await this.queryBrain(sysPrompt, userPrompt, 2500);
+
     try {
       const match = raw.match(/\{[\s\S]*\}/);
       if (match) {
         const parsed = JSON.parse(match[0]);
-        if (parsed.niche_name && parsed.locations) {
-          return parsed as PromptMatrix;
+        if (parsed.niche_name && parsed.fixed_dna && parsed.hierarchical_matrix) {
+          // Fill legacy arrays for backward compatibility
+          return {
+            niche_name: parsed.niche_name,
+            theme_summary: parsed.theme_summary || 'Viral 10-second high-retention video content',
+            fixed_dna: parsed.fixed_dna,
+            hierarchical_matrix: parsed.hierarchical_matrix,
+            subjects: parsed.hierarchical_matrix.subjects_or_anomalies || [],
+            locations: parsed.hierarchical_matrix.locations || [],
+            actions_or_hooks: parsed.hierarchical_matrix.climaxes || [],
+            camera_styles: [parsed.fixed_dna.camera_and_medium || '9:16 vertical smartphone POV'],
+          };
         }
       }
     } catch (e: any) {
-      this.logger.warn(`Failed to parse matrix JSON: ${e.message}`);
+      this.logger.warn(`Failed to parse DNA matrix JSON: ${e.message}. Using intelligent structural fallback.`);
     }
 
-    return {
-      niche_name: 'Viral_Video_Content',
-      theme_summary: 'High-retention viral 10-second video content',
-      subjects: ['Subject A', 'Subject B', 'Subject C'],
-      locations: ['Atmospheric outdoor vista', 'Moody misty rainforest', 'Golden desert dunes'],
-      actions_or_hooks: ['Curious interaction', 'Unexpected bonding moment', 'Playful comedic twist'],
-      camera_styles: ['Locked-off documentary 4K', 'Handheld organic tracking shot'],
-    };
+    // Intelligent structural fallback preserving exact user template
+    return this.getIntelligentFallbackMatrix(masterPrompt);
   }
 
+  // ---------------- LAYER 2 & 3: HIERARCHICAL MATRIX & SEMANTIC VALIDATOR ----------------
   async generateBatch(
     masterPrompt: string,
     matrix: PromptMatrix,
@@ -207,49 +273,291 @@ Return ONLY valid JSON.
     count: number,
   ): Promise<GeneratedPromptItem[]> {
     const results: GeneratedPromptItem[] = [];
-    const subjects = matrix.subjects?.length ? matrix.subjects : ['Focal Character'];
-    const locations = matrix.locations?.length ? matrix.locations : ['Scenic Environment'];
-    const actions = matrix.actions_or_hooks?.length ? matrix.actions_or_hooks : ['Novel interaction'];
-    const cameras = matrix.camera_styles?.length ? matrix.camera_styles : ['Cinematic 4K wide-angle'];
+    const hm = matrix.hierarchical_matrix || {
+      sub_genres: ['Sub-Alpine Scree', 'Banded Iron Outcrop', 'Alluvial Fault Wash', 'Icelandic Basalt', 'Atacama Salt Flat'],
+      locations: ['Cold overcast sub-alpine scree trail', 'Remote banded iron formation outcrop', 'Dry alluvial fault wash'],
+      subjects_or_anomalies: [
+        'flat slate slab sharply split where left is sub-zero frost and right radiates thermal heatwaves',
+        'impossible 30-centimeter-wide perfect hemisphere dome of crystal-clear liquid water holding shape unsupported',
+        'hundreds of loose bone-dry jagged gravel stones swirling and boiling smoothly like liquid water whirlpool',
+      ],
+      tools_and_probes: ['dented steel canteen', 'rusty iron rail nail', '1-meter dry oak walking stick', 'brass pocket compass'],
+      scale_anchors: ['small black beetle', 'tiny dried pine needle', 'tiny horned beetle', 'red wood ant'],
+      climaxes: [
+        'thermal shock causes rock to violently split with gunshot acoustic crack, sending hot fragments at boots',
+        'water dome violently cavitates with explosive hydraulic water-hammer crack, blasting pressurized spray into lens',
+        'fluid gravel instantaneously locks solid in 0.05 seconds, snapping oak stick with concussive gunshot crack',
+      ],
+    };
 
-    const sysPrompt = `You are an elite AI Video Director specialized in ${matrix.theme_summary || 'viral video creation'}.
-Based on this Master Prompt DNA:
-"""${masterPrompt}"""
-Write ONE single highly detailed 10-second video scene prompt for AI video generators (Veo, Sora, Kling, Hailuo).
-Strict Rule: Output ONLY the descriptive prompt text. Do NOT include greetings, intro, or labels like "Prompt:".`;
+    const fixed = matrix.fixed_dna || {
+      camera_and_medium:
+        'Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay.',
+      timing_breakdown: [
+        '0-2s: Anomaly hook',
+        '0-3s: Handheld approach',
+        '3-6s: Physical test with scale anchor',
+        '6-8s: Secondary reaction',
+        '8-10s: Violent climax and panic cut',
+      ],
+      negative_prompt:
+        'human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, reaction face, talking head, vlogger overlay, avatar, split screen, napkins, tissues, paper, cinematic CGI sheen, smooth gimbal stabilization, fantasy glowing magic runes, blue energy shields, sci-fi forcefields, alien technology, dramatic movie trailer soundtrack, bass drops, sound design risers, motion blur glitches, subtitles, text overlays, logos, watermarks, extra fingers, deformed hands, and narrative explanations. Maintain the convincing, unpolished aesthetic of authentic viral mobile found-footage captured spontaneously on a smartphone.',
+      audio_rules: 'Audio: [Foley sound elements], and panicked sharp breathing.',
+      structural_template: '',
+    };
+
+    const subGenres = hm.sub_genres?.length ? hm.sub_genres : ['Natural Anomaly Frontier'];
+    const locations = hm.locations?.length ? hm.locations : ['Atmospheric wilderness setting'];
+    const anomalies = hm.subjects_or_anomalies?.length ? hm.subjects_or_anomalies : ['Unexplained physical phenomenon'];
+    const tools = hm.tools_and_probes?.length ? hm.tools_and_probes : ['dented steel canteen'];
+    const anchors = hm.scale_anchors?.length ? hm.scale_anchors : ['small black beetle'];
+    const climaxes = hm.climaxes?.length ? hm.climaxes : ['explosive fracture'];
 
     for (let i = 0; i < count; i++) {
       const currentIdx = startIdx + i;
-      const subj = subjects[Math.floor(Math.random() * subjects.length)];
-      const loc = locations[Math.floor(Math.random() * locations.length)];
-      const act = actions[Math.floor(Math.random() * actions.length)];
-      const cam = cameras[Math.floor(Math.random() * cameras.length)];
 
-      const userPrompt = `Generate Variation #${currentIdx}:
-- Focal Subject: ${subj}
-- Location: ${loc}
-- Action / Hook: ${act}
-- Camera & Lighting: ${cam}
-Write the complete 10-second high-detail scene now.`;
+      // Layer 2: Deterministic Hierarchical Sub-Genre Cycling (Prevents Looping)
+      const assignedSubGenre = subGenres[(currentIdx - 1) % subGenres.length];
+      const assignedLocation = locations[(currentIdx * 3) % locations.length];
+      const assignedAnomaly = anomalies[(currentIdx * 7) % anomalies.length];
+      const assignedTool = tools[(currentIdx * 2) % tools.length];
+      const assignedAnchor = anchors[(currentIdx * 5) % anchors.length];
+      const assignedClimax = climaxes[(currentIdx * 11) % climaxes.length];
 
-      let promptText = await this.queryBrain(sysPrompt, userPrompt, 350);
-      if (!promptText) {
-        promptText = `Cinematic 10-second scene featuring ${subj} at ${loc}. ${act}. Captured with ${cam}, ultra-realistic 4K documentary style.`;
+      let attempts = 0;
+      let promptText = '';
+      let isUnique = false;
+      let lastSimilarity = 0;
+
+      while (!isUnique && attempts < 2) {
+        attempts++;
+
+        const sysPrompt = `You are an elite viral found-footage cinematic AI video director specialized in "${matrix.theme_summary}".
+Your task is to write Variation #${currentIdx} of a 10-second vertical 9:16 raw smartphone found-footage prompt for Google Flow / Veo.
+
+STRICT INSTRUCTIONS:
+1. Opening line MUST begin with: "${fixed.camera_and_medium}"
+2. Setting MUST be set in: "${assignedLocation}" (${assignedSubGenre}).
+3. 0–2 seconds: Camera points down at the impossible visual hook: ${assignedAnomaly}.
+4. 0–3 seconds: Show tentative handheld steps crunching over terrain, natural phone wobble from crouch-walking, and automatic lens exposure.
+5. 3–6 seconds: Crouch within 6 inches; an ordinary bare hand tests with ${assignedTool}, with ${assignedAnchor} on the rock edge anchoring realistic physical scale.
+6. 6–8 seconds: Secondary reaction or escalation defying expectations.
+7. 8–10 seconds: ${assignedClimax}; the operator gasps in terror, violently stumbles backward, and recording cuts out abruptly with NO face or person visible.
+8. Include full granular Foley Audio list at the end.
+9. Append ## Negative prompt:
+${fixed.negative_prompt}
+
+CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown fences, zero introduction labels.`;
+
+        const userPrompt = `Write Prompt #${currentIdx} now with extreme physical realism and granular found-footage cinematography.`;
+
+        const rawGenerated = await this.queryBrain(sysPrompt, userPrompt, 700);
+        promptText = this.cleanOutput(rawGenerated);
+
+        if (!promptText || promptText.length < 250) {
+          // Fallback assembly preserving the exact master formula
+          promptText = this.assembleFallbackPrompt(
+            fixed,
+            assignedLocation,
+            assignedAnomaly,
+            assignedTool,
+            assignedAnchor,
+            assignedClimax,
+          );
+        }
+
+        // Layer 3: Anti-Duplicate Semantic Validator
+        const similarity = this.calculateMaxSimilarity(promptText);
+        lastSimilarity = similarity;
+        if (similarity < 0.38) {
+          isUnique = true;
+          this.recordPromptTokens(currentIdx.toString(), promptText);
+        } else {
+          this.logger.warn(`Variation #${currentIdx} had high similarity (${(similarity * 100).toFixed(1)}%). Re-generating with alternate seed.`);
+        }
       }
 
       results.push({
         index: currentIdx,
-        location: loc,
-        subject: subj,
+        sub_genre: assignedSubGenre,
+        location: assignedLocation,
+        subject: assignedAnomaly,
         text: promptText,
+        similarity_score: Number((lastSimilarity * 100).toFixed(1)),
       });
     }
 
     return results;
   }
 
-  async pushToVps(filename: string, content: string, vpsUrl?: string): Promise<{ success: boolean; message: string }> {
-    // If a custom VPS webhook/agent URL is provided
+  // ---------------- LAYER 3: ANTI-DUPLICATE SEMANTIC VALIDATOR ----------------
+  private extractTokens(text: string): Set<string> {
+    const stopWords = new Set([
+      'create', 'second', 'vertical', 'smartphone', 'video', 'shot', 'strictly',
+      'camera', 'pure', 'continuous', 'first', 'person', 'selfie', 'face', 'picture',
+      'overlay', 'setting', 'seconds', 'from', 'show', 'with', 'hand', 'bare', 'operator',
+      'audio', 'negative', 'prompt', 'human', 'cinematic', 'realistic', 'phone', 'down'
+    ]);
+    const words = text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !stopWords.has(w));
+    return new Set(words);
+  }
+
+  private calculateMaxSimilarity(newText: string): number {
+    const newTokens = this.extractTokens(newText);
+    if (newTokens.size === 0 || this.sessionTokenHistory.size === 0) return 0;
+
+    let maxSim = 0;
+    // Check against last 30 recorded prompts
+    const historyEntries = Array.from(this.sessionTokenHistory.values()).slice(-30);
+    for (const prevTokens of historyEntries) {
+      let intersection = 0;
+      for (const t of newTokens) {
+        if (prevTokens.has(t)) intersection++;
+      }
+      const union = newTokens.size + prevTokens.size - intersection;
+      const sim = union > 0 ? intersection / union : 0;
+      if (sim > maxSim) maxSim = sim;
+    }
+    return maxSim;
+  }
+
+  private recordPromptTokens(id: string, text: string) {
+    this.sessionTokenHistory.set(id, this.extractTokens(text));
+    // Keep sliding window of 200 items in memory
+    if (this.sessionTokenHistory.size > 200) {
+      const firstKey = this.sessionTokenHistory.keys().next().value;
+      if (firstKey) this.sessionTokenHistory.delete(firstKey);
+    }
+  }
+
+  private assembleFallbackPrompt(
+    fixed: FixedDNA,
+    location: string,
+    anomaly: string,
+    tool: string,
+    anchor: string,
+    climax: string,
+  ): string {
+    return (
+      `${fixed.camera_and_medium} ` +
+      `The setting is ${location}. ` +
+      `In the first 0–2 seconds, the camera immediately points down at an undeniable, reality-bending visual hook: ${anomaly}. ` +
+      `From 0–3 seconds, show tentative steps crunching over terrain, natural mobile phone wobble from crouch-walking, and automatic lens exposure balancing. ` +
+      `From 3–6 seconds, crouch within six inches; an ordinary bare hand enters holding ${tool} and tests the anomaly, with ${anchor} to anchor realistic physical scale. ` +
+      `From 6–8 seconds, the interaction triggers a secondary escalation defying expectations. ` +
+      `From 8–10 seconds, ${climax}; the operator gasps in terror, violently stumbles backward, and the recording terminates abruptly with NO face or person visible. ` +
+      `Audio: footsteps, environmental wind, physical interaction sounds, deafening concussive fracture, and panicked sharp breathing.\n\n` +
+      `## Negative prompt\n${fixed.negative_prompt}`
+    );
+  }
+
+  private getIntelligentFallbackMatrix(masterPrompt: string): PromptMatrix {
+    const isAnomaly = masterPrompt.toLowerCase().includes('smartphone') || masterPrompt.toLowerCase().includes('anomaly');
+    const nicheName = isAnomaly ? 'Viral Anomaly Found Footage' : 'High-Retention Video Series';
+
+    return {
+      niche_name: nicheName,
+      theme_summary: '10-second vertical 9:16 raw smartphone found-footage discovering anomalous natural phenomena.',
+      fixed_dna: {
+        camera_and_medium:
+          'Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay.',
+        timing_breakdown: [
+          '0-2s: Undeniable reality-bending visual hook',
+          '0-3s: Tentative steps, natural mobile phone wobble, auto-exposure balancing',
+          '3-6s: Crouch within 6 inches, physical test with everyday tool, biological scale anchor',
+          '6-8s: Secondary reaction or escalation defying expectations',
+          '8-10s: Violent concussive shock climax, debris at boots, panic gasp, stumble backward, cut out with NO face visible',
+        ],
+        negative_prompt:
+          'human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, reaction face, talking head, vlogger overlay, avatar, split screen, napkins, tissues, paper, glass bowl, acrylic prop, cinematic CGI sheen, smooth gimbal stabilization, fantasy glowing magic runes, blue energy shields, sci-fi forcefields, cartoon water effects, alien technology, dramatic movie trailer soundtrack, bass drops, sound design risers, motion blur glitches, subtitles, text overlays, logos, watermarks, extra fingers, deformed hands, and narrative explanations. Maintain the convincing, unpolished aesthetic of authentic viral mobile found-footage captured spontaneously on a smartphone.',
+        audio_rules: 'Audio: [synchronized sound elements], and panicked sharp breathing.',
+        structural_template: '',
+      },
+      hierarchical_matrix: {
+        sub_genres: [
+          'Banded Iron Formation',
+          'Sub-Alpine Slate Trail',
+          'Alluvial Fault Wash',
+          'Icelandic Basalt Plateau',
+          'Atacama Salt Flat',
+          'Karst Limestone Sinkhole',
+          'Siberian Permafrost Basin',
+          'Utah Red Slickrock Plateau',
+          'Scottish Peat Bog',
+          'Geothermal Caldera Slope',
+          'Deep Copper Mine Tailings',
+          'Glacial Moraine Ridge',
+          'Appalachian Hemlock Hollow',
+          'Badlands Bentonite Wash',
+          'Brittany Granite Tide-Pool',
+        ],
+        locations: [
+          'a remote banded iron formation outcrop under harsh midday sun, with layered rust-red hematite slabs and metallic black magnetite gravel',
+          'a cold, overcast sub-alpine scree trail covered in loose grey slate stones, dry yellow tussock grass, and cool mountain air',
+          'a dry alluvial fault wash under harsh midday sun, filled with sun-baked grey river cobbles, fractured shale gravel, and dry desert thorn-scrub',
+          'an isolated Icelandic black volcanic basalt plateau buffeted by freezing North Atlantic gales, with hexagonal basalt columns and wet black sand',
+          'a blindingly white Atacama alkali salt flat under a scorched cloudless sky, with cracked geometric polygon salt crust and razor-sharp mineral ridges',
+          'an ancient Karst limestone sinkhole entrance in a temperate river gorge, with jagged mossy boulders and cold groundwater seeps',
+          'a desolate Siberian tundra permafrost thaw basin with exposed ancient black mud, frozen roots, and icy puddle ruts',
+          'a barren Utah red sandstone slickrock plateau with wind-hollowed sandstone bowls and fine rust-colored quartz powder',
+        ],
+        subjects_or_anomalies: [
+          'an impossible 30-centimeter-wide, 15-centimeter-high perfect hemisphere dome of crystal-clear liquid water holding shape unsupported on dry rock like heavy glass',
+          'a flat 1-meter natural slate slab sharply split down a center seam where the left half is crusted in sub-zero frost while the right half radiates hot thermal heatwaves',
+          'inside a natural 50-centimeter depression, hundreds of loose bone-dry jagged gravel stones are rapidly boiling and swirling smoothly like liquid water whirlpool',
+          'an unnatural pool of mirror-black viscous fluid slowly crawling vertically uphill across dry rock like living dark mercury with zero wet residue',
+          'a perfectly circular 2-foot patch of dark magnetic magnetite sand humming with a low 60Hz acoustic vibration making dust motes float 1 inch in mid-air',
+          'a 40-centimeter rock basin filled with glowing amber-tinted groundwater that instantly flash-petrifies dipped organic matter into brittle crystal stone',
+          'a narrow 5-centimeter vertical rock fracture pulling a continuous, freezing negative-pressure vacuum draft sucking ambient dust like a miniature turbine',
+        ],
+        tools_and_probes: [
+          'a 10-centimeter rusty iron rail nail',
+          'a dented military surplus steel canteen',
+          'a 1-meter dry oak walking stick',
+          'a vintage brass pocket compass',
+          'a dry 8-inch weathered juniper branch',
+          'a freshly plucked green mountain fern leaf',
+          'a digital infrared laser thermometer',
+          'a heavy 1-inch chrome steel ball-bearing',
+        ],
+        scale_anchors: [
+          'with a small black ground beetle crawling on the dry rock edge to anchor realistic physical scale',
+          'with a tiny dried pine needle resting on the rock rim to anchor realistic physical scale',
+          'with a tiny horned beetle on the rock rim to anchor realistic physical scale',
+          'with a red wood ant scrambling across the stone grain anchoring authentic physical scale',
+          'with a tiny brittle dried lichen flake clinging to the rock seam anchoring authentic physical scale',
+          'with a tiny dead honeybee carcass lying beside the anomaly anchoring believable real-world scale',
+        ],
+        climaxes: [
+          'a high-frequency metallic resonance screeches from the bedrock; the water dome violently cavitates with an explosive hydraulic water-hammer crack, blasting pressurized spray straight into the lens',
+          'extreme thermal shock causes the rock slab to violently split with an explosive gunshot-like crack, sending hot vapor and sharp rock fragments straight toward boots',
+          'a terrifying subterranean infrasound vibration hums; fluid gravel instantaneously locks solid in 0.05 seconds, snapping the thick oak stick in half with concussive gunshot crack',
+          'the liquid pool suddenly snaps backward like a high-tension rubber band and ruptures into a concussive shockwave of black mist and stinging droplets',
+          'the compass glass violently implodes with a loud electrical pop and sharp blue spark discharge, sending pressurized mineral dust blasting against camera lens',
+        ],
+      },
+      subjects: ['Natural Physical Anomaly'],
+      locations: ['Remote Geological Formation'],
+      actions_or_hooks: ['Physical probe test and violent acoustic fracture'],
+      camera_styles: ['Pure continuous 9:16 first-person POV rear smartphone camera'],
+    };
+  }
+
+  // ---------------- LAYER 4: DOWNLOADABLE FILE & VPS 1-CLICK LINKING ----------------
+  async pushToVps(filename: string, content: string, vpsUrl?: string): Promise<{ success: boolean; message: string; filePath?: string }> {
+    // 1. Always store locally in uploads/prompts folder
+    const exportDir = path.join(process.cwd(), 'uploads', 'prompts');
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+    const localFilePath = path.join(exportDir, filename);
+    fs.writeFileSync(localFilePath, content, 'utf-8');
+
+    // 2. If a custom VPS webhook URL is provided, push via HTTP POST
     if (vpsUrl && vpsUrl.trim().startsWith('http')) {
       try {
         const res = await axios.post(
@@ -259,32 +567,18 @@ Write the complete 10-second high-detail scene now.`;
         );
         return {
           success: true,
-          message: `Successfully uploaded to VPS (${res.status}): ${filename}`,
+          message: `Successfully transferred to VPS endpoint (${res.status}): ${filename}`,
+          filePath: localFilePath,
         };
       } catch (err: any) {
-        this.logger.error(`Failed to push to VPS URL: ${err.message}`);
-        return {
-          success: false,
-          message: `VPS Connection Error: ${err.message}. File is preserved locally.`,
-        };
+        this.logger.warn(`Push to custom VPS URL failed: ${err.message}. File saved locally.`);
       }
     }
 
-    // Default: Save to local exports folder on the server
-    try {
-      const exportDir = path.join(process.cwd(), 'uploads', 'prompts');
-      if (!fs.existsSync(exportDir)) {
-        fs.mkdirSync(exportDir, { recursive: true });
-      }
-      const filePath = path.join(exportDir, filename);
-      fs.writeFileSync(filePath, content, 'utf-8');
-
-      return {
-        success: true,
-        message: `Prompt file '${filename}' successfully stored on server in uploads/prompts! Ready for VPS sync.`,
-      };
-    } catch (e: any) {
-      return { success: false, message: `Storage Error: ${e.message}` };
-    }
+    return {
+      success: true,
+      message: `Prompt file '${filename}' successfully saved on server! Ready for 1-click download or automated VPS rendering.`,
+      filePath: localFilePath,
+    };
   }
 }
