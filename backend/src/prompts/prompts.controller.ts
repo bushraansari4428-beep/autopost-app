@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { PromptsService, PromptMatrix } from './prompts.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -10,9 +20,37 @@ export class PromptsController {
   getStatus() {
     return {
       status: 'ONLINE',
-      engine: 'Qwen 3.8 (Groq Neural Acceleration) + HF ZeroGPU Fallback',
+      engine: 'Qwen 3.8 (Groq Neural Acceleration) + Gemini 3.8 Flash (Native Video Vision)',
       speed: '1.5s - 2.0s per prompt',
     };
+  }
+
+  @Post('reverse-engineer-video')
+  @UseInterceptors(FileInterceptor('video', { limits: { fileSize: 50 * 1024 * 1024 } }))
+  async reverseEngineerVideo(
+    @UploadedFile() file?: Express.Multer.File,
+    @Body() body?: { videoUrl?: string; sampleCount?: number | string },
+  ) {
+    let videoBuffer: Buffer | null = null;
+    let mimeType = 'video/mp4';
+
+    if (file && file.buffer) {
+      videoBuffer = file.buffer;
+      mimeType = file.mimetype || 'video/mp4';
+    } else if (body?.videoUrl && body.videoUrl.trim()) {
+      const downloaded = await this.promptsService.downloadVideoFromUrl(body.videoUrl.trim());
+      videoBuffer = downloaded.buffer;
+      mimeType = downloaded.mimeType || 'video/mp4';
+    } else {
+      throw new BadRequestException('Either a video file or a video URL must be provided');
+    }
+
+    const sampleCount = body?.sampleCount ? parseInt(String(body.sampleCount), 10) : 5;
+    return await this.promptsService.reverseEngineerAndGenerateTestBatch(
+      videoBuffer,
+      isNaN(sampleCount) ? 5 : sampleCount,
+      mimeType,
+    );
   }
 
   @Post('analyze')
@@ -53,3 +91,4 @@ export class PromptsController {
     return await this.promptsService.pushToVps(filename, content, vpsUrl);
   }
 }
+

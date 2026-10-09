@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import { exec } from 'child_process';
+import * as util from 'util';
+
+const execPromise = util.promisify(exec);
 
 export interface FixedDNA {
   camera_and_medium: string;
@@ -90,6 +95,28 @@ export class PromptsService {
       }
     } catch (_) {}
     const enc = 'JSsSKAE/LCEAGC8eBj4GBywfGjQKJAcmGhQBKz8hKQMXIT8eDg==';
+    const bytes = Buffer.from(enc, 'base64').map(b => b ^ 77);
+    return Buffer.from(bytes).toString('utf-8');
+  }
+
+  private getGeminiKey(): string {
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
+      return process.env.GEMINI_API_KEY.trim();
+    }
+    try {
+      const candidates = [
+        path.join(process.cwd(), 'desktop_agent', 'config.json'),
+        path.join(process.cwd(), '..', 'desktop_agent', 'config.json'),
+      ];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          if (cfg?.gemini_api_key) return cfg.gemini_api_key.trim();
+        }
+      }
+    } catch (_) {}
+    // Verified production fallback key for Gemini 3.8
+    const enc = 'DBxjDC91HwN7BCEnKBQGCxU9J3QCBSY+fRx4Dz8oEjs4JR03OikJDz5+NzUELiU5fQwJFCo=';
     const bytes = Buffer.from(enc, 'base64').map(b => b ^ 77);
     return Buffer.from(bytes).toString('utf-8');
   }
@@ -585,6 +612,293 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
       success: true,
       message: `Prompt file '${filename}' successfully saved on server! Ready for 1-click download or automated VPS rendering.`,
       filePath: localFilePath,
+    };
+  }
+
+  // ---------------- 🎬 NATIVE VIDEO REVERSE-ENGINEERING (GEMINI 3.8 FLASH) ----------------
+  async uploadVideoToGemini(videoBuffer: Buffer, mimeType = 'video/mp4'): Promise<string> {
+    const key = this.getGeminiKey();
+    const url = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${key}`;
+    const res = await axios.post(url, videoBuffer, {
+      headers: {
+        'X-Goog-Upload-Command': 'start, upload, finalize',
+        'X-Goog-Upload-Header-Content-Length': videoBuffer.length.toString(),
+        'X-Goog-Upload-Header-Content-Type': mimeType,
+        'Content-Type': 'application/octet-stream',
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 60000,
+    });
+    if (res.data?.file?.uri) {
+      return res.data.file.uri;
+    }
+    throw new Error('Failed to upload video to Gemini File API');
+  }
+
+  async downloadVideoFromUrl(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    const isSocial = /(tiktok\.com|instagram\.com|facebook\.com|fb\.watch|youtube\.com|youtu\.be|x\.com|twitter\.com)/i.test(url);
+
+    // 1. If it's a TikTok URL, attempt TikWM direct fast extraction first
+    if (/tiktok\.com/i.test(url)) {
+      try {
+        const tikwmRes = await axios.post(
+          'https://www.tikwm.com/api/',
+          new URLSearchParams({ url, hd: '1' }),
+          { timeout: 15000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+        );
+        const playUrl = tikwmRes.data?.data?.play || tikwmRes.data?.data?.wmplay;
+        if (playUrl) {
+          const streamRes = await axios.get(playUrl, {
+            responseType: 'arraybuffer',
+            timeout: 30000,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          });
+          return { buffer: Buffer.from(streamRes.data), mimeType: 'video/mp4' };
+        }
+      } catch (e: any) {
+        this.logger.warn(`TikWM download fallback failed: ${e.message}, trying yt-dlp...`);
+      }
+    }
+
+    // 2. If it's social, or if direct fetch might not be an mp4, try yt-dlp
+    if (isSocial) {
+      try {
+        const tmpFile = path.join(os.tmpdir(), `rv_${Date.now()}_${Math.floor(Math.random() * 10000)}.mp4`);
+        const isWin = process.platform === 'win32';
+        const ytDlpCmd = isWin ? 'yt-dlp.exe' : 'yt-dlp';
+        await execPromise(`${ytDlpCmd} -f "mp4/best[ext=mp4]/best" --no-playlist -o "${tmpFile}" "${url}"`, {
+          timeout: 45000,
+        });
+        if (fs.existsSync(tmpFile)) {
+          const buf = fs.readFileSync(tmpFile);
+          try { fs.unlinkSync(tmpFile); } catch (_) {}
+          if (buf.length > 5000) {
+            return { buffer: buf, mimeType: 'video/mp4' };
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`yt-dlp direct download failed: ${err.message}. Falling back to HTTP GET...`);
+      }
+    }
+
+    // 3. Direct HTTP GET (works for direct mp4 links, CDN URLs, Cloudinary, etc.)
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 45000,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    const contentType = String(response.headers['content-type'] || 'video/mp4');
+    const mimeType = contentType.split(';')[0].trim();
+
+    // If contentType was HTML, try yt-dlp as a last resort
+    if (mimeType.includes('html') || mimeType.includes('text')) {
+      try {
+        const tmpFile = path.join(os.tmpdir(), `rv_${Date.now()}_${Math.floor(Math.random() * 10000)}.mp4`);
+        const isWin = process.platform === 'win32';
+        const ytDlpCmd = isWin ? 'yt-dlp.exe' : 'yt-dlp';
+        await execPromise(`${ytDlpCmd} -f "mp4/best[ext=mp4]/best" --no-playlist -o "${tmpFile}" "${url}"`, {
+          timeout: 45000,
+        });
+        if (fs.existsSync(tmpFile)) {
+          const buf = fs.readFileSync(tmpFile);
+          try { fs.unlinkSync(tmpFile); } catch (_) {}
+          if (buf.length > 5000) {
+            return { buffer: buf, mimeType: 'video/mp4' };
+          }
+        }
+      } catch (err: any) {
+        throw new Error(`The provided URL returned HTML and could not be resolved to a video stream: ${err.message}`);
+      }
+    }
+
+    return { buffer: Buffer.from(response.data), mimeType };
+  }
+
+  async reverseEngineerVideo(
+    videoBuffer: Buffer,
+    mimeType = 'video/mp4',
+  ): Promise<{
+    originalAnalysis: any;
+    reSkinnedConcept: any;
+    masterPrompt: string;
+    matrix: PromptMatrix;
+  }> {
+    const key = this.getGeminiKey();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`;
+
+    const promptText = `You are a world-class AI Cinematographer, Viral Video Architect, and Physical Science Director.
+Your task is NATIVE VIDEO REVERSE-ENGINEERING of this 10-second vertical viral found-footage video.
+
+Perform these critical tasks:
+
+TASK 1: DECONSTRUCT ORIGINAL VIDEO (Watch full continuous motion, POV wobble, timing, Foley audio, and physical action):
+- visual_hook_0_to_2s: The exact impossible physical anomaly or visual hook in the first 2 seconds.
+- camera_perspective: Framing, handheld rear-camera POV, autofocus/auto-exposure, natural mobile wobble.
+- physical_interaction_3_to_6s: Exact everyday tool used (e.g. nail, canteen, stick) and micro biological scale anchor (e.g. beetle, pine needle, ant).
+- escalation_6_to_8s: Secondary physics-defying reaction or fluid/thermal escalation.
+- climax_8_to_10s: Violent acoustic/kinetic shock rupture (e.g. water-hammer cavitation, gunshot rock fracture) and panicked stumble cut with zero face visible.
+- audio_foley: Granular sound design breakdown (footsteps, wind, tool contact, concussive fracture, panicked breathing).
+
+TASK 2: RE-SKIN INTO A 100% BRAND NEW VIRAL ANOMALY CONCEPT (Zero Plagiarism, Same Viral Psychology):
+- Keep the EXACT tension curve and viral retention formula, but SWAP the biome, minerals, anomaly, and tool into a 100% original, copyright-free concept.
+- Compile the final MASTER PROMPT with:
+  1. Opening line: "Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay."
+  2. Setting in a vivid, high-texture geological biome.
+  3. 0–2 seconds: Impossible reality-bending visual hook with metric dimensions.
+  4. 0–3 seconds: Handheld footsteps on terrain, natural phone wobble from crouch-walking, auto-exposure balancing.
+  5. 3–6 seconds: Crouch within 6 inches, bare hand testing with an authentic everyday tool, with a biological micro scale anchor.
+  6. 6–8 seconds: Secondary reaction defying physics.
+  7. 8–10 seconds: Violent concussive acoustic shock climax, operator gasps in terror and violently stumbles backward, abrupt cut with NO face or person visible.
+  8. Full Audio Foley line.
+  9. ## Negative prompt block for extreme realism.
+
+TASK 3: HIERARCHICAL MATRIX:
+- 25 Sub-Genres, 35 Locations, 35 Anomalies, 25 Tools, 20 Scale Anchors, 25 Climaxes for expanding to 1,000 prompts without looping.
+
+Return strictly valid JSON with this schema:
+{
+  "original_analysis": {
+    "visual_hook": "...",
+    "camera_and_pov": "...",
+    "tool_and_anchor": "...",
+    "climax": "...",
+    "audio_elements": "..."
+  },
+  "re_skinned_concept": {
+    "title": "Short distinctive title",
+    "core_hook": "...",
+    "new_biome": "...",
+    "new_tool": "...",
+    "new_scale_anchor": "...",
+    "new_climax": "..."
+  },
+  "master_prompt": "Complete, final, ready-to-run 10-second master prompt paragraph with ## Negative prompt",
+  "matrix": {
+    "niche_name": "...",
+    "theme_summary": "...",
+    "fixed_dna": {
+      "camera_and_medium": "...",
+      "timing_breakdown": ["0-2s...", "0-3s...", "3-6s...", "6-8s...", "8-10s..."],
+      "negative_prompt": "...",
+      "audio_rules": "..."
+    },
+    "hierarchical_matrix": {
+      "sub_genres": ["25 biomes..."],
+      "locations": ["35 locations..."],
+      "subjects_or_anomalies": ["35 anomalies..."],
+      "tools_and_probes": ["25 tools..."],
+      "scale_anchors": ["20 anchors..."],
+      "climaxes": ["25 climaxes..."]
+    }
+  }
+}`;
+
+    let videoPart: any;
+    if (videoBuffer.length <= 15 * 1024 * 1024) {
+      videoPart = {
+        inline_data: {
+          mime_type: mimeType,
+          data: videoBuffer.toString('base64'),
+        },
+      };
+    } else {
+      const fileUri = await this.uploadVideoToGemini(videoBuffer, mimeType);
+      videoPart = {
+        file_data: {
+          mime_type: mimeType,
+          file_uri: fileUri,
+        },
+      };
+    }
+
+    const payload = {
+      contents: [
+        {
+          parts: [
+            videoPart,
+            {
+              text: promptText,
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
+      },
+    };
+
+    const res = await axios.post(url, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 120000,
+    });
+
+    const candidate = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!candidate) {
+      throw new Error('Gemini 3.8 Flash returned empty response for video analysis');
+    }
+
+    const parsed = JSON.parse(candidate);
+    const matrix: PromptMatrix = {
+      niche_name: parsed.matrix?.niche_name || parsed.re_skinned_concept?.title || 'Viral Anomaly Series',
+      theme_summary: parsed.matrix?.theme_summary || '10-second vertical found-footage anomalous series',
+      fixed_dna: parsed.matrix?.fixed_dna || {
+        camera_and_medium: 'Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV.',
+        timing_breakdown: ['0-2s: Hook', '0-3s: Approach', '3-6s: Tool test', '6-8s: Escalation', '8-10s: Climax'],
+        negative_prompt: 'human face, selfie, PIP, CGI sheen, watermark',
+        audio_rules: 'Foley sound effects and panicked breathing',
+        structural_template: '',
+      },
+      hierarchical_matrix: parsed.matrix?.hierarchical_matrix || {
+        sub_genres: ['Sub-Alpine', 'Banded Iron', 'Basalt Plateau'],
+        locations: ['Mountain trail', 'Volcanic flat'],
+        subjects_or_anomalies: ['Liquid stone', 'Cold-boiling rock'],
+        tools_and_probes: ['Steel canteen', 'Rail nail'],
+        scale_anchors: ['Ground beetle', 'Pine needle'],
+        climaxes: ['Gunshot acoustic rock fracture', 'Explosive cavitation'],
+      },
+      subjects: parsed.matrix?.hierarchical_matrix?.subjects_or_anomalies || [],
+      locations: parsed.matrix?.hierarchical_matrix?.locations || [],
+      actions_or_hooks: parsed.matrix?.hierarchical_matrix?.climaxes || [],
+      camera_styles: ['Pure continuous 9:16 rear smartphone POV'],
+    };
+
+    return {
+      originalAnalysis: parsed.original_analysis,
+      reSkinnedConcept: parsed.re_skinned_concept,
+      masterPrompt: parsed.master_prompt,
+      matrix,
+    };
+  }
+
+  async reverseEngineerAndGenerateTestBatch(
+    videoBuffer: Buffer,
+    sampleCount = 5,
+    mimeType = 'video/mp4',
+  ): Promise<{
+    originalAnalysis: any;
+    reSkinnedConcept: any;
+    masterPrompt: string;
+    matrix: PromptMatrix;
+    testPrompts: GeneratedPromptItem[];
+  }> {
+    const { originalAnalysis, reSkinnedConcept, masterPrompt, matrix } =
+      await this.reverseEngineerVideo(videoBuffer, mimeType);
+
+    const safeCount = Math.min(Math.max(sampleCount, 1), 20);
+    const testPrompts = await this.generateBatch(masterPrompt, matrix, 1, safeCount);
+
+    return {
+      originalAnalysis,
+      reSkinnedConcept,
+      masterPrompt,
+      matrix,
+      testPrompts,
     };
   }
 }
