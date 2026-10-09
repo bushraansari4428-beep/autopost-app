@@ -148,6 +148,22 @@ export default function PromptGeneratorPage() {
     if (savedVps) setVpsUrl(savedVps);
   }, []);
 
+  const detectedConceptsCount = React.useMemo(() => {
+    if (!masterPrompt || !masterPrompt.trim()) return 0;
+    const text = masterPrompt.trim();
+    const promptLabelRegex = /(?:^|\n+)(?:#+\s*)?(?:PROMPT|Prompt|Example|Concept|Variation)\s*#?\s*\d+[\s\:\-\.\)]*/gi;
+    const parts1 = text.split(promptLabelRegex).map(p => p.trim()).filter(p => p.length > 30);
+    if (parts1.length > 1) return parts1.length;
+    if (text.includes('---') || text.includes('===')) {
+      const parts2 = text.split(/\n+\s*[-=_]{3,}\s*\n+/).map(p => p.trim()).filter(p => p.length > 30);
+      if (parts2.length > 1) return parts2.length;
+    }
+    const createRegex = /(?=(?:^|\n+)\s*Create a \d+[\s-]second)/gi;
+    const parts3 = text.split(createRegex).map(p => p.trim()).filter(p => p.length > 30);
+    if (parts3.length > 1) return parts3.length;
+    return 1;
+  }, [masterPrompt]);
+
   const handleUseSamplePrompt = () => {
     const sample = `Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay. The setting is a cold, overcast sub-alpine scree trail covered in loose grey slate stones, dry yellow tussock grass, and cool mountain air. In the first second, the camera points down at a flat 1-meter natural grey slate slab embedded in the dirt; the rock is sharply split down a natural center seam where the left half is crusted in thick white sub-zero frost, while the right half visibly radiates shimmering hot thermal heat-waves into the cold air. From 0–3 seconds, show cautious handheld steps crunching on loose gravel, phone bobbing with natural breathing, camera auto-exposure balancing the bright white frost against the dark wet rock, and howling cold mountain wind audio. From 3–6 seconds, lean down within eight inches of the rock seam; an ordinary bare hand holds a dented steel canteen and pours a steady thin stream of clear water directly across the center dividing line, with a tiny dried pine needle resting on the rock rim to anchor realistic physical scale. From 6–8 seconds, the poured water hits both sides simultaneously; the liquid on the frosted left side instantly flash-freezes into jagged white frost ice, while the water on the right half violently boils, hissing and vaporizing instantly into billowing steam. From 8–10 seconds, extreme thermal shock causes the rock slab to violently split with an explosive gunshot-like crack, blasting steam and sharp slate fragments toward the operator; the operator gasps in terror, violently stumbles backward, and the recording terminates abruptly with NO face or person visible. Audio: crunching gravel footsteps, howling sub-alpine wind, water pouring from metal canteen, simultaneous sizzling boil and cracking ice, deafening gunshot rock fracture, and panicked sharp breathing.
 
@@ -1212,10 +1228,19 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
               <textarea
                 value={masterPrompt}
                 onChange={e => setMasterPrompt(e.target.value)}
-                placeholder="Paste your Master Prompt here..."
+                placeholder="Paste your Master Prompt here... You can paste a single prompt or multiple example prompts (PROMPT 1, PROMPT 2, etc.)"
                 rows={8}
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono leading-relaxed"
               />
+
+              {detectedConceptsCount > 1 && (
+                <div className="flex items-center gap-2 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 animate-fadeIn">
+                  <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    <strong>{detectedConceptsCount} Distinct Concepts Detected:</strong> Generator will automatically rotate and cycle across all {detectedConceptsCount} concepts so no single video concept is repeated!
+                  </span>
+                </div>
+              )}
 
               {/* Target & Batch Selection */}
               <div className="grid grid-cols-2 gap-3 pt-1">
