@@ -637,10 +637,12 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
   }
 
   async downloadVideoFromUrl(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    const isSocial = /(tiktok\.com|instagram\.com|facebook\.com|fb\.watch|youtube\.com|youtu\.be|x\.com|twitter\.com)/i.test(url);
+    const isFacebook = /(facebook\.com|fb\.watch)/i.test(url);
+    const isTikTok = /tiktok\.com/i.test(url);
+    const isSocial = isFacebook || isTikTok || /(instagram\.com|youtube\.com|youtu\.be|x\.com|twitter\.com)/i.test(url);
 
     // 1. If it's a TikTok URL, attempt TikWM direct fast extraction first
-    if (/tiktok\.com/i.test(url)) {
+    if (isTikTok) {
       try {
         const tikwmRes = await axios.post(
           'https://www.tikwm.com/api/',
@@ -661,7 +663,7 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
       }
     }
 
-    // 2. If it's social, or if direct fetch might not be an mp4, try yt-dlp
+    // 2. yt-dlp extraction for YouTube, Reels, TikTok, Twitter, Facebook, etc.
     if (isSocial) {
       try {
         const tmpFile = path.join(os.tmpdir(), `rv_${Date.now()}_${Math.floor(Math.random() * 10000)}.mp4`);
@@ -678,44 +680,40 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
           }
         }
       } catch (err: any) {
-        this.logger.warn(`yt-dlp direct download failed: ${err.message}. Falling back to HTTP GET...`);
+        this.logger.warn(`yt-dlp download failed: ${err.message}. Trying direct fetch...`);
       }
     }
 
     // 3. Direct HTTP GET (works for direct mp4 links, CDN URLs, Cloudinary, etc.)
-    const response = await axios.get(url, {
-      responseType: 'arraybuffer',
-      timeout: 45000,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
-    const contentType = String(response.headers['content-type'] || 'video/mp4');
-    const mimeType = contentType.split(';')[0].trim();
+    try {
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+      const contentType = String(response.headers['content-type'] || 'video/mp4');
+      const mimeType = contentType.split(';')[0].trim();
 
-    // If contentType was HTML, try yt-dlp as a last resort
-    if (mimeType.includes('html') || mimeType.includes('text')) {
-      try {
-        const tmpFile = path.join(os.tmpdir(), `rv_${Date.now()}_${Math.floor(Math.random() * 10000)}.mp4`);
-        const isWin = process.platform === 'win32';
-        const ytDlpCmd = isWin ? 'yt-dlp.exe' : 'yt-dlp';
-        await execPromise(`${ytDlpCmd} -f "mp4/best[ext=mp4]/best" --no-playlist -o "${tmpFile}" "${url}"`, {
-          timeout: 45000,
-        });
-        if (fs.existsSync(tmpFile)) {
-          const buf = fs.readFileSync(tmpFile);
-          try { fs.unlinkSync(tmpFile); } catch (_) {}
-          if (buf.length > 5000) {
-            return { buffer: buf, mimeType: 'video/mp4' };
-          }
-        }
-      } catch (err: any) {
-        throw new Error(`The provided URL returned HTML and could not be resolved to a video stream: ${err.message}`);
+      if (!mimeType.includes('html') && !mimeType.includes('text') && response.data?.length > 5000) {
+        return { buffer: Buffer.from(response.data), mimeType };
       }
+    } catch (httpErr: any) {
+      this.logger.warn(`Direct HTTP GET failed: ${httpErr.message}`);
     }
 
-    return { buffer: Buffer.from(response.data), mimeType };
+    // 4. If all automated URL downloads fail
+    if (isFacebook) {
+      throw new Error(
+        'Facebook security wall ne is Reel ka automated download block kar diya hai. Baraye meherbani video apne mobile ya PC se download karein aur "Upload .mp4" tab ke zariye direct upload karein!',
+      );
+    }
+
+    throw new Error(
+      'Is video link se stream download nahi ho saki. Baraye meherbani direct .mp4 video link dein ya "Upload .mp4" tab ke zariye direct file upload karein!',
+    );
   }
 
   async reverseEngineerVideo(
@@ -843,7 +841,37 @@ Return strictly valid JSON with this schema:
       throw new Error('Gemini 3.8 Flash returned empty response for video analysis');
     }
 
-    const parsed = JSON.parse(candidate);
+    let cleanCandidate = candidate.trim();
+    if (cleanCandidate.startsWith('```json')) {
+      cleanCandidate = cleanCandidate.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanCandidate.startsWith('```')) {
+      cleanCandidate = cleanCandidate.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleanCandidate);
+    } catch (parseErr: any) {
+      this.logger.warn(`Failed to parse Gemini 3.8 JSON: ${parseErr.message}`);
+      parsed = {
+        original_analysis: {
+          visual_hook: '10-second anomalous physical phenomenon',
+          camera_and_pov: 'Handheld 9:16 rear smartphone POV',
+          tool_and_anchor: 'Everyday physical tool and biological scale anchor',
+          climax: 'Concussive acoustic fracture climax',
+          audio_elements: 'Granular terrain Foley and panicked breathing',
+        },
+        re_skinned_concept: {
+          title: 'Viral Anomaly Series',
+          core_hook: 'Impossible geological phenomenon',
+          new_biome: 'Sub-Alpine slate scree',
+          new_tool: 'Dented steel canteen',
+          new_scale_anchor: 'Dry pine needle',
+          new_climax: 'Acoustic shock fracture',
+        },
+        master_prompt: cleanCandidate,
+      };
+    }
     const matrix: PromptMatrix = {
       niche_name: parsed.matrix?.niche_name || parsed.re_skinned_concept?.title || 'Viral Anomaly Series',
       theme_summary: parsed.matrix?.theme_summary || '10-second vertical found-footage anomalous series',

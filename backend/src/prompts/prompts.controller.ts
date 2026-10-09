@@ -31,26 +31,31 @@ export class PromptsController {
     @UploadedFile() file?: Express.Multer.File,
     @Body() body?: { videoUrl?: string; sampleCount?: number | string },
   ) {
-    let videoBuffer: Buffer | null = null;
-    let mimeType = 'video/mp4';
+    try {
+      let videoBuffer: Buffer | null = null;
+      let mimeType = 'video/mp4';
 
-    if (file && file.buffer) {
-      videoBuffer = file.buffer;
-      mimeType = file.mimetype || 'video/mp4';
-    } else if (body?.videoUrl && body.videoUrl.trim()) {
-      const downloaded = await this.promptsService.downloadVideoFromUrl(body.videoUrl.trim());
-      videoBuffer = downloaded.buffer;
-      mimeType = downloaded.mimeType || 'video/mp4';
-    } else {
-      throw new BadRequestException('Either a video file or a video URL must be provided');
+      if (file && file.buffer) {
+        videoBuffer = file.buffer;
+        mimeType = file.mimetype || 'video/mp4';
+      } else if (body?.videoUrl && body.videoUrl.trim()) {
+        const downloaded = await this.promptsService.downloadVideoFromUrl(body.videoUrl.trim());
+        videoBuffer = downloaded.buffer;
+        mimeType = downloaded.mimeType || 'video/mp4';
+      } else {
+        throw new BadRequestException('Either a video file or a video URL must be provided');
+      }
+
+      const sampleCount = body?.sampleCount ? parseInt(String(body.sampleCount), 10) : 5;
+      return await this.promptsService.reverseEngineerAndGenerateTestBatch(
+        videoBuffer,
+        isNaN(sampleCount) ? 5 : sampleCount,
+        mimeType,
+      );
+    } catch (err: any) {
+      const msg = err.message || 'Video analysis failed. Please verify the video and try again.';
+      throw new BadRequestException(msg);
     }
-
-    const sampleCount = body?.sampleCount ? parseInt(String(body.sampleCount), 10) : 5;
-    return await this.promptsService.reverseEngineerAndGenerateTestBatch(
-      videoBuffer,
-      isNaN(sampleCount) ? 5 : sampleCount,
-      mimeType,
-    );
   }
 
   @Post('analyze')

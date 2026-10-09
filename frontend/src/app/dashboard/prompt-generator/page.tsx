@@ -103,6 +103,7 @@ export default function PromptGeneratorPage() {
   const [copiedTestIdx, setCopiedTestIdx] = useState<number | null>(null);
   const [copiedAllTest, setCopiedAllTest] = useState<boolean>(false);
   const [copiedMasterPrompt, setCopiedMasterPrompt] = useState<boolean>(false);
+  const [fbSecurityAlert, setFbSecurityAlert] = useState<boolean>(false);
 
   // Direct Master Prompt state
   const [masterPrompt, setMasterPrompt] = useState<string>('');
@@ -208,8 +209,14 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Server returned ${res.status}: ${errText.slice(0, 200)}`);
+        let cleanMsg = '';
+        try {
+          const errObj = await res.json();
+          cleanMsg = errObj.message || errObj.error || (Array.isArray(errObj.message) ? errObj.message.join(', ') : '');
+        } catch (_) {
+          cleanMsg = await res.text();
+        }
+        throw new Error(cleanMsg || `Server error (${res.status})`);
       }
 
       setVideoAnalysisStep(`Synthesizing brand-new concept & generating ${sampleCount} test prompts with Qwen 3.8...`);
@@ -217,13 +224,23 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
       if (data.originalAnalysis && data.reSkinnedConcept) {
         setVideoAnalysisResult(data);
+        setFbSecurityAlert(false);
         setStatusMessage(`Successfully reverse-engineered video and generated ${data.testPrompts?.length || sampleCount} test prompts!`);
       } else {
         throw new Error('Analysis completed but returned incomplete concept payload.');
       }
     } catch (err: any) {
       console.error('Video reverse-engineering error:', err);
-      setErrorMessage(`Video analysis error: ${err.message}`);
+      const msg = err.message || 'Video analysis failed';
+      const isFbBlocked =
+        (videoUrlInput && (videoUrlInput.includes('facebook.com') || videoUrlInput.includes('fb.watch'))) ||
+        msg.toLowerCase().includes('facebook') ||
+        msg.toLowerCase().includes('security wall');
+
+      if (isFbBlocked) {
+        setFbSecurityAlert(true);
+      }
+      setErrorMessage(msg);
     } finally {
       setIsAnalyzingVideo(false);
       setVideoAnalysisStep('');
@@ -634,6 +651,45 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                     </button>
                   )}
                 </div>
+
+                {/* Facebook Security Alert Banner with 1-Click Action */}
+                {fbSecurityAlert && (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2.5 animate-fadeIn mt-2">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-amber-200 uppercase tracking-wide">
+                          Facebook Security Notice
+                        </h4>
+                        <p className="text-xs text-amber-300 leading-relaxed">
+                          Facebook cloud servers ko direct Reel download ki ijazat nahi deta. Video ko apne mobile ya PC se download karke direct <strong>Upload .mp4</strong> tab ke zariye upload karein taake Gemini 3.8 Video Vision ise foran analyze kar sake!
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1 pl-8">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoInputMode('upload');
+                          setFbSecurityAlert(false);
+                          setErrorMessage('');
+                          setTimeout(() => fileInputRef.current?.click(), 100);
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Switch to Upload .mp4 & Select Video</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFbSecurityAlert(false)}
+                        className="px-3 py-1.5 rounded-lg text-xs text-amber-400 hover:text-amber-200"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
