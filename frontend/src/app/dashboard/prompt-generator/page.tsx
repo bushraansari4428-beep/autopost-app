@@ -17,7 +17,6 @@ import {
   Compass,
   Layers,
   Send,
-  Eye,
   Check,
   Loader2,
   Terminal
@@ -57,12 +56,11 @@ interface PromptItem {
   location: string;
   subject: string;
   text: string;
-  similarity_score?: number;
 }
 
 export default function PromptGeneratorPage() {
   const [masterPrompt, setMasterPrompt] = useState<string>('');
-  const [targetCount, setTargetCount] = useState<number>(1000);
+  const [targetCount, setTargetCount] = useState<number>(100);
   const [batchSize, setBatchSize] = useState<number>(5);
 
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -77,7 +75,7 @@ export default function PromptGeneratorPage() {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'fixed_dna' | 'matrix'>('fixed_dna');
+  const [activeTab, setActiveTab] = useState<'blueprint' | 'elements'>('blueprint');
 
   // VPS Modal state
   const [showVpsModal, setShowVpsModal] = useState<boolean>(false);
@@ -112,8 +110,6 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     };
   };
 
-  // Format prompts into exact requested string for Auto Bulk Video Generator:
-  // --- PROMPT 1 --- \n text \n\n --- PROMPT 2 --- \n text ...
   const formatPromptsText = (items: PromptItem[]): string => {
     return items
       .map(p => `--- PROMPT ${p.index} ---\n${p.text.trim()}\n\n`)
@@ -133,10 +129,10 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
     let activeMatrix = matrix;
 
-    // Layer 1: Prompt DNA Deconstruction if not already analyzed
+    // Analyze Master Prompt if not already done
     if (!activeMatrix) {
       setIsAnalyzing(true);
-      setStatusMessage('🧠 Layer 1: Deconstructing Prompt DNA & Extracting 2-Tier Matrix via Qwen 3.8...');
+      setStatusMessage('Analyzing Master Prompt blueprint with Qwen 3.8...');
       try {
         const res = await fetch('/api/prompts/analyze', {
           method: 'POST',
@@ -148,7 +144,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
           activeMatrix = data.matrix;
           setMatrix(data.matrix);
         } else {
-          throw new Error(data.error || 'Failed to analyze master prompt DNA');
+          throw new Error(data.error || 'Failed to analyze master prompt');
         }
       } catch (err: any) {
         setErrorMessage(`Analysis failed: ${err.message}`);
@@ -163,9 +159,9 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       return;
     }
 
-    // Layer 2 & 3: Hierarchical Matrix Cycling + Anti-Duplicate Semantic Validation
+    // Batch Generation Loop
     setIsGenerating(true);
-    setStatusMessage('🚀 Layer 2 & 3: Generating prompts with 0-loop matrix & Jaccard semantic validator (<38% overlap guarantee)...');
+    setStatusMessage('Generating prompts in background...');
 
     let currentIdx = prompts.length + 1;
     let accumulated = [...prompts];
@@ -199,12 +195,11 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
           setCurrentPrompt(data.prompts[data.prompts.length - 1]);
           currentIdx += data.prompts.length;
 
-          // Auto-scroll output box
           if (outputBoxRef.current) {
             outputBoxRef.current.scrollTop = outputBoxRef.current.scrollHeight;
           }
         } else {
-          setErrorMessage(data?.error || data?.message || 'Retrying prompt generation tick...');
+          setErrorMessage(data?.error || data?.message || 'Retrying prompt generation...');
           await new Promise(r => setTimeout(r, 2000));
         }
       } catch (err: any) {
@@ -213,16 +208,15 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
         await new Promise(r => setTimeout(r, 2000));
       }
 
-      // Smooth neural tick
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise(r => setTimeout(r, 100));
     }
 
     setIsGenerating(false);
     if (currentIdx > targetCount) {
-      setStatusMessage(`🎉 Completed! All ${targetCount} prompts generated with 100% Anti-Duplicate Semantic Guarantee!`);
+      setStatusMessage(`Completed! All ${targetCount} prompts generated successfully.`);
     } else if (stopSignalRef.current) {
       setIsPaused(true);
-      setStatusMessage(`⏸️ Paused at Prompt ${accumulated.length}. You can resume anytime.`);
+      setStatusMessage(`Paused at Prompt ${accumulated.length}. You can resume anytime.`);
     }
   };
 
@@ -230,7 +224,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     stopSignalRef.current = true;
     setIsGenerating(false);
     setIsPaused(true);
-    setStatusMessage(`⏸️ Paused. Generated ${prompts.length} of ${targetCount} prompts.`);
+    setStatusMessage(`Paused. Generated ${prompts.length} of ${targetCount} prompts.`);
   };
 
   const handleReset = () => {
@@ -246,7 +240,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
   const handleDownloadTxt = () => {
     if (prompts.length === 0) return;
-    const cleanNiche = (matrix?.niche_name || 'Viral_Anomaly_Series')
+    const cleanNiche = (matrix?.niche_name || 'Prompts')
       .replace(/[^a-zA-Z0-9_]+/g, '_')
       .replace(/^_+|_+$/g, '');
     const filename = `${cleanNiche}_${prompts.length}_prompts.txt`;
@@ -283,7 +277,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       localStorage.setItem('vps_video_generator_url', vpsUrl.trim());
     }
 
-    const cleanNiche = (matrix?.niche_name || 'Anomaly_Found_Footage')
+    const cleanNiche = (matrix?.niche_name || 'Prompts')
       .replace(/[^a-zA-Z0-9_]+/g, '_')
       .replace(/^_+|_+$/g, '');
     const filename = `${cleanNiche}_${prompts.length}_prompts.txt`;
@@ -302,7 +296,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
       const data = await res.json();
       if (data.success) {
-        setVpsSuccessMsg(data.message || 'Prompt file saved & ready for Auto Bulk Video Generator bot rendering!');
+        setVpsSuccessMsg(data.message || 'Prompt file saved & ready for bot rendering!');
       } else {
         setErrorMessage(data.message || 'VPS transfer encountered an issue.');
       }
@@ -315,18 +309,9 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
   const progressPercent = Math.min(100, Math.round((prompts.length / targetCount) * 100));
 
-  // Compute average semantic similarity score across generated items
-  const avgSimilarity =
-    prompts.length > 0
-      ? (
-          prompts.reduce((acc, p) => acc + (p.similarity_score || 12), 0) /
-          prompts.length
-        ).toFixed(1)
-      : '0.0';
-
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-y-auto custom-scrollbar p-6 space-y-6">
-      {/* Header Banner */}
+      {/* Clean Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-3">
@@ -336,39 +321,16 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h1 className="text-2xl font-black tracking-tight text-white">
-                  Universal Prompt DNA Engine
+                  Prompt Generator
                 </h1>
                 <span className="text-xs px-2.5 py-0.5 font-bold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                   Powered by Qwen 3.8 Ultra
                 </span>
-                <span className="text-xs px-2.5 py-0.5 font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> 100% Anti-Duplicate
-                </span>
               </div>
               <p className="text-sm text-slate-400 mt-0.5">
-                Deconstruct 1 Master Prompt into 1,000 mathematically unique, viral video prompts with 0% looping.
+                Generate high-retention video prompts automatically from your master prompt.
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* 4 Architecture Layers Indicator Badges */}
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            <strong>Layer 1:</strong> DNA Deconstructor
-          </div>
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
-            <strong>Layer 2:</strong> 2-Tier Matrix
-          </div>
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <strong>Layer 3:</strong> Semantic Validator
-          </div>
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></span>
-            <strong>Layer 4:</strong> 1-Click VPS Sync
           </div>
         </div>
       </div>
@@ -381,21 +343,21 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             <div className="flex items-center justify-between">
               <label className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-400" />
-                Master Prompt (Layer 1 Input)
+                Master Prompt
               </label>
               <button
                 type="button"
                 onClick={handleUseSamplePrompt}
                 className="text-xs text-blue-400 hover:text-blue-300 font-semibold transition-colors flex items-center gap-1"
               >
-                Load Anomaly Example
+                Load Example
               </button>
             </div>
 
             <textarea
               value={masterPrompt}
               onChange={e => setMasterPrompt(e.target.value)}
-              placeholder="Paste your Master Prompt here (with camera specs, timeline intervals, foley audio, and negative prompt)..."
+              placeholder="Paste your Master Prompt here..."
               rows={8}
               className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono leading-relaxed"
             />
@@ -418,13 +380,13 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   <option value={300}>300 Prompts</option>
                   <option value={500}>500 Prompts</option>
                   <option value={750}>750 Prompts</option>
-                  <option value={1000}>1,000 Prompts (Full Set)</option>
+                  <option value={1000}>1,000 Prompts</option>
                 </select>
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-slate-400 block mb-1.5">
-                  Batch Chunk Size
+                  Batch Size
                 </label>
                 <select
                   value={batchSize}
@@ -432,9 +394,9 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   disabled={isGenerating}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 >
-                  <option value={3}>3 prompts / tick</option>
-                  <option value={5}>5 prompts / tick (Recommended)</option>
-                  <option value={10}>10 prompts / tick</option>
+                  <option value={3}>3 prompts / batch</option>
+                  <option value={5}>5 prompts / batch (Recommended)</option>
+                  <option value={10}>10 prompts / batch</option>
                 </select>
               </div>
             </div>
@@ -450,8 +412,8 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 >
                   {isAnalyzing ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Layer 1: Deconstructing DNA...
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      Analyzing Blueprint...
                     </>
                   ) : isPaused ? (
                     <>
@@ -496,20 +458,24 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             )}
             {statusMessage && (
               <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
-                <Zap className="w-4 h-4 shrink-0 text-indigo-400" />
+                {isGenerating ? (
+                  <Loader2 className="w-4 h-4 shrink-0 animate-spin text-indigo-400" />
+                ) : (
+                  <Zap className="w-4 h-4 shrink-0 text-indigo-400" />
+                )}
                 <span>{statusMessage}</span>
               </div>
             )}
           </div>
 
-          {/* DNA & Matrix Inspector Card (Shows once analyzed) */}
+          {/* Prompt Blueprint & Variation Elements Card */}
           {matrix && (
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                 <div className="flex items-center gap-2">
                   <Compass className="w-4 h-4 text-indigo-400" />
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Extracted Prompt DNA
+                    Prompt Structure
                   </span>
                 </div>
                 <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
@@ -517,37 +483,37 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 </span>
               </div>
 
-              {/* Sub-tabs for DNA View */}
+              {/* Clean Sub-tabs */}
               <div className="flex gap-2 border-b border-slate-800/80 pb-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('fixed_dna')}
+                  onClick={() => setActiveTab('blueprint')}
                   className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                    activeTab === 'fixed_dna'
+                    activeTab === 'blueprint'
                       ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Layer 1: Invariant DNA
+                  Prompt Blueprint
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('matrix')}
+                  onClick={() => setActiveTab('elements')}
                   className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                    activeTab === 'matrix'
+                    activeTab === 'elements'
                       ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Layer 2: 2-Tier Matrix (Anti-Loop)
+                  Variation Elements
                 </button>
               </div>
 
-              {activeTab === 'fixed_dna' && (
+              {activeTab === 'blueprint' && (
                 <div className="space-y-2.5 text-xs">
                   <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/70">
                     <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-                      📹 Camera & Medium (Fixed Across 1,000)
+                      Camera Setup
                     </span>
                     <p className="text-slate-200 text-xs mt-1 leading-relaxed font-mono">
                       {matrix.fixed_dna?.camera_and_medium || '9:16 vertical smartphone rear POV'}
@@ -556,18 +522,18 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
                   <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/70">
                     <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-                      ⏱️ 5-Beat Timeline Architecture
+                      Timeline Breakdown
                     </span>
                     <ul className="mt-1 space-y-1 text-slate-300 text-[11px] list-disc list-inside">
                       {matrix.fixed_dna?.timing_breakdown?.map((b, i) => (
                         <li key={i}>{b}</li>
                       )) || (
                         <>
-                          <li>0–2s: Undeniable visual hook & anomaly introduction</li>
+                          <li>0–2s: Visual hook & subject introduction</li>
                           <li>0–3s: Handheld approach with terrain footsteps</li>
-                          <li>3–6s: Physical test tool & micro scale anchor</li>
-                          <li>6–8s: Secondary physics-defying escalation</li>
-                          <li>8–10s: Violent concussive climax & panicked abrupt cut</li>
+                          <li>3–6s: Physical test with scale anchor</li>
+                          <li>6–8s: Secondary reaction & escalation</li>
+                          <li>8–10s: Concussive climax & cut</li>
                         </>
                       )}
                     </ul>
@@ -575,56 +541,52 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
                   <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/70">
                     <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-                      🚫 Negative Prompt (Preserved 100%)
+                      Negative Prompt
                     </span>
                     <p className="text-slate-400 text-[11px] mt-1 line-clamp-2 italic font-mono">
-                      {matrix.fixed_dna?.negative_prompt || 'Locked negative prompt for realism'}
+                      {matrix.fixed_dna?.negative_prompt || 'Standard quality rules'}
                     </p>
                   </div>
                 </div>
               )}
 
-              {activeTab === 'matrix' && (
+              {activeTab === 'elements' && (
                 <div className="space-y-3 text-xs">
-                  <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px]">
-                    <strong>Anti-Looping Permutations:</strong> 25 Sub-Genres × 35 Locations × 35 Anomalies × 25 Tools × 20 Anchors × 25 Climaxes = <strong>10,937,500+ non-repeating variations</strong> possible!
-                  </div>
-
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                      <span className="text-slate-500 text-[11px] block">Tier 1: Sub-Genres</span>
+                      <span className="text-slate-500 text-[11px] block">Sub-Genres</span>
                       <span className="font-bold text-slate-200">
-                        {matrix.hierarchical_matrix?.sub_genres?.length || 25} biomes/terrains
+                        {matrix.hierarchical_matrix?.sub_genres?.length || 25} biomes
                       </span>
                     </div>
                     <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                      <span className="text-slate-500 text-[11px] block">Tier 2: Locations</span>
+                      <span className="text-slate-500 text-[11px] block">Locations</span>
                       <span className="font-bold text-slate-200">
-                        {matrix.hierarchical_matrix?.locations?.length || 35} real environments
+                        {matrix.hierarchical_matrix?.locations?.length || 35} environments
                       </span>
                     </div>
                     <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                      <span className="text-slate-500 text-[11px] block">Tier 2: Anomalies</span>
+                      <span className="text-slate-500 text-[11px] block">Subjects</span>
                       <span className="font-bold text-slate-200">
-                        {matrix.hierarchical_matrix?.subjects_or_anomalies?.length || 35} metric subjects
+                        {matrix.hierarchical_matrix?.subjects_or_anomalies?.length || 35} subjects
                       </span>
                     </div>
                     <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                      <span className="text-slate-500 text-[11px] block">Tier 2: Test Tools</span>
+                      <span className="text-slate-500 text-[11px] block">Test Tools</span>
                       <span className="font-bold text-slate-200">
-                        {matrix.hierarchical_matrix?.tools_and_probes?.length || 25} everyday probes
+                        {matrix.hierarchical_matrix?.tools_and_probes?.length || 25} probes
                       </span>
                     </div>
                     <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                      <span className="text-slate-500 text-[11px] block">Tier 2: Scale Anchors</span>
+                      <span className="text-slate-500 text-[11px] block">Scale Anchors</span>
                       <span className="font-bold text-slate-200">
-                        {matrix.hierarchical_matrix?.scale_anchors?.length || 20} biological anchors
+                        {matrix.hierarchical_matrix?.scale_anchors?.length || 20} anchors
                       </span>
                     </div>
                     <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
-                      <span className="text-slate-500 text-[11px] block">Tier 2: Climaxes</span>
+                      <span className="text-slate-500 text-[11px] block">Climaxes</span>
                       <span className="font-bold text-slate-200">
-                        {matrix.hierarchical_matrix?.climaxes?.length || 25} acoustic fractures
+                        {matrix.hierarchical_matrix?.climaxes?.length || 25} endings
                       </span>
                     </div>
                   </div>
@@ -636,17 +598,29 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
         {/* Right Column: Live Progress & Formatted Output */}
         <div className="lg:col-span-7 flex flex-col space-y-4">
-          {/* Progress Header */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col space-y-3">
+          {/* Generation Progress Box (With Active Rotating Sign) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col space-y-3 relative overflow-hidden">
+            {/* Background subtle animated glow while generating */}
+            {isGenerating && (
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 animate-pulse" />
+            )}
+
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 text-blue-400" />
                 <span className="text-sm font-bold text-white">Generation Progress</span>
+                {isGenerating && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold animate-pulse">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Working in background...</span>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                  Layer 3 Overlap: {avgSimilarity}% (&lt; 38% Limit ✅)
-                </span>
+
+              <div className="flex items-center gap-2">
+                {isGenerating && (
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                )}
                 <span className="text-xs font-mono font-bold text-blue-400">
                   {prompts.length} / {targetCount} ({progressPercent}%)
                 </span>
@@ -654,9 +628,11 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             </div>
 
             {/* Progress Bar */}
-            <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+            <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800 relative">
               <div
-                className="bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-400 h-full transition-all duration-300 rounded-full"
+                className={`bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-400 h-full transition-all duration-300 rounded-full ${
+                  isGenerating ? 'animate-pulse' : ''
+                }`}
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -665,10 +641,10 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             {currentPrompt && (
               <div className="text-xs text-slate-400 flex items-center justify-between bg-slate-950/80 px-3 py-2 rounded-xl border border-slate-800/80">
                 <span className="truncate pr-2">
-                  <strong className="text-slate-200">Latest #{currentPrompt.index}:</strong> [{currentPrompt.sub_genre || 'Anomaly'}] {currentPrompt.location}
+                  <strong className="text-slate-200">Latest #{currentPrompt.index}:</strong> {currentPrompt.location}
                 </span>
                 <span className="text-emerald-400 font-bold shrink-0 text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  Validated ({currentPrompt.similarity_score || 12}% Overlap)
+                  Saved
                 </span>
               </div>
             )}
@@ -682,7 +658,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors disabled:opacity-40"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Download .txt (Layer 4)</span>
+                <span>Download .txt</span>
               </button>
 
               <button
@@ -711,7 +687,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 className="ml-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40"
               >
                 <Server className="w-3.5 h-3.5" />
-                <span>1-Click Push to VPS (Auto Bulk Video Generator)</span>
+                <span>Send to VPS</span>
               </button>
             </div>
           </div>
@@ -724,6 +700,9 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
                   Formatted Output ({prompts.length} Ready)
                 </span>
+                {isGenerating && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                )}
               </div>
 
               {/* View Toggle */}
@@ -738,7 +717,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    Raw TXT Format
+                    Raw TXT
                   </button>
                   <button
                     type="button"
@@ -752,9 +731,6 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                     Scene Cards
                   </button>
                 </div>
-                <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-                  Auto Bulk Format: --- PROMPT X ---
-                </span>
               </div>
             </div>
 
@@ -764,45 +740,86 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 className="flex-1 bg-slate-950 rounded-xl p-4 font-mono text-xs text-slate-300 overflow-y-auto max-h-[520px] border border-slate-800 custom-scrollbar leading-relaxed whitespace-pre-wrap select-text"
               >
                 {prompts.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-600 py-20 space-y-2">
-                    <Film className="w-8 h-8 opacity-40" />
-                    <p>No prompts generated yet. Enter a Master Prompt and click Start.</p>
+                  <div className="h-full flex flex-col items-center justify-center text-slate-600 py-20 space-y-3">
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                        <p className="text-blue-400 font-semibold text-sm">
+                          Generating prompts in background...
+                        </p>
+                        <p className="text-slate-500 text-xs">
+                          Prompts will appear here in real-time.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <Film className="w-8 h-8 opacity-40" />
+                        <p>No prompts generated yet. Enter a Master Prompt and click Generate.</p>
+                      </>
+                    )}
                   </div>
                 ) : (
-                  formatPromptsText(prompts)
+                  <>
+                    {formatPromptsText(prompts)}
+                    {isGenerating && (
+                      <div className="flex items-center gap-2 py-3 text-blue-400 text-xs animate-pulse">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Generating next batch in background...</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
               <div className="flex-1 bg-slate-950 rounded-xl p-3 overflow-y-auto max-h-[520px] border border-slate-800 custom-scrollbar space-y-3">
                 {prompts.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-600 py-20 space-y-2">
-                    <Film className="w-8 h-8 opacity-40" />
-                    <p>No prompt cards generated yet.</p>
+                  <div className="h-full flex flex-col items-center justify-center text-slate-600 py-20 space-y-3">
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                        <p className="text-blue-400 font-semibold text-sm">
+                          Generating scenes in background...
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <Film className="w-8 h-8 opacity-40" />
+                        <p>No prompt cards generated yet.</p>
+                      </>
+                    )}
                   </div>
                 ) : (
-                  prompts.map(p => (
-                    <div
-                      key={p.index}
-                      className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-xl space-y-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 font-bold rounded-md font-mono text-[11px] border border-blue-500/30">
-                            PROMPT {p.index}
-                          </span>
-                          <span className="text-xs text-slate-300 font-semibold truncate max-w-[200px]">
-                            {p.sub_genre || 'Anomaly Scene'}
+                  <>
+                    {prompts.map(p => (
+                      <div
+                        key={p.index}
+                        className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-xl space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 font-bold rounded-md font-mono text-[11px] border border-blue-500/30">
+                              PROMPT {p.index}
+                            </span>
+                            <span className="text-xs text-slate-300 font-semibold truncate max-w-[280px]">
+                              {p.sub_genre || p.location}
+                            </span>
+                          </div>
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            Saved
                           </span>
                         </div>
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                          Overlap: {p.similarity_score || 12}% (&lt;38% Pass)
-                        </span>
+                        <p className="text-slate-300 leading-relaxed font-mono text-[11px] whitespace-pre-wrap bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60">
+                          {p.text}
+                        </p>
                       </div>
-                      <p className="text-slate-300 leading-relaxed font-mono text-[11px] whitespace-pre-wrap bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/60">
-                        {p.text}
-                      </p>
-                    </div>
-                  ))
+                    ))}
+                    {isGenerating && (
+                      <div className="flex items-center justify-center gap-2 py-3 text-blue-400 text-xs animate-pulse">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Generating next scenes...</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -810,7 +827,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
         </div>
       </div>
 
-      {/* 🚀 One-Click VPS Transfer Modal (Layer 4) */}
+      {/* VPS Transfer Modal */}
       {showVpsModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
@@ -821,10 +838,10 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">
-                    Layer 4: Direct VPS Deployment
+                    Send to VPS
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Auto-transfer prompt file to Auto Bulk Video Generator
+                    Transfer prompt file to Auto Bulk Video Generator
                   </p>
                 </div>
               </div>
@@ -839,7 +856,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  VPS Bot Webhook / Sync URL (Optional)
+                  VPS Bot Webhook URL (Optional)
                 </label>
                 <input
                   type="text"
@@ -849,15 +866,14 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Default target: <code className="text-slate-400">/home/ubuntu/Auto_Bulk_Video_Generator/prompts/master/</code>
+                  Target directory: <code className="text-slate-400">/home/ubuntu/Auto_Bulk_Video_Generator/prompts/master/</code>
                 </p>
               </div>
 
               <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 text-xs text-slate-400 space-y-1">
-                <p><strong>Total Prompts:</strong> {prompts.length} unique scenes</p>
-                <p><strong>Niche:</strong> {matrix?.niche_name || 'Viral Anomaly Series'}</p>
-                <p><strong>Formatting:</strong> Exact <code className="text-slate-300">--- PROMPT X ---</code> for Auto Bulk Video Generator</p>
-                <p><strong>Math Verification:</strong> Jaccard Overlap &lt; 0.38 (Passed 100%)</p>
+                <p><strong>Total Prompts:</strong> {prompts.length}</p>
+                <p><strong>Niche:</strong> {matrix?.niche_name || 'Video Series'}</p>
+                <p><strong>Format:</strong> Structured TXT (.txt)</p>
               </div>
 
               {vpsSuccessMsg && (
