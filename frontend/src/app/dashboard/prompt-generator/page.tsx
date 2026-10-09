@@ -862,7 +862,16 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleApproveAndExpand(20)}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white font-bold text-xs shadow-md border border-slate-700 transition-all"
+                  >
+                    <Layers className="w-4 h-4 text-blue-400" />
+                    <span>Expand to 20 Prompts</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => handleApproveAndExpand(500)}

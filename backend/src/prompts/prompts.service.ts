@@ -760,6 +760,8 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
     const fileUri = await this.uploadVideoToGemini(videoBuffer, mimeType);
     this.logger.log(`Gemini video upload ready: ${fileUri}`);
 
+    const anchorCount = Math.min(Math.max(sampleCount, 1), 5);
+
     const promptText = `You are a world-class AI Cinematographer and Viral Short-Form Video Producer.
 Your task is NATIVE VIDEO REVERSE-ENGINEERING of this short video clip.
 
@@ -790,15 +792,15 @@ TASK 2: RE-SKIN INTO A 100% BRAND NEW CONCEPT (Same Viral Formula, Fresh Origina
 TASK 3: COMPILE THE MASTER PROMPT:
 - Full, ready-to-run 10-second prompt for this new re-skinned concept with full camera POV, setting, 0-2s hook, 2-5s action, 5-8s escalation, 8-10s climax, synchronized Audio: Foley line, and ## Negative prompt block.
 
-TASK 4: HIERARCHICAL MATRIX & ${sampleCount} INITIAL TEST PROMPTS:
+TASK 4: HIERARCHICAL MATRIX & ${anchorCount} INITIAL TEST PROMPTS:
 - Create a focused, high-density matrix tailored to THIS concept:
-  * sub_genres: 8-10 distinct themes/sub-genres
-  * locations: 8-10 distinct locations
-  * subjects_or_anomalies: 8-10 distinct subjects/hooks
-  * tools_and_probes: 8-10 tools/objects/interaction details
-  * scale_anchors: 6-8 scale anchors/fine details
-  * climaxes: 8-10 climaxes/endings
-- test_prompts: Generate exactly ${sampleCount} complete, ready-to-run 10-second variation prompts directly exploring this concept across different settings. Each prompt must include ## Negative prompt.
+  * sub_genres: 10 distinct themes/sub-genres
+  * locations: 10 distinct locations
+  * subjects_or_anomalies: 10 distinct subjects/hooks
+  * tools_and_probes: 10 tools/objects/interaction details
+  * scale_anchors: 8 scale anchors/fine details
+  * climaxes: 10 climaxes/endings
+- test_prompts: Generate exactly ${anchorCount} complete, ready-to-run 10-second variation prompts directly exploring this concept across different settings. Each prompt must include ## Negative prompt.
 
 Return strictly valid JSON with this schema:
 {
@@ -931,30 +933,39 @@ Return strictly valid JSON with this schema:
     try {
       parsed = JSON.parse(cleanCandidate);
     } catch (parseErr: any) {
-      this.logger.warn(`Failed to parse Gemini JSON: ${parseErr.message}`);
-      parsed = {
-        original_analysis: {
-          actual_subject_and_action: 'Short viral video clip',
-          visual_hook: 'Dynamic opening hook',
-          camera_and_pov: 'Continuous vertical POV',
-          climax: 'Dramatic ending resolution',
-          audio_elements: 'Synchronized Foley audio',
-        },
-        re_skinned_concept: {
-          title: 'Viral Concept Series',
-          core_hook: 'Fresh original viral concept',
-          new_biome: 'Cinematic environment',
-          new_tool: 'Focal interaction object',
-          new_scale_anchor: 'Fine visual detail',
-          new_climax: 'High-impact climax',
-        },
-        master_prompt: cleanCandidate,
-      };
+      this.logger.warn(`Initial JSON parse failed: ${parseErr.message}. Attempting structural repair...`);
+      let repaired = false;
+      const lastObjClose = cleanCandidate.lastIndexOf('},');
+      if (lastObjClose !== -1) {
+        try {
+          const testCandidate = cleanCandidate.substring(0, lastObjClose + 1) + ']}';
+          parsed = JSON.parse(testCandidate);
+          repaired = true;
+          this.logger.log('Successfully recovered truncated JSON payload with intact prompts!');
+        } catch (_) {}
+      }
+      if (!repaired) {
+        const lastBraceClose = cleanCandidate.lastIndexOf('}');
+        if (lastBraceClose !== -1) {
+          try {
+            const testCandidate = cleanCandidate.substring(0, lastBraceClose + 1) + '}';
+            parsed = JSON.parse(testCandidate);
+            repaired = true;
+            this.logger.log('Successfully recovered JSON payload via root closure!');
+          } catch (_) {}
+        }
+      }
+      if (!repaired) {
+        throw new Error('Gemini Video Vision output format error. Please try analyzing again.');
+      }
     }
 
+    const nicheName = parsed.matrix?.niche_name || parsed.re_skinned_concept?.title || 'Viral Video Concept';
+    const themeSummary = parsed.matrix?.theme_summary || parsed.re_skinned_concept?.core_hook || '10-second vertical video series';
+
     const matrix: PromptMatrix = {
-      niche_name: parsed.matrix?.niche_name || parsed.re_skinned_concept?.title || 'Viral Concept Series',
-      theme_summary: parsed.matrix?.theme_summary || '10-second vertical viral series',
+      niche_name: nicheName,
+      theme_summary: themeSummary,
       fixed_dna: parsed.matrix?.fixed_dna || {
         camera_and_medium: 'Create a 10-second vertical 9:16 video in continuous POV.',
         timing_breakdown: ['0-2s: Hook', '2-5s: Development', '5-8s: Escalation', '8-10s: Climax'],
@@ -963,16 +974,16 @@ Return strictly valid JSON with this schema:
         structural_template: '',
       },
       hierarchical_matrix: parsed.matrix?.hierarchical_matrix || {
-        sub_genres: ['Dynamic Theme A', 'Dynamic Theme B'],
-        locations: ['Location A', 'Location B'],
-        subjects_or_anomalies: ['Subject A', 'Subject B'],
-        tools_and_probes: ['Tool A', 'Tool B'],
-        scale_anchors: ['Detail A', 'Detail B'],
-        climaxes: ['Climax A', 'Climax B'],
+        sub_genres: [parsed.re_skinned_concept?.niche || 'Signature Concept'],
+        locations: [parsed.re_skinned_concept?.new_biome || 'Signature Setting'],
+        subjects_or_anomalies: [parsed.re_skinned_concept?.core_hook || 'Core Visual Hook'],
+        tools_and_probes: [parsed.re_skinned_concept?.new_tool || 'Focal Interaction'],
+        scale_anchors: [parsed.re_skinned_concept?.new_scale_anchor || 'Texture Detail'],
+        climaxes: [parsed.re_skinned_concept?.new_climax || 'Dramatic Climax'],
       },
-      subjects: parsed.matrix?.hierarchical_matrix?.subjects_or_anomalies || [],
-      locations: parsed.matrix?.hierarchical_matrix?.locations || [],
-      actions_or_hooks: parsed.matrix?.hierarchical_matrix?.climaxes || [],
+      subjects: parsed.matrix?.hierarchical_matrix?.subjects_or_anomalies || [parsed.re_skinned_concept?.core_hook || 'Core Hook'],
+      locations: parsed.matrix?.hierarchical_matrix?.locations || [parsed.re_skinned_concept?.new_biome || 'Setting'],
+      actions_or_hooks: parsed.matrix?.hierarchical_matrix?.climaxes || [parsed.re_skinned_concept?.new_climax || 'Climax'],
       camera_styles: ['Continuous vertical 9:16 POV'],
     };
 
@@ -1008,13 +1019,17 @@ Return strictly valid JSON with this schema:
     testPrompts: GeneratedPromptItem[];
   }> {
     const safeCount = Math.min(Math.max(sampleCount, 1), 20);
-    const result = await this.reverseEngineerVideo(videoBuffer, safeCount, mimeType);
+    // Request up to 5 core anchor prompts from Gemini Video Vision (prevents token truncation)
+    const visionAnchorCount = Math.min(safeCount, 5);
+    const result = await this.reverseEngineerVideo(videoBuffer, visionAnchorCount, mimeType);
 
     let testPrompts = result.testPrompts || [];
 
-    // If Gemini returned fewer prompts than requested, supplement dynamically from this video's matrix
+    // If user requested more than vision anchor prompts (e.g. 10, 15, or 20 prompts),
+    // dynamically generate the remaining prompts using Qwen 3.8 / Groq from this EXACT concept's Master Prompt & Matrix!
     if (testPrompts.length < safeCount) {
       const needed = safeCount - testPrompts.length;
+      this.logger.log(`Supplementing ${needed} test prompts from this video's Master Prompt and Matrix using Groq...`);
       const additional = await this.generateBatch(
         result.masterPrompt,
         result.matrix,
