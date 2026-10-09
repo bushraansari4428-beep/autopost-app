@@ -184,13 +184,19 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
           })
         });
 
+        if (!res.ok) {
+          const errText = await res.text();
+          setErrorMessage(`Server response ${res.status}: ${errText.slice(0, 120)}`);
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+
         const data = await res.json();
-        if (data.success && Array.isArray(data.prompts)) {
+        if (data.success && Array.isArray(data.prompts) && data.prompts.length > 0) {
+          setErrorMessage('');
           accumulated = [...accumulated, ...data.prompts];
           setPrompts([...accumulated]);
-          if (data.prompts.length > 0) {
-            setCurrentPrompt(data.prompts[data.prompts.length - 1]);
-          }
+          setCurrentPrompt(data.prompts[data.prompts.length - 1]);
           currentIdx += data.prompts.length;
 
           // Auto-scroll output box
@@ -198,11 +204,12 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             outputBoxRef.current.scrollTop = outputBoxRef.current.scrollHeight;
           }
         } else {
-          // Delay and retry on minor rate limit
+          setErrorMessage(data?.error || data?.message || 'Retrying prompt generation tick...');
           await new Promise(r => setTimeout(r, 2000));
         }
       } catch (err: any) {
         console.error('Batch generation error:', err);
+        setErrorMessage(`Network error: ${err.message}. Retrying...`);
         await new Promise(r => setTimeout(r, 2000));
       }
 

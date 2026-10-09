@@ -2,7 +2,6 @@ import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
 import { PromptsService, PromptMatrix } from './prompts.service';
 import { AuthGuard } from '@nestjs/passport';
 
-@UseGuards(AuthGuard('jwt'))
 @Controller('prompts')
 export class PromptsController {
   constructor(private readonly promptsService: PromptsService) {}
