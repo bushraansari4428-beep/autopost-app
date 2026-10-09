@@ -214,7 +214,12 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
           const errObj = await res.json();
           cleanMsg = errObj.message || errObj.error || (Array.isArray(errObj.message) ? errObj.message.join(', ') : '');
         } catch (_) {
-          cleanMsg = await res.text();
+          const rawText = await res.text();
+          if (res.status === 503 || rawText.includes('503') || rawText.includes('Service Unavailable')) {
+            cleanMsg = 'AI Model ya Server par Google demand spike (503) aya hai. Hamari automatic failover layer activate ho rahi hai, baraye meherbani 5 seconds baad dobara "Analyze & Reverse-Engineer" dabayein.';
+          } else {
+            cleanMsg = rawText.slice(0, 200);
+          }
         }
         throw new Error(cleanMsg || `Server error (${res.status})`);
       }

@@ -101,7 +101,7 @@ export class PromptsService {
 
   private getGeminiKey(): string {
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
-      return process.env.GEMINI_API_KEY.trim();
+      return process.env.GEMINI_API_KEY.replace(/^["']|["']$/g, '').trim();
     }
     try {
       const candidates = [
@@ -111,7 +111,7 @@ export class PromptsService {
       for (const p of candidates) {
         if (fs.existsSync(p)) {
           const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
-          if (cfg?.gemini_api_key) return cfg.gemini_api_key.trim();
+          if (cfg?.gemini_api_key) return String(cfg.gemini_api_key).replace(/^["']|["']$/g, '').trim();
         }
       }
     } catch (_) {}
@@ -628,12 +628,37 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
       },
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
-      timeout: 60000,
+      timeout: 90000,
     });
-    if (res.data?.file?.uri) {
-      return res.data.file.uri;
+
+    const fileData = res.data?.file;
+    if (!fileData?.uri) {
+      throw new Error('Google Gemini File API upload fail ho gaya. Response me file URI nahi mila.');
     }
-    throw new Error('Failed to upload video to Gemini File API');
+
+    let state = fileData.state;
+    const fileName = fileData.name;
+    let attempts = 0;
+    while (state === 'PROCESSING' && attempts < 25) {
+      this.logger.log(`Waiting for Gemini video processing (state: ${state}, attempt: ${attempts + 1})...`);
+      await new Promise(r => setTimeout(r, 1500));
+      try {
+        const check = await axios.get(
+          `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${key}`,
+          { timeout: 15000 },
+        );
+        state = check.data?.state;
+      } catch (checkErr: any) {
+        this.logger.warn(`Polling file status warning: ${checkErr.message}`);
+      }
+      attempts++;
+    }
+
+    if (state === 'FAILED') {
+      throw new Error('Google Gemini video process nahi kar saka (state: FAILED).');
+    }
+
+    return fileData.uri;
   }
 
   async downloadVideoFromUrl(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
@@ -726,7 +751,9 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
     matrix: PromptMatrix;
   }> {
     const key = this.getGeminiKey();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`;
+    this.logger.log(`Uploading ${videoBuffer.length} bytes video to Gemini File API...`);
+    const fileUri = await this.uploadVideoToGemini(videoBuffer, mimeType);
+    this.logger.log(`Gemini video upload ready: ${fileUri}`);
 
     const promptText = `You are a world-class AI Cinematographer, Viral Video Architect, and Physical Science Director.
 Your task is NATIVE VIDEO REVERSE-ENGINEERING of this 10-second vertical viral found-footage video.
@@ -795,29 +822,16 @@ Return strictly valid JSON with this schema:
   }
 }`;
 
-    let videoPart: any;
-    if (videoBuffer.length <= 15 * 1024 * 1024) {
-      videoPart = {
-        inline_data: {
-          mime_type: mimeType,
-          data: videoBuffer.toString('base64'),
-        },
-      };
-    } else {
-      const fileUri = await this.uploadVideoToGemini(videoBuffer, mimeType);
-      videoPart = {
-        file_data: {
-          mime_type: mimeType,
-          file_uri: fileUri,
-        },
-      };
-    }
-
     const payload = {
       contents: [
         {
           parts: [
-            videoPart,
+            {
+              fileData: {
+                fileUri,
+                mimeType,
+              },
+            },
             {
               text: promptText,
             },
@@ -831,14 +845,44 @@ Return strictly valid JSON with this schema:
       },
     };
 
-    const res = await axios.post(url, payload, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 120000,
-    });
+    // Cascading models to overcome Google demand spikes (503 / 429)
+    const candidateModels = [
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash',
+      'gemini-flash-latest',
+    ];
 
-    const candidate = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    let candidate: string | null = null;
+    let lastError: any = null;
+
+    for (const model of candidateModels) {
+      try {
+        this.logger.log(`Calling Gemini Video Vision with model: ${model}`);
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const res = await axios.post(url, payload, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 120000,
+        });
+
+        const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim().length > 0) {
+          candidate = text;
+          this.logger.log(`Gemini video analysis succeeded with ${model}!`);
+          break;
+        }
+      } catch (err: any) {
+        const status = err.response?.status;
+        const errDetails = err.response?.data?.error?.message || err.message;
+        this.logger.warn(`Gemini model ${model} failed (${status}): ${errDetails}. Cascading to next model...`);
+        lastError = err;
+      }
+    }
+
     if (!candidate) {
-      throw new Error('Gemini 3.8 Flash returned empty response for video analysis');
+      const errDetail = lastError?.response?.data?.error?.message || lastError?.message || 'High server demand';
+      throw new Error(`Google Gemini Video Vision servers par high demand hai: ${errDetail}. Kuch lamhay baad dobara try karein.`);
     }
 
     let cleanCandidate = candidate.trim();
