@@ -92,6 +92,8 @@ interface VideoAnalysisResult {
   testPrompts?: PromptItem[];
 }
 
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://autopost-app-1.onrender.com').replace(/\/+$/, '');
+
 export default function PromptGeneratorPage() {
   // Navigation Mode: Video Reverse Engineer vs Direct Master Prompt
   const [mainMode, setMainMode] = useState<'video_engineer' | 'master_prompt'>('video_engineer');
@@ -206,7 +208,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
       setVideoAnalysisStep('Gemini 3.8 analyzing continuous video motion, POV wobble, timing & Foley audio...');
 
-      const res = await fetch('/api/prompts/reverse-engineer-video', {
+      const res = await fetch(`${BACKEND_URL}/prompts/reverse-engineer-video`, {
         method: 'POST',
         headers,
         body: formData,
@@ -225,7 +227,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             } else if (res.status === 503 || rawText.includes('503') || rawText.includes('Service Unavailable')) {
               cleanMsg = 'AI Model par temporary demand spike (503) aya hai. Baraye meherbani 5 seconds baad dobara koshish karein.';
             } else if (res.status === 413 || rawText.includes('413') || rawText.includes('Payload Too Large')) {
-              cleanMsg = 'Video file ka size bohot bara hai. Baraye meherbani chhoti clip upload karein.';
+              cleanMsg = 'Video file ka size bohot bara hai. Baraye meherbani 50MB se chhoti clip upload karein.';
             } else {
               cleanMsg = rawText.slice(0, 200);
             }
@@ -248,7 +250,15 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       }
     } catch (err: any) {
       console.error('Video reverse-engineering error:', err);
-      const msg = err.message || 'Video analysis failed';
+      let msg = err.message || 'Video analysis failed';
+      if (
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        msg.includes('ROUTER_EXTERNAL_TARGET_ERROR') ||
+        msg.includes('Load failed')
+      ) {
+        msg = 'Connection note: Render server spin-up ho raha hai ya temporary network hiccup hua hai. Baraye meherbani 5 seconds baad dobara Analyze click karein.';
+      }
       const isFbBlocked =
         (videoUrlInput && (videoUrlInput.includes('facebook.com') || videoUrlInput.includes('fb.watch'))) ||
         msg.toLowerCase().includes('facebook') ||
@@ -335,7 +345,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       setIsAnalyzing(true);
       setStatusMessage('Analyzing Master Prompt structure with Qwen 3.8...');
       try {
-        const res = await fetch('/api/prompts/analyze', {
+        const res = await fetch(`${BACKEND_URL}/prompts/analyze`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({ masterPrompt })
@@ -370,7 +380,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     while (currentIdx <= targetCount && !stopSignalRef.current) {
       const needed = Math.min(batchSize, targetCount - currentIdx + 1);
       try {
-        const res = await fetch('/api/prompts/generate-batch', {
+        const res = await fetch(`${BACKEND_URL}/prompts/generate-batch`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -485,7 +495,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     const textContent = formatPromptsText(prompts);
 
     try {
-      const res = await fetch('/api/prompts/push-to-vps', {
+      const res = await fetch(`${BACKEND_URL}/prompts/push-to-vps`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({

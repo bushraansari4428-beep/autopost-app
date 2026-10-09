@@ -40,6 +40,8 @@ interface QueueMeta {
   videosPerDay: number;
 }
 
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://autopost-app-1.onrender.com').replace(/\/+$/, '');
+
 export default function CloudUploadPage() {
   const router = useRouter();
   const [pages, setPages] = useState<any[]>([]);
@@ -188,7 +190,7 @@ export default function CloudUploadPage() {
       formData.append('video', file);
 
       try {
-        const res = await fetch(`/api/pages/${selectedPageId}/cloud-upload`, {
+        const res = await fetch(`${BACKEND_URL}/pages/${selectedPageId}/cloud-upload`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`
