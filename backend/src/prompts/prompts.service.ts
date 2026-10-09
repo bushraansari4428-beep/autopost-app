@@ -791,14 +791,14 @@ TASK 3: COMPILE THE MASTER PROMPT:
 - Full, ready-to-run 10-second prompt for this new re-skinned concept with full camera POV, setting, 0-2s hook, 2-5s action, 5-8s escalation, 8-10s climax, synchronized Audio: Foley line, and ## Negative prompt block.
 
 TASK 4: HIERARCHICAL MATRIX & ${sampleCount} INITIAL TEST PROMPTS:
-- Create a rich matrix specifically tailored to THIS concept:
-  * sub_genres: 20 themes/sub-genres relevant to this niche
-  * locations: 25 locations relevant to this niche
-  * subjects_or_anomalies: 25 subjects/hooks relevant to this niche
-  * tools_and_probes: 20 tools/objects/details relevant to this niche
-  * scale_anchors: 15 scale anchors/details relevant to this niche
-  * climaxes: 20 climaxes/endings relevant to this niche
-- test_prompts: Generate exactly ${sampleCount} complete, production-ready, highly granular 10-second variation prompts directly exploring this concept across different settings. Each test prompt must be a complete prompt ready for video generation, including its own ## Negative prompt block!
+- Create a focused, high-density matrix tailored to THIS concept:
+  * sub_genres: 8-10 distinct themes/sub-genres
+  * locations: 8-10 distinct locations
+  * subjects_or_anomalies: 8-10 distinct subjects/hooks
+  * tools_and_probes: 8-10 tools/objects/interaction details
+  * scale_anchors: 6-8 scale anchors/fine details
+  * climaxes: 8-10 climaxes/endings
+- test_prompts: Generate exactly ${sampleCount} complete, ready-to-run 10-second variation prompts directly exploring this concept across different settings. Each prompt must include ## Negative prompt.
 
 Return strictly valid JSON with this schema:
 {
@@ -868,17 +868,16 @@ Return strictly valid JSON with this schema:
       ],
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 4096,
         responseMimeType: 'application/json',
       },
     };
 
-    // Cascading models to overcome Google demand spikes (prioritizing active models)
+    // Fast, resilient cascading models to eliminate timeouts & demand spikes
     const candidateModels = [
       'gemini-3.5-flash',
       'gemini-3.6-flash',
       'gemini-3.8-flash',
-      'gemini-3.7-flash',
     ];
 
     let candidate: string | null = null;
@@ -890,7 +889,7 @@ Return strictly valid JSON with this schema:
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
         const res = await axios.post(url, payload, {
           headers: { 'Content-Type': 'application/json' },
-          timeout: 45000,
+          timeout: 30000,
         });
 
         const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -904,6 +903,9 @@ Return strictly valid JSON with this schema:
         const errDetails = err.response?.data?.error?.message || err.message;
         this.logger.warn(`Gemini model ${model} failed (${status}): ${errDetails}. Cascading to next model...`);
         lastError = err;
+        if (status === 503 || status === 429) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
     }
 
@@ -914,9 +916,15 @@ Return strictly valid JSON with this schema:
 
     let cleanCandidate = candidate.trim();
     if (cleanCandidate.startsWith('```json')) {
-      cleanCandidate = cleanCandidate.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      cleanCandidate = cleanCandidate.replace(/^```json\s*/, '').replace(/\s*```[\s\S]*$/, '');
     } else if (cleanCandidate.startsWith('```')) {
-      cleanCandidate = cleanCandidate.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      cleanCandidate = cleanCandidate.replace(/^```\s*/, '').replace(/\s*```[\s\S]*$/, '');
+    }
+
+    const firstBrace = cleanCandidate.indexOf('{');
+    const lastBrace = cleanCandidate.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanCandidate = cleanCandidate.substring(firstBrace, lastBrace + 1);
     }
 
     let parsed: any;
