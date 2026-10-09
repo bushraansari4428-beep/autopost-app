@@ -69,14 +69,18 @@ interface PromptItem {
 
 interface VideoAnalysisResult {
   originalAnalysis?: {
+    actual_subject_and_action?: string;
     visual_hook?: string;
     camera_and_pov?: string;
+    interaction_or_action?: string;
     tool_and_anchor?: string;
     climax?: string;
     audio_elements?: string;
+    viral_retention_formula?: string;
   };
   reSkinnedConcept?: {
     title?: string;
+    niche?: string;
     core_hook?: string;
     new_biome?: string;
     new_tool?: string;
@@ -888,6 +892,15 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   <div className="space-y-3 text-xs">
                     <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                       <span className="text-slate-400 font-semibold block text-[11px] uppercase">
+                        Detected Video Subject & Action
+                      </span>
+                      <p className="text-slate-200 mt-1 leading-relaxed">
+                        {videoAnalysisResult.originalAnalysis?.actual_subject_and_action || videoAnalysisResult.originalAnalysis?.visual_hook || 'Dynamic video sequence'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
+                      <span className="text-slate-400 font-semibold block text-[11px] uppercase">
                         Visual Hook (0–2s)
                       </span>
                       <p className="text-slate-200 mt-1 leading-relaxed">
@@ -897,28 +910,28 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
                     <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                       <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                        Handheld POV & Wobble
+                        Handheld POV & Movement
                       </span>
                       <p className="text-slate-200 mt-1 leading-relaxed">
-                        {videoAnalysisResult.originalAnalysis?.camera_and_pov || '9:16 continuous rear smartphone POV'}
+                        {videoAnalysisResult.originalAnalysis?.camera_and_pov || '9:16 continuous video POV'}
                       </p>
                     </div>
 
                     <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                       <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                        Physical Tool & Scale Anchor (3–6s)
+                        Action / Focal Interaction (3–6s)
                       </span>
                       <p className="text-slate-200 mt-1 leading-relaxed">
-                        {videoAnalysisResult.originalAnalysis?.tool_and_anchor || 'Everyday tool interaction'}
+                        {videoAnalysisResult.originalAnalysis?.interaction_or_action || videoAnalysisResult.originalAnalysis?.tool_and_anchor || 'Core scene development'}
                       </p>
                     </div>
 
                     <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                       <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                        Acoustic Climax & Shock (8–10s)
+                        Ending Climax (8–10s)
                       </span>
                       <p className="text-slate-200 mt-1 leading-relaxed">
-                        {videoAnalysisResult.originalAnalysis?.climax || 'Violent fracture & stumble cut'}
+                        {videoAnalysisResult.originalAnalysis?.climax || 'Dynamic scene climax'}
                       </p>
                     </div>
 
@@ -927,7 +940,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                         Foley Sound Design
                       </span>
                       <p className="text-slate-200 mt-1 leading-relaxed font-mono text-[11px]">
-                        {videoAnalysisResult.originalAnalysis?.audio_elements || 'Natural terrain Foley and panicked breathing'}
+                        {videoAnalysisResult.originalAnalysis?.audio_elements || 'Natural Foley sound design'}
                       </p>
                     </div>
                   </div>
@@ -943,36 +956,36 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                       </span>
                     </div>
                     <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                      {videoAnalysisResult.reSkinnedConcept?.title || 'Original Anomaly Series'}
+                      {videoAnalysisResult.reSkinnedConcept?.title || 'Original Concept Series'}
                     </span>
                   </div>
 
                   <div className="space-y-3 text-xs">
                     <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                       <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                        Core Impossible Anomaly
+                        New Creative Hook
                       </span>
                       <p className="text-purple-300 font-semibold mt-1 leading-relaxed">
-                        {videoAnalysisResult.reSkinnedConcept?.core_hook || 'Original impossible physical phenomenon'}
+                        {videoAnalysisResult.reSkinnedConcept?.core_hook || 'Original viral concept'}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2.5">
                       <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                         <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                          New Biome
+                          Niche / Environment
                         </span>
                         <p className="text-slate-200 mt-1 leading-relaxed">
-                          {videoAnalysisResult.reSkinnedConcept?.new_biome || 'Geological environment'}
+                          {videoAnalysisResult.reSkinnedConcept?.new_biome || videoAnalysisResult.reSkinnedConcept?.niche || 'Creative setting'}
                         </p>
                       </div>
 
                       <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                         <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                          Everyday Tool & Probe
+                          Key Object / Tool
                         </span>
                         <p className="text-slate-200 mt-1 leading-relaxed">
-                          {videoAnalysisResult.reSkinnedConcept?.new_tool || 'Authentic tool'}
+                          {videoAnalysisResult.reSkinnedConcept?.new_tool || 'Focal interaction object'}
                         </p>
                       </div>
                     </div>
@@ -980,19 +993,19 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                     <div className="grid grid-cols-2 gap-2.5">
                       <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                         <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                          Micro Scale Anchor
+                          Visual Detail / Texture
                         </span>
                         <p className="text-slate-200 mt-1 leading-relaxed">
-                          {videoAnalysisResult.reSkinnedConcept?.new_scale_anchor || 'Organic biological scale marker'}
+                          {videoAnalysisResult.reSkinnedConcept?.new_scale_anchor || 'Fine texture detail'}
                         </p>
                       </div>
 
                       <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/70">
                         <span className="text-slate-400 font-semibold block text-[11px] uppercase">
-                          Concussive Climax
+                          Climax & Ending Impact
                         </span>
                         <p className="text-slate-200 mt-1 leading-relaxed">
-                          {videoAnalysisResult.reSkinnedConcept?.new_climax || 'Acoustic shock fracture'}
+                          {videoAnalysisResult.reSkinnedConcept?.new_climax || 'High-impact ending'}
                         </p>
                       </div>
                     </div>

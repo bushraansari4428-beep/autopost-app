@@ -361,27 +361,27 @@ Return ONLY valid JSON. No conversational text.`;
       while (!isUnique && attempts < 2) {
         attempts++;
 
-        const sysPrompt = `You are an elite viral found-footage cinematic AI video director specialized in "${matrix.theme_summary}".
-Your task is to write Variation #${currentIdx} of a 10-second vertical 9:16 raw smartphone found-footage prompt for Google Flow / Veo.
+        const sysPrompt = `You are a world-class viral short-form cinematic AI video director specialized in "${matrix.theme_summary}".
+Your task is to write Variation #${currentIdx} of a 10-second vertical 9:16 prompt based on the Master Prompt formula:
+"""${masterPrompt}"""
 
 STRICT INSTRUCTIONS:
-1. Opening line MUST begin with: "${fixed.camera_and_medium}"
-2. Setting MUST be set in: "${assignedLocation}" (${assignedSubGenre}).
-3. 0–2 seconds: Camera points down at the impossible visual hook: ${assignedAnomaly}.
-4. 0–3 seconds: Show tentative handheld steps crunching over terrain, natural phone wobble from crouch-walking, and automatic lens exposure.
-5. 3–6 seconds: Crouch within 6 inches; an ordinary bare hand tests with ${assignedTool}, with ${assignedAnchor} on the rock edge anchoring realistic physical scale.
-6. 6–8 seconds: Secondary reaction or escalation defying expectations.
-7. 8–10 seconds: ${assignedClimax}; the operator gasps in terror, violently stumbles backward, and recording cuts out abruptly with NO face or person visible.
-8. Include full granular Foley Audio list at the end.
-9. Append ## Negative prompt:
-${fixed.negative_prompt}
+1. Maintain the exact camera angle, perspective, format, and pacing of the Master Prompt.
+2. Incorporate these unique variation elements:
+   - Setting / Location: ${assignedLocation} (${assignedSubGenre})
+   - Core Subject / Hook: ${assignedAnomaly}
+   - Tool / Object / Focus: ${assignedTool}
+   - Scale / Texture Detail: ${assignedAnchor}
+   - Climax / Ending: ${assignedClimax}
+3. Audio: Include a synchronized Foley audio line matching the action.
+4. Append the ## Negative prompt block at the end.
 
-CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown fences, zero introduction labels.`;
+CRITICAL: Output ONLY the complete, final video generation prompt. Zero greetings, zero markdown fences, zero conversational filler.`;
 
-        const userPrompt = `Write Prompt #${currentIdx} now with extreme physical realism and granular found-footage cinematography.`;
+        const userPrompt = `Write Prompt #${currentIdx} now with extreme cinematic realism and high visual retention.`;
 
         try {
-          const rawGenerated = await this.queryBrain(sysPrompt, userPrompt, 700);
+          const rawGenerated = await this.queryBrain(sysPrompt, userPrompt, 350);
           promptText = this.cleanOutput(rawGenerated);
         } catch (_) {}
 
@@ -470,21 +470,24 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
   private assembleFallbackPrompt(
     fixed: FixedDNA,
     location: string,
-    anomaly: string,
-    tool: string,
-    anchor: string,
-    climax: string,
+    subject: string,
+    toolOrDetail: string,
+    anchorOrTexture: string,
+    climaxOrEnding: string,
   ): string {
+    const camera = fixed.camera_and_medium || 'Create a 10-second vertical 9:16 video in continuous POV.';
+    const audio = fixed.audio_rules || 'Audio: Natural environmental Foley sound design.';
+    const negative = fixed.negative_prompt || 'human face, selfie, watermark, CGI sheen, low quality';
+
     return (
-      `${fixed.camera_and_medium} ` +
-      `The setting is ${location}. ` +
-      `In the first 0–2 seconds, the camera immediately points down at an undeniable, reality-bending visual hook: ${anomaly}. ` +
-      `From 0–3 seconds, show tentative steps crunching over terrain, natural mobile phone wobble from crouch-walking, and automatic lens exposure balancing. ` +
-      `From 3–6 seconds, crouch within six inches; an ordinary bare hand enters holding ${tool} and tests the anomaly, with ${anchor} to anchor realistic physical scale. ` +
-      `From 6–8 seconds, the interaction triggers a secondary escalation defying expectations. ` +
-      `From 8–10 seconds, ${climax}; the operator gasps in terror, violently stumbles backward, and the recording terminates abruptly with NO face or person visible. ` +
-      `Audio: footsteps, environmental wind, physical interaction sounds, deafening concussive fracture, and panicked sharp breathing.\n\n` +
-      `## Negative prompt\n${fixed.negative_prompt}`
+      `${camera} ` +
+      `The scene is set in ${location}. ` +
+      `In the opening 0–2 seconds, the camera focuses on an undeniable visual hook: ${subject}. ` +
+      `From 2–5 seconds, continuous camera movement and authentic framing reveal ${toolOrDetail}, framed alongside ${anchorOrTexture} to anchor realistic scale and texture. ` +
+      `From 5–8 seconds, the scene escalates with dynamic physical motion and high tension. ` +
+      `From 8–10 seconds, ${climaxOrEnding}. ` +
+      `${audio}\n\n` +
+      `## Negative prompt\n${negative}`
     );
   }
 
@@ -743,83 +746,108 @@ CRITICAL: Output ONLY the complete, final prompt. Zero greetings, zero markdown 
 
   async reverseEngineerVideo(
     videoBuffer: Buffer,
+    sampleCount = 5,
     mimeType = 'video/mp4',
   ): Promise<{
     originalAnalysis: any;
     reSkinnedConcept: any;
     masterPrompt: string;
     matrix: PromptMatrix;
+    testPrompts: GeneratedPromptItem[];
   }> {
     const key = this.getGeminiKey();
     this.logger.log(`Uploading ${videoBuffer.length} bytes video to Gemini File API...`);
     const fileUri = await this.uploadVideoToGemini(videoBuffer, mimeType);
     this.logger.log(`Gemini video upload ready: ${fileUri}`);
 
-    const promptText = `You are a world-class AI Cinematographer, Viral Video Architect, and Physical Science Director.
-Your task is NATIVE VIDEO REVERSE-ENGINEERING of this 10-second vertical viral found-footage video.
+    const promptText = `You are a world-class AI Cinematographer and Viral Short-Form Video Producer.
+Your task is NATIVE VIDEO REVERSE-ENGINEERING of this short video clip.
+
+CRITICAL INSTRUCTION:
+Base your entire analysis 100% strictly on what is ACTUALLY visible and audible in this specific video clip. Do NOT assume the video is about rocks, tools, or biomes unless you actually observe them in the footage. Adapt completely to whatever genre or style is shown.
 
 Perform these critical tasks:
 
-TASK 1: DECONSTRUCT ORIGINAL VIDEO (Watch full continuous motion, POV wobble, timing, Foley audio, and physical action):
-- visual_hook_0_to_2s: The exact impossible physical anomaly or visual hook in the first 2 seconds.
-- camera_perspective: Framing, handheld rear-camera POV, autofocus/auto-exposure, natural mobile wobble.
-- physical_interaction_3_to_6s: Exact everyday tool used (e.g. nail, canteen, stick) and micro biological scale anchor (e.g. beetle, pine needle, ant).
-- escalation_6_to_8s: Secondary physics-defying reaction or fluid/thermal escalation.
-- climax_8_to_10s: Violent acoustic/kinetic shock rupture (e.g. water-hammer cavitation, gunshot rock fracture) and panicked stumble cut with zero face visible.
-- audio_foley: Granular sound design breakdown (footsteps, wind, tool contact, concussive fracture, panicked breathing).
+TASK 1: DECONSTRUCT ORIGINAL VIDEO (Watch full video motion, subject, camera, and Foley audio):
+- actual_subject_and_action: Factual description of what is actually happening in this video.
+- visual_hook_0_to_2s: The exact opening visual hook that grabs attention in the first 2 seconds.
+- camera_perspective: Framing, POV, camera movement, autofocus, handheld natural motion/wobble, lighting.
+- interaction_or_action: Main subject interaction, action, or escalation between 2-8 seconds.
+- climax_or_ending: The climax, final reaction, dramatic turn, or ending hook between 8-10 seconds.
+- audio_foley: Granular sound design and Foley breakdown (ambient sounds, physical impacts, voice/breathing).
+- viral_retention_formula: Why this video works psychologically (curiosity gap, tension curve, satisfying visuals).
 
-TASK 2: RE-SKIN INTO A 100% BRAND NEW VIRAL ANOMALY CONCEPT (Zero Plagiarism, Same Viral Psychology):
-- Keep the EXACT tension curve and viral retention formula, but SWAP the biome, minerals, anomaly, and tool into a 100% original, copyright-free concept.
-- Compile the final MASTER PROMPT with:
-  1. Opening line: "Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay."
-  2. Setting in a vivid, high-texture geological biome.
-  3. 0–2 seconds: Impossible reality-bending visual hook with metric dimensions.
-  4. 0–3 seconds: Handheld footsteps on terrain, natural phone wobble from crouch-walking, auto-exposure balancing.
-  5. 3–6 seconds: Crouch within 6 inches, bare hand testing with an authentic everyday tool, with a biological micro scale anchor.
-  6. 6–8 seconds: Secondary reaction defying physics.
-  7. 8–10 seconds: Violent concussive acoustic shock climax, operator gasps in terror and violently stumbles backward, abrupt cut with NO face or person visible.
-  8. Full Audio Foley line.
-  9. ## Negative prompt block for extreme realism.
+TASK 2: RE-SKIN INTO A 100% BRAND NEW CONCEPT (Same Viral Formula, Fresh Original Content):
+- Retain the EXACT viral retention curve, tension, and camera pacing, but create a 100% brand-new, copyright-free creative concept in the same style/genre.
+- title: Short distinctive concept title.
+- niche: Specific content niche.
+- core_hook: The new, 100% original hook that replaces the original video's subject.
+- new_biome: New creative environment or setting.
+- new_tool: New item, tool, or focal interaction element.
+- new_scale_anchor: New visual detail or texture element.
+- new_climax: New dramatic ending or reaction.
 
-TASK 3: HIERARCHICAL MATRIX:
-- 25 Sub-Genres, 35 Locations, 35 Anomalies, 25 Tools, 20 Scale Anchors, 25 Climaxes for expanding to 1,000 prompts without looping.
+TASK 3: COMPILE THE MASTER PROMPT:
+- Full, ready-to-run 10-second prompt for this new re-skinned concept with full camera POV, setting, 0-2s hook, 2-5s action, 5-8s escalation, 8-10s climax, synchronized Audio: Foley line, and ## Negative prompt block.
+
+TASK 4: HIERARCHICAL MATRIX & ${sampleCount} INITIAL TEST PROMPTS:
+- Create a rich matrix specifically tailored to THIS concept:
+  * sub_genres: 20 themes/sub-genres relevant to this niche
+  * locations: 25 locations relevant to this niche
+  * subjects_or_anomalies: 25 subjects/hooks relevant to this niche
+  * tools_and_probes: 20 tools/objects/details relevant to this niche
+  * scale_anchors: 15 scale anchors/details relevant to this niche
+  * climaxes: 20 climaxes/endings relevant to this niche
+- test_prompts: Generate exactly ${sampleCount} complete, production-ready, highly granular 10-second variation prompts directly exploring this concept across different settings. Each test prompt must be a complete prompt ready for video generation, including its own ## Negative prompt block!
 
 Return strictly valid JSON with this schema:
 {
   "original_analysis": {
+    "actual_subject_and_action": "...",
     "visual_hook": "...",
     "camera_and_pov": "...",
-    "tool_and_anchor": "...",
+    "interaction_or_action": "...",
     "climax": "...",
-    "audio_elements": "..."
+    "audio_elements": "...",
+    "viral_retention_formula": "..."
   },
   "re_skinned_concept": {
-    "title": "Short distinctive title",
+    "title": "...",
+    "niche": "...",
     "core_hook": "...",
     "new_biome": "...",
     "new_tool": "...",
     "new_scale_anchor": "...",
     "new_climax": "..."
   },
-  "master_prompt": "Complete, final, ready-to-run 10-second master prompt paragraph with ## Negative prompt",
+  "master_prompt": "...",
   "matrix": {
     "niche_name": "...",
     "theme_summary": "...",
     "fixed_dna": {
       "camera_and_medium": "...",
-      "timing_breakdown": ["0-2s...", "0-3s...", "3-6s...", "6-8s...", "8-10s..."],
+      "timing_breakdown": ["0-2s...", "2-5s...", "5-8s...", "8-10s..."],
       "negative_prompt": "...",
       "audio_rules": "..."
     },
     "hierarchical_matrix": {
-      "sub_genres": ["25 biomes..."],
-      "locations": ["35 locations..."],
-      "subjects_or_anomalies": ["35 anomalies..."],
-      "tools_and_probes": ["25 tools..."],
-      "scale_anchors": ["20 anchors..."],
-      "climaxes": ["25 climaxes..."]
+      "sub_genres": ["..."],
+      "locations": ["..."],
+      "subjects_or_anomalies": ["..."],
+      "tools_and_probes": ["..."],
+      "scale_anchors": ["..."],
+      "climaxes": ["..."]
     }
-  }
+  },
+  "test_prompts": [
+    {
+      "index": 1,
+      "sub_genre": "...",
+      "location": "...",
+      "subject": "...",
+      "text": "Complete 10-second prompt #1 with ## Negative prompt"
+    }
+  ]
 }`;
 
     const payload = {
@@ -847,8 +875,8 @@ Return strictly valid JSON with this schema:
 
     // Cascading models to overcome Google demand spikes (prioritizing active models)
     const candidateModels = [
-      'gemini-3.6-flash',
       'gemini-3.5-flash',
+      'gemini-3.6-flash',
       'gemini-3.8-flash',
       'gemini-3.7-flash',
     ];
@@ -862,7 +890,7 @@ Return strictly valid JSON with this schema:
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
         const res = await axios.post(url, payload, {
           headers: { 'Content-Type': 'application/json' },
-          timeout: 35000,
+          timeout: 45000,
         });
 
         const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -895,55 +923,68 @@ Return strictly valid JSON with this schema:
     try {
       parsed = JSON.parse(cleanCandidate);
     } catch (parseErr: any) {
-      this.logger.warn(`Failed to parse Gemini 3.8 JSON: ${parseErr.message}`);
+      this.logger.warn(`Failed to parse Gemini JSON: ${parseErr.message}`);
       parsed = {
         original_analysis: {
-          visual_hook: '10-second anomalous physical phenomenon',
-          camera_and_pov: 'Handheld 9:16 rear smartphone POV',
-          tool_and_anchor: 'Everyday physical tool and biological scale anchor',
-          climax: 'Concussive acoustic fracture climax',
-          audio_elements: 'Granular terrain Foley and panicked breathing',
+          actual_subject_and_action: 'Short viral video clip',
+          visual_hook: 'Dynamic opening hook',
+          camera_and_pov: 'Continuous vertical POV',
+          climax: 'Dramatic ending resolution',
+          audio_elements: 'Synchronized Foley audio',
         },
         re_skinned_concept: {
-          title: 'Viral Anomaly Series',
-          core_hook: 'Impossible geological phenomenon',
-          new_biome: 'Sub-Alpine slate scree',
-          new_tool: 'Dented steel canteen',
-          new_scale_anchor: 'Dry pine needle',
-          new_climax: 'Acoustic shock fracture',
+          title: 'Viral Concept Series',
+          core_hook: 'Fresh original viral concept',
+          new_biome: 'Cinematic environment',
+          new_tool: 'Focal interaction object',
+          new_scale_anchor: 'Fine visual detail',
+          new_climax: 'High-impact climax',
         },
         master_prompt: cleanCandidate,
       };
     }
+
     const matrix: PromptMatrix = {
-      niche_name: parsed.matrix?.niche_name || parsed.re_skinned_concept?.title || 'Viral Anomaly Series',
-      theme_summary: parsed.matrix?.theme_summary || '10-second vertical found-footage anomalous series',
+      niche_name: parsed.matrix?.niche_name || parsed.re_skinned_concept?.title || 'Viral Concept Series',
+      theme_summary: parsed.matrix?.theme_summary || '10-second vertical viral series',
       fixed_dna: parsed.matrix?.fixed_dna || {
-        camera_and_medium: 'Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV.',
-        timing_breakdown: ['0-2s: Hook', '0-3s: Approach', '3-6s: Tool test', '6-8s: Escalation', '8-10s: Climax'],
-        negative_prompt: 'human face, selfie, PIP, CGI sheen, watermark',
-        audio_rules: 'Foley sound effects and panicked breathing',
+        camera_and_medium: 'Create a 10-second vertical 9:16 video in continuous POV.',
+        timing_breakdown: ['0-2s: Hook', '2-5s: Development', '5-8s: Escalation', '8-10s: Climax'],
+        negative_prompt: 'human face, selfie, watermark, CGI sheen, low quality',
+        audio_rules: 'Audio: Natural environmental Foley sound design.',
         structural_template: '',
       },
       hierarchical_matrix: parsed.matrix?.hierarchical_matrix || {
-        sub_genres: ['Sub-Alpine', 'Banded Iron', 'Basalt Plateau'],
-        locations: ['Mountain trail', 'Volcanic flat'],
-        subjects_or_anomalies: ['Liquid stone', 'Cold-boiling rock'],
-        tools_and_probes: ['Steel canteen', 'Rail nail'],
-        scale_anchors: ['Ground beetle', 'Pine needle'],
-        climaxes: ['Gunshot acoustic rock fracture', 'Explosive cavitation'],
+        sub_genres: ['Dynamic Theme A', 'Dynamic Theme B'],
+        locations: ['Location A', 'Location B'],
+        subjects_or_anomalies: ['Subject A', 'Subject B'],
+        tools_and_probes: ['Tool A', 'Tool B'],
+        scale_anchors: ['Detail A', 'Detail B'],
+        climaxes: ['Climax A', 'Climax B'],
       },
       subjects: parsed.matrix?.hierarchical_matrix?.subjects_or_anomalies || [],
       locations: parsed.matrix?.hierarchical_matrix?.locations || [],
       actions_or_hooks: parsed.matrix?.hierarchical_matrix?.climaxes || [],
-      camera_styles: ['Pure continuous 9:16 rear smartphone POV'],
+      camera_styles: ['Continuous vertical 9:16 POV'],
     };
+
+    const testPrompts: GeneratedPromptItem[] = Array.isArray(parsed.test_prompts)
+      ? parsed.test_prompts.map((p: any, i: number) => ({
+          index: p.index || i + 1,
+          sub_genre: p.sub_genre || p.title || `Variation ${i + 1}`,
+          location: p.location || '',
+          subject: p.subject || '',
+          text: p.text || (typeof p === 'string' ? p : ''),
+          similarity_score: 0,
+        }))
+      : [];
 
     return {
       originalAnalysis: parsed.original_analysis,
       reSkinnedConcept: parsed.re_skinned_concept,
       masterPrompt: parsed.master_prompt,
       matrix,
+      testPrompts,
     };
   }
 
@@ -958,18 +999,29 @@ Return strictly valid JSON with this schema:
     matrix: PromptMatrix;
     testPrompts: GeneratedPromptItem[];
   }> {
-    const { originalAnalysis, reSkinnedConcept, masterPrompt, matrix } =
-      await this.reverseEngineerVideo(videoBuffer, mimeType);
-
     const safeCount = Math.min(Math.max(sampleCount, 1), 20);
-    const testPrompts = await this.generateBatch(masterPrompt, matrix, 1, safeCount);
+    const result = await this.reverseEngineerVideo(videoBuffer, safeCount, mimeType);
+
+    let testPrompts = result.testPrompts || [];
+
+    // If Gemini returned fewer prompts than requested, supplement dynamically from this video's matrix
+    if (testPrompts.length < safeCount) {
+      const needed = safeCount - testPrompts.length;
+      const additional = await this.generateBatch(
+        result.masterPrompt,
+        result.matrix,
+        testPrompts.length + 1,
+        needed,
+      );
+      testPrompts = [...testPrompts, ...additional];
+    }
 
     return {
-      originalAnalysis,
-      reSkinnedConcept,
-      masterPrompt,
-      matrix,
-      testPrompts,
+      originalAnalysis: result.originalAnalysis,
+      reSkinnedConcept: result.reSkinnedConcept,
+      masterPrompt: result.masterPrompt,
+      matrix: result.matrix,
+      testPrompts: testPrompts.slice(0, safeCount),
     };
   }
 }
