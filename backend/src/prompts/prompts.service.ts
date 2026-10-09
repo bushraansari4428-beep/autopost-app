@@ -138,7 +138,7 @@ export class PromptsService {
     return cleaned.trim();
   }
 
-  private async callGroq(systemPrompt: string, userPrompt: string, maxTokens = 1200): Promise<string | null> {
+  private async callGroq(systemPrompt: string, userPrompt: string, maxTokens = 350): Promise<string | null> {
     const key = this.getGroqKey();
     if (!key) return null;
     try {
@@ -158,7 +158,7 @@ export class PromptsService {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000,
+          timeout: 8000,
         },
       );
 
@@ -180,7 +180,7 @@ export class PromptsService {
         { data: ['🧠 Brain (Qwen)', null, `${systemPrompt}\n\n${userPrompt}`] },
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-          timeout: 25000,
+          timeout: 4000,
         },
       );
 
@@ -190,7 +190,7 @@ export class PromptsService {
       const streamRes = await axios.get(`${endpoint}/${eventId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         responseType: 'text',
-        timeout: 45000,
+        timeout: 5000,
       });
 
       const lines = (streamRes.data as string).split('\n');
@@ -205,12 +205,12 @@ export class PromptsService {
         }
       }
     } catch (err: any) {
-      this.logger.error(`HF fallback failed: ${err.message}`);
+      this.logger.warn(`HF fallback skipped: ${err.message}`);
     }
     return '';
   }
 
-  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 1200): Promise<string> {
+  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 350): Promise<string> {
     const groqRes = await this.callGroq(systemPrompt, userPrompt, maxTokens);
     if (groqRes && groqRes.trim().length > 0) return groqRes;
     return await this.callHf(systemPrompt, userPrompt);
@@ -845,13 +845,12 @@ Return strictly valid JSON with this schema:
       },
     };
 
-    // Cascading models to overcome Google demand spikes (503 / 429)
+    // Cascading models to overcome Google demand spikes (prioritizing active models)
     const candidateModels = [
-      'gemini-3.8-flash',
-      'gemini-3.7-flash',
       'gemini-3.6-flash',
       'gemini-3.5-flash',
-      'gemini-flash-latest',
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
     ];
 
     let candidate: string | null = null;
@@ -863,7 +862,7 @@ Return strictly valid JSON with this schema:
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
         const res = await axios.post(url, payload, {
           headers: { 'Content-Type': 'application/json' },
-          timeout: 120000,
+          timeout: 35000,
         });
 
         const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
