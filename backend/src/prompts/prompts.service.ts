@@ -210,9 +210,65 @@ export class PromptsService {
     return '';
   }
 
+  private async callGemini(systemPrompt: string, userPrompt: string, maxTokens = 400): Promise<string | null> {
+    const key = this.getGeminiKey();
+    if (!key) return null;
+
+    const candidateModels = [
+      'gemini-3.5-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-3.8-flash',
+    ];
+
+    for (const model of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const res = await axios.post(
+          url,
+          {
+            contents: [
+              {
+                parts: [
+                  { text: `${systemPrompt}\n\n${userPrompt}` },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.85,
+              maxOutputTokens: maxTokens,
+            },
+          },
+          {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 10000,
+          },
+        );
+
+        const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim().length > 0) {
+          return this.cleanOutput(text);
+        }
+      } catch (err: any) {
+        this.logger.warn(`Gemini model ${model} text generation skipped: ${err.response?.status || err.message}`);
+      }
+    }
+    return null;
+  }
+
   private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 350): Promise<string> {
-    const groqRes = await this.callGroq(systemPrompt, userPrompt, maxTokens);
-    if (groqRes && groqRes.trim().length > 0) return groqRes;
+    // 1. Try Groq Qwen 3.8 first
+    try {
+      const groqRes = await this.callGroq(systemPrompt, userPrompt, maxTokens);
+      if (groqRes && groqRes.trim().length > 0) return groqRes;
+    } catch (_) {}
+
+    // 2. Cascade immediately to Google Gemini Flash Lite (Ultra-fast active model)
+    try {
+      const geminiRes = await this.callGemini(systemPrompt, userPrompt, maxTokens);
+      if (geminiRes && geminiRes.trim().length > 0) return geminiRes;
+    } catch (_) {}
+
+    // 3. Fallback to HF Neural Brain
     return await this.callHf(systemPrompt, userPrompt);
   }
 
@@ -430,7 +486,7 @@ Return ONLY valid JSON. No conversational text.`;
     const climaxes = hm.climaxes?.length ? hm.climaxes : ['explosive fracture'];
 
     const generateOne = async (currentIdx: number): Promise<GeneratedPromptItem> => {
-      // Deterministic round-robin cycling with zero zero-lock collisions
+      // Deterministic round-robin cycling across all elements with zero zero-lock collisions
       const assignedSubGenre = subGenres[(currentIdx - 1) % subGenres.length];
       const assignedLocation = locations[(currentIdx - 1) % locations.length];
       const assignedTool = tools[(currentIdx - 1) % tools.length];
@@ -446,7 +502,11 @@ Return ONLY valid JSON. No conversational text.`;
         const conceptIdx = (currentIdx - 1) % userPrompts.length;
         conceptPrompt = userPrompts[conceptIdx];
         conceptNumber = conceptIdx + 1;
-        assignedAnomaly = this.extractCoreSubjectFromPrompt(conceptPrompt);
+        const baseSubject = this.extractCoreSubjectFromPrompt(conceptPrompt);
+        const cycle = Math.floor((currentIdx - 1) / userPrompts.length);
+        assignedAnomaly = cycle > 0
+          ? `${baseSubject} (Escalation Phase ${cycle + 1} with unexpected physical anomaly behavior)`
+          : baseSubject;
       }
 
       let attempts = 0;
@@ -546,8 +606,16 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
       };
     };
 
-    const indices = Array.from({ length: count }, (_, i) => startIdx + i);
-    const results = await Promise.all(indices.map(idx => generateOne(idx)));
+    // Sequential paced execution with 200ms spacing to prevent 429 rate limit spikes
+    const results: GeneratedPromptItem[] = [];
+    for (let i = 0; i < count; i++) {
+      const idx = startIdx + i;
+      const res = await generateOne(idx);
+      results.push(res);
+      if (i < count - 1) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
     return results;
   }
 
@@ -633,17 +701,108 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
       }
     }
 
+    // 100 COMPLETELY UNIQUE, REALITY-BENDING NATURAL PHENOMENA (ZERO-REPEAT LIBRARY)
     const defaultAnomalies = [
+      'an impossible 30-centimeter-wide perfect hemisphere dome of crystal-clear liquid water holding shape unsupported on dry basalt rock like solid glass',
       'a flat 1-meter natural slate slab sharply split down a center seam where the left half is crusted in sub-zero frost while the right half radiates hot thermal heatwaves',
-      'an impossible 30-centimeter-wide, 15-centimeter-high perfect hemisphere dome of crystal-clear liquid water holding shape unsupported on dry rock like heavy glass',
-      'inside a natural 50-centimeter depression, hundreds of loose bone-dry jagged gravel stones are rapidly boiling and swirling smoothly like liquid water whirlpool',
+      'inside a natural 50-centimeter rock depression, hundreds of loose bone-dry jagged gravel stones are rapidly boiling and swirling smoothly like liquid water whirlpool',
       'an unnatural pool of mirror-black viscous fluid slowly crawling vertically uphill across dry rock like living dark mercury with zero wet residue',
       'a perfectly circular 2-foot patch of dark magnetic magnetite sand humming with a low 60Hz acoustic vibration making dust motes float 1 inch in mid-air',
       'a 40-centimeter rock basin filled with glowing amber-tinted groundwater that instantly flash-petrifies dipped organic matter into brittle crystal stone',
       'a narrow 5-centimeter vertical rock fracture pulling a continuous, freezing negative-pressure vacuum draft sucking ambient dust like a miniature turbine',
-      'a porous basalt slab emitting rhythmic phosphorescent green pulses every 2 seconds with an audible electrical hum',
-      'a natural quartz boulder levitating exactly 2 inches above the bedrock, rotating at a slow, constant 5 RPM',
-      'a patch of desert sand that instantly solidifies into mirror-smooth dark obsidian glass upon the lightest footstep contact',
+      'a porous basalt slab emitting rhythmic phosphorescent emerald-green pulses every 2 seconds with an audible electrical hum',
+      'a natural 40cm quartz boulder hovering exactly 3 inches above the bedrock, rotating at a slow, constant 5 RPM',
+      'a desert sand patch that instantly fuses into mirror-smooth dark obsidian glass upon the lightest footstep contact',
+      'a weathered juniper branch embedded in stone whose dried needles freeze backward into translucent ice needles when touched with metal',
+      'a 1-foot patch of grey clay possessing absolute zero friction, causing placed objects to glide infinitely across the surface without stopping',
+      'a natural stone bowl where clear rainwater continuously defies gravity, creeping upward along the stone lip in tiny beaded droplets',
+      'an ancient iron railway spike driven into limestone that glows with a cold, pale-blue plasma corona with zero heat',
+      'a smooth granite river cobble remaining at exactly -15 degrees Celsius in scorching midday sun, continuously crusting in dry ice frost',
+      'a shimmering 1-meter air lens hovering above a salt polygon that magnifies distant terrain like a floating telescope lens',
+      'a dense patch of dark peat soil repelling water droplets with magnetic force, causing poured water to bounce 6 inches into the air',
+      'a hexagonal basalt column whose surface vibrates with a crystal-clear cello note whenever shadowed from the sun',
+      'a sub-alpine rock hollow where gravity is horizontally tilted at 45 degrees, pulling loose pebbles sideways against the rock face',
+      'a crystalline mineral seam pulsing with blinding flashes of ultraviolet luminescence in complete synchronization with distant thunder',
+      'a shallow pool of mineral brine reflecting the operator smartphone back as an antique brass handheld mirror',
+      'a natural 50cm sandstone sphere ringing with a resonant cathedral bell chime whenever struck by a light wooden twig',
+      'a crevice in red canyon shale continuously exuding thick, heavy lilac vapor that flows downhill like liquid argon',
+      'a petrified tree stump where fossilized amber sap slowly oozes and flash-hardens into brittle diamond glass in 0.05 seconds',
+      'a 2-meter patch of riverbed gravel where acoustic sound travels at one-tenth speed, delaying footstep echoes by 3 full seconds',
+      'a jagged hematite boulder exerting a powerful repulsive magnetic field, pushing steel tools backward through the air like an invisible cushion',
+      'an isolated puddle of rainwater that remains entirely static like solid glass, displaying zero ripples even when a stone is dropped onto it',
+      'a narrow bedrock fissure releasing a steady stream of microscopic floating amber sparks that vanish 2 feet above the surface',
+      'a flat granite slab absorbing 100% of ambient light like geological Vantablack, casting a pitch-black silhouette in broad daylight',
+      'a natural calcite crystal geode whose inner crystal teeth click and rotate like precision clockwork gears',
+      'a cold mountain stream seep where poured water instantly solidifies into warm, pliable wax-like ice',
+      'an isolated volcanic stone continuously emitting a soft electrostatic hiss that makes arm hairs stand straight up from 12 inches away',
+      'a dry limestone fault crack producing a continuous harmonious double-reed flute tone as desert wind passes through it',
+      'a 30-centimeter puddle of iridescent fluid that separates into concentric rainbow rings when touched with a pine needle',
+      'an embedded quartz vein in dark schist glowing brighter and brighter as the operator hand approaches, dimming when pulled away',
+      'a patch of loose volcanic cinders that spontaneously arranges into concentric geometric circles when footstep vibrations cease',
+      'a miniature natural stone arch under which water droplets hang motionless in mid-air for 4 seconds before dropping',
+      'a smooth river cobble that visibly casts a shadow in the exact opposite direction of the afternoon sun',
+      'a natural rock depression containing a solitary floating droplet of mercury-clear water the size of a golf ball that never touches the rock',
+      'a fractured slate seam where poured water immediately separates into two distinct fluids: crystal clear on the left, jet black on the right',
+      'a high-altitude scree boulder boiling hot on its shaded northern face while frozen in frost on its sun-exposed southern face',
+      'a 1-meter circle of bleached river sand that ripples smoothly like ocean waves despite being bone-dry and windless',
+      'an ancient weathered ironwood root petrified into solid magnetite that pulls compass needles into a continuous 360-degree spin',
+      'a natural limestone basin echoing whispers at 10x amplified volume with a terrifying subterranean metallic reverb',
+      'a sub-alpine gravel terrace where operator footprints leave glowing bioluminescent blue impressions that fade after 5 seconds',
+      'a porous pumice stone resting in mid-air 1 inch above a basalt ledge, bobbing gently like a boat on water',
+      'a shallow canyon pothole where liquid temperature drops 20 degrees Celsius every 5 seconds, forming spontaneous ice spikes',
+      'a natural fracture in a banded iron outcrop humming with an audible 440Hz tuning-fork tone when tapped with steel',
+      'a 50cm circular patch of red clay completely hydrophobic to air, forming a visible 2mm vacuum gap between soil and atmosphere',
+      'a natural obsidian mirror slab embedded in tundra mud that reflects the night starry sky even under blazing midday sun',
+      'an ancient glacial granite boulder with a central fissure emitting a continuous sub-zero vapor draft that freezes grass instantly',
+      'a natural sandstone basin where poured water spontaneously forms into perfect geometric hexagonal whirlpools',
+      'an embedded metallic meteorite nodule generating an invisible 1-foot dome of silence, completely muting howling wind within its radius',
+      'a weathered limestone hollow where water droplets fall upward from the rock surface into the air before vanishing',
+      'a 1-foot patch of dark slate displaying moving, fractal tree-like phosphorescent frost patterns crawling across its surface',
+      'a natural volcanic crater stone whose inner core glows with a steady, pulsating orange embers light with zero smoke',
+      'a high-desert salt crust polygon that violently snaps and jumps 2 inches off the ground when touched by metal',
+      'an isolated pool of cold groundwater exhibiting negative surface tension, pulling floating twigs directly to the bottom',
+      'an ancient glacial till rock face that sweats viscous amber oil flash-evaporating with a hiss when exposed to sunlight',
+      'a natural quartz geode that hums with radio static when the operator points a smartphone camera directly at its aperture',
+      'a circular patch of volcanic ash that repels iron filings into a perfect spiky corona ring',
+      'a natural stone cistern where water remains at a permanent 45-degree angled tilt without spilling',
+      'a weathered granite cleft where dropped pebbles take 4 seconds to fall 6 inches, moving in hyper-slow motion',
+      'an embedded fluorite crystal node emitting brilliant violet laser-like light beams along natural cleavage lines',
+      'a flat river rock where poured water instantly forms into thousands of tiny, non-coalescing rolling liquid ball-bearings',
+      'a sub-alpine fault wash crack that exhales a warm, eucalyptus-scented subterranean breeze every 4 seconds like rhythmic respiration',
+      'a dense basalt boulder ringing like an anvil when struck, emitting a visible circular shockwave through surrounding dust',
+      'a natural limestone seep where dripping water forms upside-down stalagmites growing rapidly at 1 centimeter per second',
+      'an isolated patch of alpine turf where frost crystals grow in the shape of microscopic spiral nautilus shells',
+      'a smooth black tourmaline pebble that spins continuously on its axis when placed on wet rock',
+      'a natural canyon pothole containing liquid changing color through the full spectrum from crimson to azure every 3 seconds',
+      'an embedded iron meteorite fragment that makes ambient compass needles point straight down toward the Earth core',
+      'a weathered slate slab that absorbs water like a sponge and immediately compresses it out as high-pressure fine mist',
+      'a natural stone hollow where dust motes assemble into miniature levitating geometric dodecahedrons',
+      'a glacial moraine ridge boulder covered in transparent ice that is warm to the touch and melts fallen snow instantly',
+      'a porous limestone shelf where water droplets skate across the surface like hovercraft without wetting the stone',
+      'an ancient dried mud playa polygon ringing with high-pitched musical frequencies when tapped with walking stick',
+      'a deep volcanic fumarole vent that pulls ambient smoke and dust inward instead of expelling it',
+      'a natural quartz cluster whose crystal facets project sharp holographic geometric shadows on the surrounding rock',
+      'a sub-alpine scree hollow where loose gravel stones spontaneously align their sharpest points toward true magnetic North',
+      'a weathered granite basin holding clear fluid that instantaneously freezes into solid crystal the exact millisecond a fingertip approaches within 1mm',
+      'a high-desert gypsum dune crest where sand grains flow uphill like reverse waterfalls in calm air',
+      'a natural limestone fault seam emitting a pale green phosphorescent glow illuminating the operator boots in darkness',
+      'an embedded basalt nodule exhibiting massive localized density, making a 2-inch stone weigh an impossible 15 kilograms',
+      'a shallow river rock depression where water boils vigorously at 4 degrees Celsius without producing steam or heat',
+      'an ancient petrified tree branch conducting static electricity, making small sparks dance across its bark',
+      'a natural sandstone bowl where poured water instantly self-assembles into a perfect spinning liquid vortex',
+      'a glacial ice fissure where trapped air bubbles are completely motionless and rectangular in geometry',
+      'a weathered slate trail seam emitting a sharp acoustic crack and blue spark whenever a rubber boot steps across it',
+      'a natural obsidian bowl containing jet-black fluid displaying miniature celestial whirlpools on its surface',
+      'a sub-alpine granite outcrop with a 1-foot circular zone where smartphone autofocus cameras go into an infinite rapid pulsing loop',
+      'a high-altitude mineral spring where water emerges as frozen spherical ice marbles rolling down the scree',
+      'a natural calcite fracture pulling a steady freezing draft that coats the operator glove in instantaneous hoarfrost',
+      'an isolated basalt boulder whose hexagonal cracks pulse with rhythmic red veins of subsurface bioluminescence',
+      'a weathered ironstone slab that repels sand grains, creating an unnatural 6-inch sterile halo of bare stone',
+      'an ancient volcanic cinder cone rock absorbing sound, reducing shouted words to an eerie, muffled whisper',
+      'a natural limestone trough where dropped water droplets bounce continuously 5 times before splashing',
+      'a desert quartz pavement where sunlight reflects as polarized, concentric rainbow rings on the camera lens',
+      'an alpine moraine boulder with a 2-inch central bore hole emitting a low 30Hz infrasound hum causing camera sensor shake',
+      'a smooth granite slab where poured water flash-freezes into a crystal-clear lens magnifying the microscopic stone grain 100x'
     ];
 
     const finalSubjects = extractedSubjects.length > 0
@@ -690,6 +849,16 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
           'Appalachian Hemlock Hollow',
           'Badlands Bentonite Wash',
           'Brittany Granite Tide-Pool',
+          'Danakil Sulfur Depression',
+          'Namib Skeleton Dunes',
+          'Pamukkale Travertine Terraces',
+          'Wadi Rum Sandstone Canyons',
+          'Giant Causeway Basalt Columns',
+          'Yellowstone Hydrothermal Caldera',
+          'Socotra Dragonblood Plateau',
+          'Karijini Iron Gorge',
+          'Fingal Cave Sea Caverns',
+          'Luray Limestone Caverns'
         ],
         locations: [
           'a remote banded iron formation outcrop under harsh midday sun, with layered rust-red hematite slabs and metallic black magnetite gravel',
@@ -700,6 +869,23 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
           'an ancient Karst limestone sinkhole entrance in a temperate river gorge, with jagged mossy boulders and cold groundwater seeps',
           'a desolate Siberian tundra permafrost thaw basin with exposed ancient black mud, frozen roots, and icy puddle ruts',
           'a barren Utah red sandstone slickrock plateau with wind-hollowed sandstone bowls and fine rust-colored quartz powder',
+          'a dark Scottish highland peat bog under gloomy drizzle, with soggy black sphagnum turf and still brown tannin pools',
+          'a steaming geothermal caldera slope in New Zealand, with sulfur-stained yellow clay and bubbling mineral seeps',
+          'an abandoned high-altitude copper mine tailing pile with crushed turquoise-green malachite rock and oxidizing pyrite gravel',
+          'a razor-sharp glacial moraine ridge above the treeline, covered in unstable blue-grey gneiss boulders and patches of hardpack snow',
+          'a secluded Appalachian hemlock hollow beside a roaring mountain brook, with slick green liverwort on wet river granite',
+          'an arid South Dakota badlands wash with crumbling banded bentonite mudstone and wind-sculpted clay hoodoos',
+          'a wave-battered Brittany granite sea terrace at low tide, with cold tidepools, black barnacles, and glistening wet sea kelp',
+          'a blinding neon-yellow Danakil sulfur terrace with boiling acidic brine crusts and fragile hollow salt chimneys',
+          'a windswept Namib desert dune crest where towering rust-red sand dunes meet black volcanic rock outcrops',
+          'a gleaming white Pamukkale travertine shelf overflowing with pale turquoise mineral water under late afternoon sun',
+          'a narrow towering red sandstone slot canyon in Wadi Rum, with deep shadows and soft salmon-pink dune sand',
+          'a rugged North Atlantic shoreline of interlocking columnar basalt blocks washed by crashing sea foam',
+          'a Yellowstone thermal meadow surrounded by dead lodgepole pine snags, with pale sinter crusts and bubbling hydrothermal mud',
+          'a rugged limestone cliff on Socotra island with red soil, sharp eroded karstic pinnacles, and cool coastal wind',
+          'a deep red Karijini iron-ore gorge with banded jasper walls polished like marble by flash floods',
+          'a dark echoing sea-cave entrance with vaulted basalt columns echoing hollow booming ocean swells',
+          'an underground limestone cavern entrance with dripping calcite curtains and cold subterranean river gravel'
         ],
         subjects_or_anomalies: finalSubjects,
         tools_and_probes: [
@@ -711,6 +897,23 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
           'a freshly plucked green mountain fern leaf',
           'a digital infrared laser thermometer',
           'a heavy 1-inch chrome steel ball-bearing',
+          'a vintage windproof brass Zippo lighter',
+          'a hardened tungsten carbide scribing tool',
+          'a 6-inch vintage stainless steel geological ruler',
+          'a small copper magnifying loupe',
+          'a flat unpolished pine wood shingle',
+          'a heavy antique cast-iron padlock key',
+          'a thin 12-inch flexible surveyor steel wire',
+          'a dry natural sea sponge fragment',
+          'a pair of surgical stainless steel tweezers',
+          'a vintage pocket pendulum on braided cord',
+          'a piece of natural white blackboard chalk',
+          'a smooth 2-inch polished obsidian thumb stone',
+          'a small brass jeweler hammer',
+          'a glass medicine dropper bottle of distilled water',
+          'a 5-meter bright orange surveyor nylon string',
+          'a compact handheld UV blacklight torch',
+          'a heavy vintage leather-bound field notebook'
         ],
         scale_anchors: [
           'with a small black ground beetle crawling on the dry rock edge to anchor realistic physical scale',
@@ -719,13 +922,52 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
           'with a red wood ant scrambling across the stone grain anchoring authentic physical scale',
           'with a tiny brittle dried lichen flake clinging to the rock seam anchoring authentic physical scale',
           'with a tiny dead honeybee carcass lying beside the anomaly anchoring believable real-world scale',
+          'with a single yellow birch leaf resting on the bedrock anchoring realistic scale',
+          'with an empty speckled snail shell wedged in the stone fracture anchoring authentic physical scale',
+          'with a tiny grey spider crawling across the stone rim anchoring believable real-world scale',
+          'with a stray spruce cone scale resting on the rock margin anchoring believable physical scale',
+          'with a small dry wild oat grain lying beside the anomaly anchoring authentic scale',
+          'with a delicate dried dragonfly wing clinging to the stone anchoring realistic micro scale',
+          'with a tiny mottled bird feather resting against the rock edge anchoring authentic physical scale',
+          'with an empty cicada nymph shell anchored to the stone edge providing believable scale',
+          'with a small dried rowan berry resting on the rock rim anchoring believable real-world scale',
+          'with a tiny white quartz pebble the size of a pea anchoring authentic physical scale',
+          'with a delicate dried moss spore capsule resting beside the anomaly anchoring authentic scale',
+          'with a tiny black carpenter ant paused on the stone surface anchoring realistic physical scale',
+          'with a single dry dandelion seed caught in a micro-crevice anchoring believable scale',
+          'with an empty acorn cap wedged in the stone grain anchoring authentic real-world scale',
+          'with a shed snake scale flake glistening beside the anomaly anchoring physical scale',
+          'with a tiny dried seed pod from alpine heather anchoring authentic micro scale',
+          'with an ancient fossil crinoid stem ring visible in the stone anchoring believable scale',
+          'with a small dry pine cone resting 2 inches away anchoring authentic physical scale',
+          'with a fragile dried ladybug shell resting on the rock seam anchoring believable scale'
         ],
         climaxes: [
-          'a high-frequency metallic resonance screeches from the bedrock; the anomaly violently cavitates with an explosive acoustic crack, blasting pressurized fragments straight into the lens',
-          'extreme thermal shock causes the rock slab to violently split with an explosive gunshot-like crack, sending hot vapor and sharp rock fragments straight toward boots',
-          'a terrifying subterranean infrasound vibration hums; fluid gravel instantaneously locks solid in 0.05 seconds, snapping the thick oak stick in half with concussive gunshot crack',
-          'the liquid pool suddenly snaps backward like a high-tension rubber band and ruptures into a concussive shockwave of mist and stinging droplets',
-          'the compass glass violently implodes with a loud electrical pop and sharp blue spark discharge, sending pressurized mineral dust blasting against camera lens',
+          'Bedrock resonates with a high-pitched metallic shriek; the anomaly violently cavitates with an explosive acoustic crack, blasting pressurized fragments straight into the lens',
+          'A terrifying subterranean infrasound vibration hums; fluid instantaneously locks solid in 0.05 seconds, snapping the tool in half with concussive gunshot crack',
+          'The compass glass violently implodes with a loud electrical pop and sharp blue spark discharge, sending pressurized mineral dust blasting against camera lens',
+          'A blinding violet flash arcs between the stones with a thunderclap pop; the liquid instantaneously flash-freezes into crystalline needles as the phone sensor glitches with static',
+          'The air pressure drops precipitously with a deep roaring vacuum sound; surrounding gravel is sucked 6 inches inward before exploding outward into a cloud of pulverized dust',
+          'The anomaly ripples like liquid mercury and violently snaps backward like a high-tension cable, launching a concussive shockwave of fine spray at boots',
+          'A deafening harmonic tone rings out; the stone surface instantly fractures into a spiderweb of glowing geometric fissures, blasting stinging mineral shards at the operator',
+          'Sudden thermal inversion causes ambient moisture to instantly flash into a thick freezing cloud of dry hoarfrost, blinding the camera before abrupt cut',
+          'The levitating object suddenly drops with enormous kinetic mass, shattering the underlying bedrock with a seismic thud that knocks the camera operator backward',
+          'An invisible gravitational pulse sends surrounding loose stones flying outward in a perfect 360-degree flat ring, accompanied by a sharp bass drop sound',
+          'The liquid vortex suddenly reverses direction in 0.01 seconds with a hydraulic whip crack, splashing hyper-dense iridescent droplets against the smartphone lens',
+          'A sharp static discharge arcs from the rock directly into the metal probe with an ear-splitting crackle, illuminating the scene in blinding electric blue',
+          'Subterranean air pressure erupts through a micro-fissure with a screaming turbine whistle, blasting cold quartz powder in a spiraling vortex into the camera',
+          'The stone slab emits a continuous 800Hz acoustic screech; the internal crystal core shatters into millions of microscopic glittering sparks',
+          'A sudden magnetic pulse violently yanks the steel tool out of the operator grip, slamming it flush against the stone with a deafening metallic clang',
+          'The pool of dark fluid instantaneously boils into a dense lilac aerosol plume that covers the screen in oily condensation before cutting out',
+          'The stone surface develops thousands of microscopic hairline fractures with a rapid-fire acoustic crackle like breaking glass, collapsing 1 inch inward',
+          'A sudden subterranean thud shakes the ground; the ambient air temperature plunges 20 degrees in 1 second, frosting over the smartphone camera lens',
+          'The amber groundwater flashes with an intense phosphorescent strobe, instantly vaporizing the dipped tool tip with a sharp hiss and puff of dry smoke',
+          'A high-tension acoustic hum reaches deafening pitch before snapping in absolute dead silence, leaving surrounding dust suspended motionless in mid-air',
+          'The rock fissure suddenly exhausts a pressurized jet of freezing mist that crystallizes into airborne snow flurry within 3 inches of the phone',
+          'The liquid dome cavitates from its internal core with an explosive hydraulic water-hammer crack, blasting crystal spray straight toward the operator face',
+          'An instantaneous electromagnetic pulse wipes the camera screen with horizontal static scanlines accompanied by a loud audio pop before cutting',
+          'The natural crystal geode violently ruptures with a resonant gunshot report, peppering the operator boots with harmless iridescent mineral sand',
+          'The terrain seam violently shifts 2 centimeters with a sickening subterranean crunch, sending loose scree cascading downhill as the operator stumbles backward'
         ],
       },
       subjects: finalSubjects,
