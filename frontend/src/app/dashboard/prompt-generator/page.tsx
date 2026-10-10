@@ -140,10 +140,10 @@ export default function PromptGeneratorPage() {
   const outputBoxRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load saved state from localStorage
+  // Ensure Master Prompt starts completely empty on fresh open (remove any legacy cached prompt)
   useEffect(() => {
-    const savedPrompt = localStorage.getItem('last_master_prompt');
-    if (savedPrompt) setMasterPrompt(savedPrompt);
+    localStorage.removeItem('last_master_prompt');
+    setMasterPrompt('');
     const savedVps = localStorage.getItem('vps_video_generator_url');
     if (savedVps) setVpsUrl(savedVps);
   }, []);
@@ -158,18 +158,19 @@ export default function PromptGeneratorPage() {
       const parts2 = text.split(/\n+\s*[-=_]{3,}\s*\n+/).map(p => p.trim()).filter(p => p.length > 30);
       if (parts2.length > 1) return parts2.length;
     }
-    const createRegex = /(?=(?:^|\n+)\s*Create a \d+[\s-]second)/gi;
+    const createRegex = /(?=(?:^|\n+)\s*(?:Create a|A) \d+[\s-]second)/gi;
     const parts3 = text.split(createRegex).map(p => p.trim()).filter(p => p.length > 30);
     if (parts3.length > 1) return parts3.length;
     return 1;
   }, [masterPrompt]);
 
   const handleUseSamplePrompt = () => {
-    const sample = `Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay. The setting is a cold, overcast sub-alpine scree trail covered in loose grey slate stones, dry yellow tussock grass, and cool mountain air. In the first second, the camera points down at a flat 1-meter natural grey slate slab embedded in the dirt; the rock is sharply split down a natural center seam where the left half is crusted in thick white sub-zero frost, while the right half visibly radiates shimmering hot thermal heat-waves into the cold air. From 0–3 seconds, show cautious handheld steps crunching on loose gravel, phone bobbing with natural breathing, camera auto-exposure balancing the bright white frost against the dark wet rock, and howling cold mountain wind audio. From 3–6 seconds, lean down within eight inches of the rock seam; an ordinary bare hand holds a dented steel canteen and pours a steady thin stream of clear water directly across the center dividing line, with a tiny dried pine needle resting on the rock rim to anchor realistic physical scale. From 6–8 seconds, the poured water hits both sides simultaneously; the liquid on the frosted left side instantly flash-freezes into jagged white frost ice, while the water on the right half violently boils, hissing and vaporizing instantly into billowing steam. From 8–10 seconds, extreme thermal shock causes the rock slab to violently split with an explosive gunshot-like crack, blasting steam and sharp slate fragments toward the operator; the operator gasps in terror, violently stumbles backward, and the recording terminates abruptly with NO face or person visible. Audio: crunching gravel footsteps, howling sub-alpine wind, water pouring from metal canteen, simultaneous sizzling boil and cracking ice, deafening gunshot rock fracture, and panicked sharp breathing.
+    const sample = `Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay. The setting is a misty pine forest clearing at dawn beside an old wooden footbridge over a shallow brook. In the first second, the camera points at a stream of crystal-clear water rising vertically upward from the creek into a floating hollow liquid ring spinning in mid-air. From 0–3 seconds, show cautious handheld steps approaching the wooden bridge rail, phone bobbing with natural breathing and camera auto-exposure adjusting to the morning mist. From 3–6 seconds, lean within eight inches of the floating water ring; an ordinary bare hand holds a dry pine branch and slowly touches the spinning rim of the water arch, with a small green fern leaf resting on the wooden rail to anchor realistic physical scale. From 6–8 seconds, the floating water ring suddenly freezes into solid transparent ice in mid-air while continuing to hover unsupported. From 8–10 seconds, the suspended ice ring shatters outward into thousands of sparkling droplets; the operator stumbles backward and the recording terminates abruptly with NO face or person visible.
 
 ## Negative prompt
 human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, reaction face, talking head, vlogger overlay, avatar, split screen, napkins, tissues, paper, glass bowl, acrylic prop, cinematic CGI sheen, smooth gimbal stabilization, fantasy glowing magic runes, blue energy shields, sci-fi forcefields, cartoon water effects, alien technology, dramatic movie trailer soundtrack, bass drops, sound design risers, motion blur glitches, subtitles, text overlays, logos, watermarks, extra fingers, deformed hands, and narrative explanations. Maintain the convincing, unpolished aesthetic of authentic viral mobile found-footage captured spontaneously on a smartphone.`;
     setMasterPrompt(sample);
+    setMatrix(null);
   };
 
   const getAuthHeaders = () => {
@@ -182,8 +183,8 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
   const formatPromptsText = (items: PromptItem[]): string => {
     return items
-      .map(p => `--- PROMPT ${p.index} ---\n${p.text.trim()}\n\n`)
-      .join('');
+      .map(p => `PROMPT ${p.index}\n\n\n${p.text.trim()}`)
+      .join('\n\n\n');
   };
 
   // ---------------- 🎬 VIDEO REVERSE-ENGINEERING ACTIONS ----------------
@@ -352,7 +353,6 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     setErrorMessage('');
     stopSignalRef.current = false;
     setIsPaused(false);
-    localStorage.setItem('last_master_prompt', masterPrompt);
 
     let activeMatrix = matrix;
 
@@ -1227,7 +1227,10 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
               <textarea
                 value={masterPrompt}
-                onChange={e => setMasterPrompt(e.target.value)}
+                onChange={e => {
+                  setMasterPrompt(e.target.value);
+                  if (matrix) setMatrix(null);
+                }}
                 placeholder="Paste your Master Prompt here... You can paste a single prompt or multiple example prompts (PROMPT 1, PROMPT 2, etc.)"
                 rows={8}
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono leading-relaxed"
@@ -1237,7 +1240,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 <div className="flex items-center gap-2 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 animate-fadeIn">
                   <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>
-                    <strong>{detectedConceptsCount} Distinct Concepts Detected:</strong> Generator will automatically rotate and cycle across all {detectedConceptsCount} concepts so no single video concept is repeated!
+                    <strong>{detectedConceptsCount} Example Prompts Detected:</strong> Generator will analyze your examples and create 100% brand-new, unrepeated video concepts with zero duplicate ideas!
                   </span>
                 </div>
               )}
