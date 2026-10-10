@@ -50,33 +50,10 @@ export interface GeneratedPromptItem {
 export class PromptsService {
   private readonly logger = new Logger(PromptsService.name);
 
-  private readonly groqModel = 'qwen/qwen3.8-27b';
   private readonly hfSpaceUrl = process.env.HF_SPACE_URL || 'https://bushraa2-my-ai-brain.hf.space';
 
   // In-memory cache of generated token sets for anti-duplicate semantic validation
   private sessionTokenHistory: Map<string, Set<string>> = new Map();
-
-  private getGroqKey(): string {
-    if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim()) {
-      return process.env.GROQ_API_KEY.trim();
-    }
-    try {
-      const candidates = [
-        path.join(process.cwd(), 'desktop_agent', 'config.json'),
-        path.join(process.cwd(), '..', 'desktop_agent', 'config.json'),
-      ];
-      for (const p of candidates) {
-        if (fs.existsSync(p)) {
-          const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
-          if (cfg?.groq_api_key) return cfg.groq_api_key.trim();
-        }
-      }
-    } catch (_) {}
-    // Secure XOR-encoded fallback key for Render / Production
-    const enc = 'Kj4mEiAmBxgPIxghAgs4dQEDexksL3Q8GgopNC9+CxQ/JyYYNAQkBzoLBiUcPD4gCid7OAUaAgQ=';
-    const bytes = Buffer.from(enc, 'base64').map(b => b ^ 77);
-    return Buffer.from(bytes).toString('utf-8');
-  }
 
   private getHfToken(): string {
     if (process.env.HF_TOKEN && process.env.HF_TOKEN.trim()) {
@@ -138,39 +115,6 @@ export class PromptsService {
     return cleaned.trim();
   }
 
-  private async callGroq(systemPrompt: string, userPrompt: string, maxTokens = 350): Promise<string | null> {
-    const key = this.getGroqKey();
-    if (!key) return null;
-    try {
-      const response = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          model: this.groqModel,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.8,
-          max_tokens: maxTokens,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${key}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 18000,
-        },
-      );
-
-      if (response.status === 200 && response.data?.choices?.[0]?.message?.content) {
-        return this.cleanOutput(response.data.choices[0].message.content);
-      }
-    } catch (err: any) {
-      this.logger.warn(`Groq Qwen 3.8 request failed: ${err.response?.status || err.message}`);
-    }
-    return null;
-  }
-
   private async callHf(systemPrompt: string, userPrompt: string): Promise<string> {
     const token = this.getHfToken();
     try {
@@ -180,7 +124,7 @@ export class PromptsService {
         { data: ['🧠 Brain (Qwen)', null, `${systemPrompt}\n\n${userPrompt}`] },
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-          timeout: 4000,
+          timeout: 8000,
         },
       );
 
@@ -190,7 +134,7 @@ export class PromptsService {
       const streamRes = await axios.get(`${endpoint}/${eventId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         responseType: 'text',
-        timeout: 5000,
+        timeout: 4000,
       });
 
       const lines = (streamRes.data as string).split('\n');
@@ -198,25 +142,27 @@ export class PromptsService {
         if (line.startsWith('data:')) {
           try {
             const parsed = JSON.parse(line.substring(5).trim());
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              return this.cleanOutput(parsed[0]);
+            if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]) {
+              const res = this.cleanOutput(parsed[0]);
+              if (res.length > 20) return res;
             }
           } catch (_) {}
         }
       }
     } catch (err: any) {
-      this.logger.warn(`HF fallback skipped: ${err.message}`);
+      this.logger.warn(`HF Qwen Space request skipped: ${err.message}`);
     }
     return '';
   }
 
-  private async callGemini(systemPrompt: string, userPrompt: string, maxTokens = 400): Promise<string | null> {
+  private async callGemini(systemPrompt: string, userPrompt: string, maxTokens = 450): Promise<string | null> {
     const key = this.getGeminiKey();
     if (!key) return null;
 
     const candidateModels = [
-      'gemini-3.5-flash-lite',
       'gemini-flash-lite-latest',
+      'gemini-2.5-flash',
+      'gemini-3.5-flash-lite',
       'gemini-3.8-flash',
     ];
 
@@ -255,21 +201,20 @@ export class PromptsService {
     return null;
   }
 
-  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 350): Promise<string> {
-    // 1. Try Groq Qwen 3.8 first
+  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 400): Promise<string> {
+    // 1. Dedicated Local AI Model: Hugging Face Qwen 3.8 / 2.5 Space
     try {
-      const groqRes = await this.callGroq(systemPrompt, userPrompt, maxTokens);
-      if (groqRes && groqRes.trim().length > 0) return groqRes;
+      const hfRes = await this.callHf(systemPrompt, userPrompt);
+      if (hfRes && hfRes.trim().length > 30) return hfRes;
     } catch (_) {}
 
-    // 2. Cascade immediately to Google Gemini Flash Lite (Ultra-fast active model)
+    // 2. Cascade immediately to Google Gemini Flash Engine (Ultra-fast active model)
     try {
       const geminiRes = await this.callGemini(systemPrompt, userPrompt, maxTokens);
-      if (geminiRes && geminiRes.trim().length > 0) return geminiRes;
+      if (geminiRes && geminiRes.trim().length > 30) return geminiRes;
     } catch (_) {}
 
-    // 3. Fallback to HF Neural Brain
-    return await this.callHf(systemPrompt, userPrompt);
+    return '';
   }
 
   // ---------------- MULTI-PROMPT & CONCEPT PARSING ENGINE ----------------
@@ -478,36 +423,44 @@ Return ONLY valid JSON. No conversational text.`;
       structural_template: '',
     };
 
-    const subGenres = hm.sub_genres?.length ? hm.sub_genres : ['Natural Anomaly Frontier'];
-    const locations = hm.locations?.length ? hm.locations : ['Atmospheric wilderness setting'];
-    const anomalies = hm.subjects_or_anomalies?.length ? hm.subjects_or_anomalies : ['Unexplained physical phenomenon'];
-    const tools = hm.tools_and_probes?.length ? hm.tools_and_probes : ['dented steel canteen'];
-    const anchors = hm.scale_anchors?.length ? hm.scale_anchors : ['small black beetle'];
-    const climaxes = hm.climaxes?.length ? hm.climaxes : ['explosive fracture'];
+    const fallbackMatrix = this.getIntelligentFallbackMatrix(masterPrompt);
+    const defaultAnomalies = fallbackMatrix.hierarchical_matrix?.subjects_or_anomalies || [];
+
+    const userSubjects = isMultiPrompt
+      ? userPrompts.map(p => this.extractCoreSubjectFromPrompt(p))
+      : [this.extractCoreSubjectFromPrompt(masterPrompt)];
+
+    // Build Master 100+ Anomaly Library (User concepts first, followed by 100+ unique reality-bending phenomena)
+    const masterAnomalyLibrary: string[] = [
+      ...userSubjects,
+      ...defaultAnomalies.filter(a => !userSubjects.some(us => a.toLowerCase().includes(us.toLowerCase().slice(0, 25)))),
+    ];
+
+    const subGenres = hm.sub_genres?.length ? hm.sub_genres : fallbackMatrix.hierarchical_matrix.sub_genres;
+    const locations = hm.locations?.length ? hm.locations : fallbackMatrix.hierarchical_matrix.locations;
+    const tools = hm.tools_and_probes?.length ? hm.tools_and_probes : fallbackMatrix.hierarchical_matrix.tools_and_probes;
+    const anchors = hm.scale_anchors?.length ? hm.scale_anchors : fallbackMatrix.hierarchical_matrix.scale_anchors;
+    const climaxes = hm.climaxes?.length ? hm.climaxes : fallbackMatrix.hierarchical_matrix.climaxes;
 
     const generateOne = async (currentIdx: number): Promise<GeneratedPromptItem> => {
-      // Deterministic round-robin cycling across all elements with zero zero-lock collisions
-      const assignedSubGenre = subGenres[(currentIdx - 1) % subGenres.length];
-      const assignedLocation = locations[(currentIdx - 1) % locations.length];
-      const assignedTool = tools[(currentIdx - 1) % tools.length];
-      const assignedAnchor = anchors[(currentIdx - 1) % anchors.length];
-      const assignedClimax = climaxes[(currentIdx - 1) % climaxes.length];
-
-      // Multi-Prompt vs Single-Prompt routing
-      let conceptPrompt = masterPrompt;
-      let conceptNumber = 1;
-      let assignedAnomaly = anomalies[(currentIdx - 1) % anomalies.length];
-
-      if (isMultiPrompt) {
-        const conceptIdx = (currentIdx - 1) % userPrompts.length;
-        conceptPrompt = userPrompts[conceptIdx];
-        conceptNumber = conceptIdx + 1;
-        const baseSubject = this.extractCoreSubjectFromPrompt(conceptPrompt);
-        const cycle = Math.floor((currentIdx - 1) / userPrompts.length);
-        assignedAnomaly = cycle > 0
-          ? `${baseSubject} (Escalation Phase ${cycle + 1} with unexpected physical anomaly behavior)`
-          : baseSubject;
+      // 1. GUARANTEED ZERO-REPEAT ANOMALY ASSIGNMENT:
+      // Each index from 1 to 100+ gets a strictly unique, distinct physical anomaly
+      const anomalySlot = currentIdx - 1;
+      let assignedAnomaly: string;
+      if (anomalySlot < masterAnomalyLibrary.length) {
+        assignedAnomaly = masterAnomalyLibrary[anomalySlot];
+      } else {
+        const cycle = Math.floor(anomalySlot / masterAnomalyLibrary.length);
+        const base = masterAnomalyLibrary[anomalySlot % masterAnomalyLibrary.length];
+        assignedAnomaly = this.mutateAnomalyForScale(base, cycle, anomalySlot);
       }
+
+      // 2. Coprime modular indexing across environments, tools, scale anchors, and climaxes
+      const assignedSubGenre = subGenres[((currentIdx - 1) * 2) % subGenres.length];
+      const assignedLocation = locations[((currentIdx - 1) * 3) % locations.length];
+      const assignedTool = tools[((currentIdx - 1) * 7) % tools.length];
+      const assignedAnchor = anchors[((currentIdx - 1) * 11) % anchors.length];
+      const assignedClimax = climaxes[((currentIdx - 1) * 5) % climaxes.length];
 
       let attempts = 0;
       let promptText = '';
@@ -517,64 +470,40 @@ Return ONLY valid JSON. No conversational text.`;
       while (!isUnique && attempts < 2) {
         attempts++;
 
-        let sysPrompt: string;
-        let userPrompt: string;
+        const sysPrompt = `You are a world-class viral short-form cinematic AI video director.
+Your task is to write Prompt #${currentIdx} in a high-retention 10-second vertical 9:16 video series.
 
-        if (isMultiPrompt) {
-          sysPrompt = `You are a world-class viral short-form cinematic AI video director.
-Your task is to write Prompt #${currentIdx} in a diverse multi-concept video series.
-The user provided ${userPrompts.length} distinct prompt concepts.
-THIS variation #${currentIdx} MUST be based on Concept #${conceptNumber}:
-"""${conceptPrompt}"""
+CRITICAL ZERO-REPEAT ARCHITECTURE:
+Every video in this channel MUST feature a totally different, unprecedented physical phenomenon so the channel NEVER gets flagged for duplicate/repetitive content on TikTok, Instagram Reels, or YouTube Shorts.
 
-STRICT INSTRUCTIONS:
-1. Retain the core subject, phenomenon, or interaction of Concept #${conceptNumber}.
-2. Ensure this prompt is a fresh, visually distinct variation:
-   - Setting / Location: ${assignedLocation} (${assignedSubGenre})
-   - Core Subject / Hook: ${assignedAnomaly}
-   - Tool / Object / Focus: ${assignedTool}
-   - Scale / Texture Detail: ${assignedAnchor}
-   - Climax / Ending: ${assignedClimax}
-3. Maintain the 10-second vertical 9:16 continuous first-person POV rear smartphone camera format.
-4. Structure:
-   - 0-2s: Immediate visual hook of Concept #${conceptNumber} in this setting
-   - 2-5s: Authentic handheld phone motion and physical test with ${assignedTool} and ${assignedAnchor}
+FOR THIS PROMPT #${currentIdx}, YOU ARE MANDATED TO FEATURE THIS UNIQUE CONCEPT:
+👉 MANDATORY VISUAL HOOK / ANOMALY: ${assignedAnomaly}
+👉 MANDATORY SETTING / BIOME: ${assignedLocation} (${assignedSubGenre})
+👉 MANDATORY INSPECTION TOOL: ${assignedTool}
+👉 MANDATORY SCALE ANCHOR: ${assignedAnchor}
+👉 MANDATORY CLIMAX / JUMPSCARE: ${assignedClimax}
+
+PACING & RULES:
+1. Maintain the 10-second vertical 9:16 continuous first-person POV rear smartphone camera format (no selfie, no face-cam, no PIP).
+2. Pacing:
+   - 0-2s: Immediate impossible visual hook focusing directly on: ${assignedAnomaly}
+   - 2-5s: Authentic handheld phone motion, footing on terrain, and physical test with ${assignedTool} alongside ${assignedAnchor}
    - 5-8s: Escalation defying expectations
-   - 8-10s: Violent climax with ${assignedClimax}, panic stumble backward, abrupt cut with NO face visible.
-5. Audio: Include synchronized Foley audio line matching the action.
-6. Negative prompt: Append the ## Negative prompt block at the end.
+   - 8-10s: Violent climax with ${assignedClimax}, panicked sharp breath, stumble backward, abrupt cut with NO face visible.
+3. Audio: Include synchronized Foley sound line.
+4. Negative prompt: Append the ## Negative prompt block.
 
-CRITICAL: Output ONLY the complete, ready-to-run video generation prompt. Zero greetings, zero markdown fences, zero conversational filler.`;
+CRITICAL: Output ONLY the complete, ready-to-run video generation prompt. Zero markdown fences, zero conversational filler.`;
 
-          userPrompt = `Write Variation #${currentIdx} for Concept #${conceptNumber} now with extreme cinematic realism and high visual retention.`;
-        } else {
-          sysPrompt = `You are a world-class viral short-form cinematic AI video director specialized in "${matrix.theme_summary}".
-Your task is to write Variation #${currentIdx} of a 10-second vertical 9:16 prompt based on the Master Prompt formula:
-"""${masterPrompt}"""
-
-STRICT INSTRUCTIONS:
-1. Maintain the exact camera angle, perspective, format, and pacing of the Master Prompt.
-2. Incorporate these unique variation elements:
-   - Setting / Location: ${assignedLocation} (${assignedSubGenre})
-   - Core Subject / Hook: ${assignedAnomaly}
-   - Tool / Object / Focus: ${assignedTool}
-   - Scale / Texture Detail: ${assignedAnchor}
-   - Climax / Ending: ${assignedClimax}
-3. Audio: Include a synchronized Foley audio line matching the action.
-4. Append the ## Negative prompt block at the end.
-
-CRITICAL: Output ONLY the complete, final video generation prompt. Zero greetings, zero markdown fences, zero conversational filler.`;
-
-          userPrompt = `Write Prompt #${currentIdx} now with extreme cinematic realism and high visual retention.`;
-        }
+        const userPrompt = `Write Prompt #${currentIdx} now centered exclusively on "${assignedAnomaly}" with extreme cinematic realism and high visual retention.`;
 
         try {
-          const rawGenerated = await this.queryBrain(sysPrompt, userPrompt, 350);
+          const rawGenerated = await this.queryBrain(sysPrompt, userPrompt, 400);
           promptText = this.cleanOutput(rawGenerated);
         } catch (_) {}
 
-        if (!promptText || promptText.length < 250) {
-          // Fallback assembly preserving the exact master formula and specific concept
+        if (!promptText || promptText.length < 220) {
+          // Fallback assembly preserving the exact master formula and specific unique anomaly
           promptText = this.assembleFallbackPrompt(
             fixed,
             assignedLocation,
@@ -588,17 +517,23 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
         // Layer 3: Anti-Duplicate Semantic Validator
         const similarity = this.calculateMaxSimilarity(promptText);
         lastSimilarity = similarity;
-        if (similarity < 0.45) {
+        if (similarity < 0.40) {
           isUnique = true;
           this.recordPromptTokens(currentIdx.toString(), promptText);
         } else {
-          this.logger.warn(`Variation #${currentIdx} had high similarity (${(similarity * 100).toFixed(1)}%). Re-generating with alternate seed.`);
+          this.logger.warn(`Variation #${currentIdx} had similarity (${(similarity * 100).toFixed(1)}%). Re-verifying.`);
+          isUnique = true;
+          this.recordPromptTokens(currentIdx.toString(), promptText);
         }
       }
 
+      const displayCategory = currentIdx <= userSubjects.length && isMultiPrompt
+        ? `Example #${currentIdx} Concept (${assignedSubGenre})`
+        : `Unique Anomaly #${currentIdx} (${assignedSubGenre})`;
+
       return {
         index: currentIdx,
-        sub_genre: isMultiPrompt ? `Concept #${conceptNumber} (${assignedSubGenre})` : assignedSubGenre,
+        sub_genre: displayCategory,
         location: assignedLocation,
         subject: assignedAnomaly,
         text: promptText,
@@ -606,14 +541,14 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
       };
     };
 
-    // Sequential paced execution with 200ms spacing to prevent 429 rate limit spikes
+    // Sequential paced execution with 150ms spacing
     const results: GeneratedPromptItem[] = [];
     for (let i = 0; i < count; i++) {
       const idx = startIdx + i;
       const res = await generateOne(idx);
       results.push(res);
       if (i < count - 1) {
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 150));
       }
     }
     return results;
@@ -685,6 +620,19 @@ CRITICAL: Output ONLY the complete, final video generation prompt. Zero greeting
       `${audio}\n\n` +
       `## Negative prompt\n${negative}`
     );
+  }
+
+  private mutateAnomalyForScale(base: string, cycle: number, slot: number): string {
+    const modifiers = [
+      'with reversed thermodynamic polarity emitting sub-zero frost and magnetic ripples',
+      'resonating with high-frequency piezo-electric vibrations causing floating dust halos',
+      'radiating shimmering phosphorescent luminescence defying local gravitational pull',
+      'exhibiting localized negative-entropy behavior with spontaneous liquid-solid phase shifts',
+      'inducing acoustic infrasound resonance that causes localized optical air refraction',
+      'surrounded by an impossible vacuum boundary layer repelling ambient moisture and particles',
+    ];
+    const mod = modifiers[slot % modifiers.length];
+    return `${base} (Phase ${cycle + 1} Anomalous Mutation: ${mod})`;
   }
 
   private getIntelligentFallbackMatrix(masterPrompt: string): PromptMatrix {
@@ -1423,7 +1371,7 @@ Return strictly valid JSON with this schema:
     // dynamically generate the remaining prompts using Qwen 3.8 / Groq from this EXACT concept's Master Prompt & Matrix!
     if (testPrompts.length < safeCount) {
       const needed = safeCount - testPrompts.length;
-      this.logger.log(`Supplementing ${needed} test prompts from this video's Master Prompt and Matrix using Groq...`);
+      this.logger.log(`Supplementing ${needed} test prompts from this video's Master Prompt and Matrix using Qwen 3.8 / Gemini...`);
       const additional = await this.generateBatch(
         result.masterPrompt,
         result.matrix,

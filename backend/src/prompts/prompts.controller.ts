@@ -20,8 +20,8 @@ export class PromptsController {
   getStatus() {
     return {
       status: 'ONLINE',
-      engine: 'Qwen 3.8 (Groq Neural Acceleration) + Gemini 3.8 Flash (Native Video Vision)',
-      speed: '1.5s - 2.0s per prompt',
+      engine: 'Qwen 3.8 / 2.5 (Dedicated Local HF Space) + Gemini 3.8 (Native Video Vision & Flash Acceleration)',
+      speed: '1.0s - 2.0s per prompt',
     };
   }
 
