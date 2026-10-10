@@ -98,9 +98,7 @@ export default function PromptGeneratorPage() {
   // Navigation Mode: Video Reverse Engineer vs Direct Master Prompt
   const [mainMode, setMainMode] = useState<'video_engineer' | 'master_prompt'>('video_engineer');
 
-  // Video Reverse Engineer state
-  const [videoInputMode, setVideoInputMode] = useState<'url' | 'upload'>('url');
-  const [videoUrlInput, setVideoUrlInput] = useState<string>('');
+  // Video Reverse Engineer state (Direct Video Upload Only)
   const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
   const [sampleCount, setSampleCount] = useState<number>(5);
   const [isAnalyzingVideo, setIsAnalyzingVideo] = useState<boolean>(false);
@@ -109,7 +107,6 @@ export default function PromptGeneratorPage() {
   const [copiedTestIdx, setCopiedTestIdx] = useState<number | null>(null);
   const [copiedAllTest, setCopiedAllTest] = useState<boolean>(false);
   const [copiedMasterPrompt, setCopiedMasterPrompt] = useState<boolean>(false);
-  const [fbSecurityAlert, setFbSecurityAlert] = useState<boolean>(false);
 
   // Direct Master Prompt state
   const [masterPrompt, setMasterPrompt] = useState<string>('');
@@ -130,7 +127,8 @@ export default function PromptGeneratorPage() {
   const [copied, setCopied] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'blueprint' | 'elements'>('blueprint');
 
-  // VPS Modal state
+  // Custom File Name & VPS Modal state
+  const [customFileName, setCustomFileName] = useState<string>('');
   const [showVpsModal, setShowVpsModal] = useState<boolean>(false);
   const [vpsUrl, setVpsUrl] = useState<string>('');
   const [isSendingToVps, setIsSendingToVps] = useState<boolean>(false);
@@ -187,6 +185,22 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       .join('\n\n\n');
   };
 
+  const getResolvedFilename = (itemsCount?: number): string => {
+    const count = itemsCount ?? prompts.length;
+    const trimmed = customFileName.trim();
+    if (trimmed) {
+      const clean = trimmed
+        .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '_')
+        .replace(/\.txt$/i, '')
+        .trim();
+      return `${clean || `Prompts_${count}`}.txt`;
+    }
+    const cleanNiche = (matrix?.niche_name || videoAnalysisResult?.reSkinnedConcept?.title || 'Prompts')
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    return `${cleanNiche}_${count}_prompts.txt`;
+  };
+
   // ---------------- 🎬 VIDEO REVERSE-ENGINEERING ACTIONS ----------------
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -198,32 +212,24 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     setErrorMessage('');
     setStatusMessage('');
 
-    if (videoInputMode === 'url' && !videoUrlInput.trim()) {
-      setErrorMessage('Please enter a video URL (TikTok, Instagram Reels, Facebook, YouTube Shorts, or direct .mp4 link).');
-      return;
-    }
-    if (videoInputMode === 'upload' && !selectedVideoFile) {
+    if (!selectedVideoFile) {
       setErrorMessage('Please select or upload a 10-second .mp4 video file.');
       return;
     }
 
     setIsAnalyzingVideo(true);
-    setVideoAnalysisStep('Uploading video stream to Gemini 3.8 Video Vision...');
+    setVideoAnalysisStep('Uploading video stream...');
 
     try {
       const formData = new FormData();
-      if (videoInputMode === 'upload' && selectedVideoFile) {
-        formData.append('video', selectedVideoFile);
-      } else if (videoInputMode === 'url' && videoUrlInput.trim()) {
-        formData.append('videoUrl', videoUrlInput.trim());
-      }
+      formData.append('video', selectedVideoFile);
       formData.append('sampleCount', String(sampleCount));
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      setVideoAnalysisStep('Gemini 3.8 analyzing continuous video motion, POV wobble, timing & Foley audio...');
+      setVideoAnalysisStep('Analyzing continuous video motion, POV wobble, timing & audio...');
 
       const res = await fetch(`${BACKEND_URL}/prompts/reverse-engineer-video`, {
         method: 'POST',
@@ -242,7 +248,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
             if (res.status === 504 || rawText.includes('504') || rawText.includes('Gateway Timeout')) {
               cleanMsg = 'Server timeout (504): Server response late ho gaya. Baraye meherbani dobara try karein.';
             } else if (res.status === 503 || rawText.includes('503') || rawText.includes('Service Unavailable')) {
-              cleanMsg = 'AI Model par temporary demand spike (503) aya hai. Baraye meherbani 5 seconds baad dobara koshish karein.';
+              cleanMsg = 'Temporary demand spike (503) aya hai. Baraye meherbani 5 seconds baad dobara koshish karein.';
             } else if (res.status === 413 || rawText.includes('413') || rawText.includes('Payload Too Large')) {
               cleanMsg = 'Video file ka size bohot bara hai. Baraye meherbani 50MB se chhoti clip upload karein.';
             } else {
@@ -255,12 +261,11 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
         throw new Error(cleanMsg || `Server error (${res.status})`);
       }
 
-      setVideoAnalysisStep(`Synthesizing brand-new concept & generating ${sampleCount} test prompts with Qwen 3.8...`);
+      setVideoAnalysisStep(`Synthesizing brand-new concept & generating ${sampleCount} test prompts...`);
       const data: VideoAnalysisResult = await res.json();
 
       if (data.originalAnalysis && data.reSkinnedConcept) {
         setVideoAnalysisResult(data);
-        setFbSecurityAlert(false);
         setStatusMessage(`Successfully reverse-engineered video and generated ${data.testPrompts?.length || sampleCount} test prompts!`);
       } else {
         throw new Error('Analysis completed but returned incomplete concept payload.');
@@ -275,14 +280,6 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
         msg.includes('Load failed')
       ) {
         msg = 'Connection note: Render server spin-up ho raha hai ya temporary network hiccup hua hai. Baraye meherbani 5 seconds baad dobara Analyze click karein.';
-      }
-      const isFbBlocked =
-        (videoUrlInput && (videoUrlInput.includes('facebook.com') || videoUrlInput.includes('fb.watch'))) ||
-        msg.toLowerCase().includes('facebook') ||
-        msg.toLowerCase().includes('security wall');
-
-      if (isFbBlocked) {
-        setFbSecurityAlert(true);
       }
       setErrorMessage(msg);
     } finally {
@@ -317,10 +314,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
   const handleDownloadTestPrompts = () => {
     if (!videoAnalysisResult?.testPrompts || videoAnalysisResult.testPrompts.length === 0) return;
-    const cleanTitle = (videoAnalysisResult.reSkinnedConcept?.title || 'Test_Batch')
-      .replace(/[^a-zA-Z0-9_]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    const filename = `${cleanTitle}_${videoAnalysisResult.testPrompts.length}_test_samples.txt`;
+    const filename = getResolvedFilename(videoAnalysisResult.testPrompts.length);
     const textContent = formatPromptsText(videoAnalysisResult.testPrompts);
 
     const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
@@ -340,6 +334,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     if (videoAnalysisResult.matrix) {
       setMatrix(videoAnalysisResult.matrix);
     }
+    setVpsSuccessMsg('');
     setShowVpsModal(true);
   };
 
@@ -359,7 +354,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     // Analyze Master Prompt if not already done
     if (!activeMatrix) {
       setIsAnalyzing(true);
-      setStatusMessage('Analyzing Master Prompt structure with Qwen 3.8...');
+      setStatusMessage('Analyzing Master Prompt structure...');
       try {
         const res = await fetch(`${BACKEND_URL}/prompts/analyze`, {
           method: 'POST',
@@ -482,10 +477,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
   const handleDownloadTxt = () => {
     if (prompts.length === 0) return;
-    const cleanNiche = (matrix?.niche_name || 'Prompts')
-      .replace(/[^a-zA-Z0-9_]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    const filename = `${cleanNiche}_${prompts.length}_prompts.txt`;
+    const filename = getResolvedFilename(prompts.length);
     const textContent = formatPromptsText(prompts);
 
     const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
@@ -519,10 +511,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       localStorage.setItem('vps_video_generator_url', vpsUrl.trim());
     }
 
-    const cleanNiche = (matrix?.niche_name || 'Prompts')
-      .replace(/[^a-zA-Z0-9_]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    const filename = `${cleanNiche}_${prompts.length}_prompts.txt`;
+    const filename = getResolvedFilename(prompts.length);
     const textContent = formatPromptsText(prompts);
 
     try {
@@ -538,7 +527,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
       const data = await res.json();
       if (data.success) {
-        setVpsSuccessMsg(data.message || 'Prompt file saved & ready for bot rendering!');
+        setVpsSuccessMsg(data.message || `File "${filename}" sent directly to VPS (/home/ubuntu/Auto_Bulk_Video_Generator/prompts/master/${filename})!`);
       } else {
         setErrorMessage(data.message || 'VPS transfer encountered an issue.');
       }
@@ -561,21 +550,9 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
               <Terminal className="w-6 h-6 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl font-black tracking-tight text-white">
-                  Prompt Generator & Reverse Engineering
-                </h1>
-                <span className="text-xs px-2.5 py-0.5 font-bold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center gap-1">
-                  <Video className="w-3 h-3 text-blue-400" />
-                  Gemini 3.8 Video Vision
-                </span>
-                <span className="text-xs px-2.5 py-0.5 font-bold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                  Qwen 3.8 Ultra
-                </span>
-              </div>
-              <p className="text-sm text-slate-400 mt-0.5">
-                Reverse-engineer viral 10-second videos with AI Video Vision or generate bulk prompts from text.
-              </p>
+              <h1 className="text-2xl font-black tracking-tight text-white">
+                Prompt Generator & Reverse Engineering
+              </h1>
             </div>
           </div>
         </div>
@@ -635,174 +612,72 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       )}
 
       {/* ============================================================== */}
-      {/* 📹 TAB 1: VIDEO REVERSE ENGINEER (GEMINI 3.8 VIDEO VISION)      */}
+      {/* 📹 TAB 1: VIDEO REVERSE ENGINEER                                */}
       {/* ============================================================== */}
       {mainMode === 'video_engineer' && (
         <div className="space-y-6">
           {/* Video Input Card */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-4 border-b border-slate-800">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Film className="w-5 h-5 text-blue-400" />
-                  Native Video Reverse-Engineering Engine
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Gemini 3.8 Flash watches the complete 10-second video stream natively (POV motion, camera wobble, physical interaction & Foley audio) to craft a 100% original re-skinned concept.
-                </p>
-              </div>
-
-              {/* Source Mode Toggle */}
-              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setVideoInputMode('url')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
-                    videoInputMode === 'url'
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <LinkIcon className="w-3.5 h-3.5" />
-                  <span>Video Link</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVideoInputMode('upload')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
-                    videoInputMode === 'upload'
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload .mp4</span>
-                </button>
-              </div>
+            <div className="flex items-center justify-between gap-2 pb-4 border-b border-slate-800">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Film className="w-5 h-5 text-blue-400" />
+                Native Video Reverse-Engineering Engine
+              </h2>
             </div>
 
-            {/* Input Selection */}
-            {videoInputMode === 'url' ? (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-300 block">
-                  Paste Video URL (TikTok, Reels, Shorts, Facebook, Direct MP4)
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={videoUrlInput}
-                      onChange={e => setVideoUrlInput(e.target.value)}
-                      placeholder="https://www.tiktok.com/@creator/video/... or direct .mp4 link"
-                      disabled={isAnalyzingVideo}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono"
-                    />
-                  </div>
-                  {videoUrlInput && (
+            {/* Direct Video Upload Only */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-300 block">
+                Upload 10-Second Video Clip (.mp4, .mov, max 50MB)
+              </label>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="video/mp4,video/quicktime,video/webm"
+                className="hidden"
+              />
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-800 hover:border-blue-500/50 bg-slate-950/60 rounded-2xl p-6 text-center cursor-pointer transition-all hover:bg-slate-950"
+              >
+                {selectedVideoFile ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
+                      <Video className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-bold text-slate-200">{selectedVideoFile.name}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {(selectedVideoFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for analysis
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setVideoUrlInput('')}
-                      className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-xl transition-colors"
-                      title="Clear"
+                      onClick={e => {
+                        e.stopPropagation();
+                        setSelectedVideoFile(null);
+                      }}
+                      className="ml-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
-                  )}
-                </div>
-
-                {/* Facebook Security Alert Banner with 1-Click Action */}
-                {fbSecurityAlert && (
-                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2.5 animate-fadeIn mt-2">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-bold text-amber-200 uppercase tracking-wide">
-                          Facebook Security Notice
-                        </h4>
-                        <p className="text-xs text-amber-300 leading-relaxed">
-                          Facebook cloud servers ko direct Reel download ki ijazat nahi deta. Video ko apne mobile ya PC se download karke direct <strong>Upload .mp4</strong> tab ke zariye upload karein taake Gemini 3.8 Video Vision ise foran analyze kar sake!
-                        </p>
-                      </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="mx-auto w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-slate-400">
+                      <Upload className="w-5 h-5" />
                     </div>
-                    <div className="flex items-center gap-2 pt-1 pl-8">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setVideoInputMode('upload');
-                          setFbSecurityAlert(false);
-                          setErrorMessage('');
-                          setTimeout(() => fileInputRef.current?.click(), 100);
-                        }}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow"
-                      >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Switch to Upload .mp4 & Select Video</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFbSecurityAlert(false)}
-                        className="px-3 py-1.5 rounded-lg text-xs text-amber-400 hover:text-amber-200"
-                      >
-                        Dismiss
-                      </button>
-                    </div>
+                    <p className="text-xs font-semibold text-slate-300">
+                      Click to select or drag & drop 10-second .mp4 video
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Supports MP4, MOV, WebM • Under 50MB
+                    </p>
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-300 block">
-                  Upload 10-Second Video Clip (.mp4, .mov, max 50MB)
-                </label>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="video/mp4,video/quicktime,video/webm"
-                  className="hidden"
-                />
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-800 hover:border-blue-500/50 bg-slate-950/60 rounded-2xl p-6 text-center cursor-pointer transition-all hover:bg-slate-950"
-                >
-                  {selectedVideoFile ? (
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
-                        <Video className="w-5 h-5" />
-                      </div>
-                      <div className="text-left">
-                        <p className="text-xs font-bold text-slate-200">{selectedVideoFile.name}</p>
-                        <p className="text-[11px] text-slate-500">
-                          {(selectedVideoFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for analysis
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          setSelectedVideoFile(null);
-                        }}
-                        className="ml-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="mx-auto w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-slate-400">
-                        <Upload className="w-5 h-5" />
-                      </div>
-                      <p className="text-xs font-semibold text-slate-300">
-                        Click to select or drag & drop 10-second .mp4 video
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Supports MP4, MOV, WebM • Under 50MB
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Safety Gate: Initial Test Batch Selector */}
             <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2.5">
@@ -811,9 +686,6 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   Safety Verification: Initial Test Batch
                 </label>
-                <span className="text-[11px] text-slate-400 font-medium">
-                  Inspect quality before expanding to 500 or 1,000 prompts
-                </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -852,12 +724,12 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 {isAnalyzingVideo ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin text-white" />
-                    <span>Analyzing Video with Gemini 3.8 Video Vision...</span>
+                    <span>Analyzing Video...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5 text-blue-200" />
-                    <span>Analyze Video with Gemini 3.8 & Generate {sampleCount} Test Prompts</span>
+                    <span>Analyze Video</span>
                   </>
                 )}
               </button>
@@ -934,9 +806,6 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                         Original Video Deconstruction
                       </span>
                     </div>
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
-                      Gemini 3.8 Video Vision
-                    </span>
                   </div>
 
                   <div className="space-y-3 text-xs">
@@ -1113,7 +982,20 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1">
+                      <FileText className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+                      <input
+                        type="text"
+                        value={customFileName}
+                        onChange={e => setCustomFileName(e.target.value)}
+                        placeholder={getResolvedFilename(videoAnalysisResult.testPrompts?.length || 5).replace(/\.txt$/i, '')}
+                        className="bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none font-mono w-40"
+                        title="Rename output .txt file"
+                      />
+                      <span className="text-[11px] text-slate-500 font-mono">.txt</span>
+                    </div>
+
                     <button
                       type="button"
                       onClick={handleDownloadTestPrompts}
@@ -1147,7 +1029,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                       className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-600/40 transition-colors"
                     >
                       <Server className="w-3.5 h-3.5" />
-                      <span>Test on VPS</span>
+                      <span>Send to VPS</span>
                     </button>
                   </div>
                 </div>
@@ -1219,7 +1101,7 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       )}
 
       {/* ============================================================== */}
-      {/* 📝 TAB 2: DIRECT MASTER PROMPT GENERATOR (QWEN 3.8 ULTRA)      */}
+      {/* 📝 TAB 2: DIRECT MASTER PROMPT GENERATOR                        */}
       {/* ============================================================== */}
       {mainMode === 'master_prompt' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1527,46 +1409,68 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 </div>
               )}
 
-              {/* Action Bar: Download, Copy, Send to VPS */}
-              <div className="flex items-center gap-2 pt-1 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleDownloadTxt}
-                  disabled={prompts.length === 0}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors disabled:opacity-40"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download .txt</span>
-                </button>
+              {/* File Rename Input + Action Bar: Download, Copy, Send to VPS */}
+              <div className="pt-1 space-y-2.5">
+                <div className="flex items-center gap-2 bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2">
+                  <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="text-xs font-semibold text-slate-400 shrink-0">
+                    File Name:
+                  </span>
+                  <input
+                    type="text"
+                    value={customFileName}
+                    onChange={e => setCustomFileName(e.target.value)}
+                    placeholder={getResolvedFilename(prompts.length || targetCount).replace(/\.txt$/i, '')}
+                    className="flex-1 bg-transparent text-xs text-slate-100 placeholder-slate-500 focus:outline-none font-mono"
+                  />
+                  <span className="text-xs font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 shrink-0">
+                    .txt
+                  </span>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={handleCopyAll}
-                  disabled={prompts.length === 0}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors disabled:opacity-40"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy All</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleDownloadTxt}
+                    disabled={prompts.length === 0}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors disabled:opacity-40"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download .txt</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setShowVpsModal(true)}
-                  disabled={prompts.length === 0}
-                  className="ml-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40"
-                >
-                  <Server className="w-3.5 h-3.5" />
-                  <span>Send to VPS</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyAll}
+                    disabled={prompts.length === 0}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors disabled:opacity-40"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy All</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVpsSuccessMsg('');
+                      setShowVpsModal(true);
+                    }}
+                    disabled={prompts.length === 0}
+                    className="ml-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40"
+                  >
+                    <Server className="w-3.5 h-3.5" />
+                    <span>Send to VPS</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1719,10 +1623,10 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">
-                    Send to VPS
+                    Send Prompts File to VPS
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Transfer prompt file to Auto Bulk Video Generator
+                    Rename & send directly to Auto Bulk Video Generator on your VPS
                   </p>
                 </div>
               </div>
@@ -1736,25 +1640,28 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  VPS Bot Webhook URL (Optional)
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  File Name (.txt)
                 </label>
-                <input
-                  type="text"
-                  value={vpsUrl}
-                  onChange={e => setVpsUrl(e.target.value)}
-                  placeholder="http://158.180.26.131:8000/api/upload-prompts"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono"
-                />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Target directory: <code className="text-slate-400">/home/ubuntu/Auto_Bulk_Video_Generator/prompts/master/</code>
+                <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 focus-within:ring-2 focus-within:ring-emerald-500/50">
+                  <input
+                    type="text"
+                    value={customFileName}
+                    onChange={e => setCustomFileName(e.target.value)}
+                    placeholder={getResolvedFilename(prompts.length).replace(/\.txt$/i, '')}
+                    className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none font-mono"
+                  />
+                  <span className="text-xs font-mono text-slate-400 ml-2">.txt</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Saves directly to: <code className="text-emerald-400">/home/ubuntu/Auto_Bulk_Video_Generator/prompts/master/{getResolvedFilename(prompts.length)}</code>
                 </p>
               </div>
 
               <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 text-xs text-slate-400 space-y-1">
+                <p><strong>File Name:</strong> <span className="text-slate-200 font-mono">{getResolvedFilename(prompts.length)}</span></p>
                 <p><strong>Total Prompts:</strong> {prompts.length}</p>
-                <p><strong>Series Title:</strong> {matrix?.niche_name || 'Video Series'}</p>
-                <p><strong>Format:</strong> Structured TXT (.txt)</p>
+                <p><strong>Format:</strong> PROMPT 1 ... PROMPT {prompts.length} (.txt)</p>
               </div>
 
               {vpsSuccessMsg && (
@@ -1782,12 +1689,12 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 {isSendingToVps ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Transferring to VPS...</span>
+                    <span>Sending to VPS...</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>Deploy to VPS Now</span>
+                    <span>Send to VPS Now</span>
                   </>
                 )}
               </button>

@@ -95,5 +95,18 @@ export class PromptsController {
     const { filename, content, vpsUrl } = body;
     return await this.promptsService.pushToVps(filename, content, vpsUrl);
   }
+
+  @Get('vps-sync')
+  getPendingVpsFiles() {
+    return {
+      success: true,
+      files: this.promptsService.getPendingVpsFiles(),
+    };
+  }
+
+  @Post('vps-ack')
+  acknowledgeVpsFile(@Body() body: { id: string }) {
+    return this.promptsService.acknowledgeVpsFile(body?.id || '');
+  }
 }
 
