@@ -390,6 +390,21 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     setIsGenerating(true);
     setStatusMessage('Generating prompts in background...');
 
+    // Keep batch request payload ultra-compact (<4KB) to prevent 413 Request Entity Too Large
+    const compactMatrix: PromptMatrix = {
+      niche_name: activeMatrix.niche_name,
+      theme_summary: activeMatrix.theme_summary,
+      fixed_dna: activeMatrix.fixed_dna,
+      hierarchical_matrix: {
+        sub_genres: (activeMatrix.hierarchical_matrix?.sub_genres || []).slice(0, 10),
+        locations: (activeMatrix.hierarchical_matrix?.locations || []).slice(0, 10),
+        subjects_or_anomalies: (activeMatrix.hierarchical_matrix?.subjects_or_anomalies || []).slice(0, 10),
+        tools_and_probes: (activeMatrix.hierarchical_matrix?.tools_and_probes || []).slice(0, 10),
+        scale_anchors: (activeMatrix.hierarchical_matrix?.scale_anchors || []).slice(0, 10),
+        climaxes: (activeMatrix.hierarchical_matrix?.climaxes || []).slice(0, 10),
+      },
+    };
+
     let currentIdx = prompts.length + 1;
     let accumulated = [...prompts];
 
@@ -400,8 +415,8 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            masterPrompt,
-            matrix: activeMatrix,
+            masterPrompt: masterPrompt.slice(0, 8000),
+            matrix: compactMatrix,
             startIdx: currentIdx,
             count: needed
           })

@@ -1760,27 +1760,27 @@ Return ONLY valid JSON. No conversational text.`;
       parsedMatrix.hierarchical_matrix.sub_genres = [
         ...(parsedMatrix.hierarchical_matrix.sub_genres || []),
         ...fallbackMatrix.hierarchical_matrix.sub_genres,
-      ];
+      ].slice(0, 20);
       parsedMatrix.hierarchical_matrix.locations = [
         ...(parsedMatrix.hierarchical_matrix.locations || []),
         ...fallbackMatrix.hierarchical_matrix.locations,
-      ];
+      ].slice(0, 20);
       parsedMatrix.hierarchical_matrix.subjects_or_anomalies = [
         ...(parsedMatrix.hierarchical_matrix.subjects_or_anomalies || []),
         ...fallbackMatrix.hierarchical_matrix.subjects_or_anomalies,
-      ];
+      ].slice(0, 20);
       parsedMatrix.hierarchical_matrix.tools_and_probes = [
         ...(parsedMatrix.hierarchical_matrix.tools_and_probes || []),
         ...fallbackMatrix.hierarchical_matrix.tools_and_probes,
-      ];
+      ].slice(0, 20);
       parsedMatrix.hierarchical_matrix.scale_anchors = [
         ...(parsedMatrix.hierarchical_matrix.scale_anchors || []),
         ...fallbackMatrix.hierarchical_matrix.scale_anchors,
-      ];
+      ].slice(0, 20);
       parsedMatrix.hierarchical_matrix.climaxes = [
         ...(parsedMatrix.hierarchical_matrix.climaxes || []),
         ...fallbackMatrix.hierarchical_matrix.climaxes,
-      ];
+      ].slice(0, 20);
       parsedMatrix.subjects = parsedMatrix.hierarchical_matrix.subjects_or_anomalies;
     }
 
@@ -2003,16 +2003,16 @@ CRITICAL ZERO-REPEAT & FORMATTING RULES:
         structural_template: '',
       },
       hierarchical_matrix: {
-        sub_genres: MASTER_SCENE_BLUEPRINTS.map(b => b.sub_genre),
-        locations: MASTER_SCENE_BLUEPRINTS.map(b => b.location),
-        subjects_or_anomalies: MASTER_SCENE_BLUEPRINTS.map(b => b.subject),
-        tools_and_probes: MASTER_SCENE_BLUEPRINTS.map(b => b.tool),
-        scale_anchors: MASTER_SCENE_BLUEPRINTS.map(b => b.anchor),
-        climaxes: MASTER_SCENE_BLUEPRINTS.map(b => b.climax),
+        sub_genres: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.sub_genre),
+        locations: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.location),
+        subjects_or_anomalies: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.subject),
+        tools_and_probes: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.tool),
+        scale_anchors: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.anchor),
+        climaxes: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.climax),
       },
-      subjects: MASTER_SCENE_BLUEPRINTS.map(b => b.subject),
-      locations: MASTER_SCENE_BLUEPRINTS.map(b => b.location),
-      actions_or_hooks: MASTER_SCENE_BLUEPRINTS.map(b => b.climax),
+      subjects: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.subject),
+      locations: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.location),
+      actions_or_hooks: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.climax),
       camera_styles: [DEFAULT_CAMERA_MEDIUM],
     };
   }
