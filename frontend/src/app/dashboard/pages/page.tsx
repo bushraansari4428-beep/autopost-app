@@ -570,16 +570,6 @@ export default function FacebookPagesPage() {
             <span>{isScanningCM ? 'Scanning CM...' : 'Scan CM Invites'}</span>
           </button>
           <button 
-            onClick={() => {
-              setShowBulkModal(true);
-              setBulkResults(null);
-              setBulkError('');
-            }}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 text-white font-bold shadow-lg shadow-orange-500/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
-          >
-            <span>⚡</span> Bulk Import (1000+ Pages)
-          </button>
-          <button 
             onClick={() => setShowModal(true)}
             className="px-6 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold shadow-lg shadow-[#1877F2]/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
           >
@@ -682,48 +672,11 @@ export default function FacebookPagesPage() {
                   </div>
                 </div>
                 
-                <div className="pt-3 border-t border-gray-800/60 flex flex-wrap justify-between items-center gap-2 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-emerald-400 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-                      Active
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openRenameModal(page);
-                      }}
-                      className="text-amber-400 hover:text-amber-300 font-bold px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/30 transition text-xs flex items-center gap-1 z-20 cursor-pointer"
-                      title="Rename this page and update its bio on Facebook & AutoPost"
-                    >
-                      <span>✏️</span> Rename & Bio
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openSyncModal(page);
-                      }}
-                      className="text-cyan-400 hover:text-cyan-300 font-bold px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg border border-cyan-500/30 transition text-xs flex items-center gap-1 z-20 cursor-pointer"
-                      title="Sync and rebrand this page with a TikTok/Social Creator name & avatar"
-                    >
-                      <span>🔄</span> Sync Creator
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleCM(page, !page.hasContentMonetization);
-                      }}
-                      className={`font-bold px-2 py-1 rounded-lg border transition text-xs flex items-center gap-1 z-20 cursor-pointer ${
-                        page.hasContentMonetization
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                          : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border-slate-700'
-                      }`}
-                      title={page.hasContentMonetization ? "Click to toggle/reset CM" : "Click to test Content Monetization & send WhatsApp Alert!"}
-                    >
-                      <span>{page.hasContentMonetization ? '⭐' : '💰'}</span>
-                      <span>{page.hasContentMonetization ? 'CM Active' : 'Test CM'}</span>
-                    </button>
-                  </div>
+                <div className="pt-3 border-t border-gray-800/60 flex justify-between items-center gap-2 text-sm">
+                  <span className="text-emerald-400 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+                    Active
+                  </span>
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
