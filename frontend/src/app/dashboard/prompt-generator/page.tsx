@@ -39,12 +39,22 @@ interface FixedDNA {
   structural_template?: string;
 }
 
+interface UniqueSceneBlueprint {
+  sub_genre: string;
+  location: string;
+  subject: string;
+  tool_and_anchor: string;
+  escalation: string;
+  climax: string;
+}
+
 interface HierarchicalMatrix {
   sub_genres?: string[];
   locations?: string[];
   subjects_or_anomalies?: string[];
   tools_and_probes?: string[];
   scale_anchors?: string[];
+  escalations?: string[];
   climaxes?: string[];
 }
 
@@ -53,6 +63,8 @@ interface PromptMatrix {
   theme_summary: string;
   fixed_dna?: FixedDNA;
   hierarchical_matrix?: HierarchicalMatrix;
+  scene_blueprints?: UniqueSceneBlueprint[];
+  is_custom_dna?: boolean;
   subjects?: string[];
   locations?: string[];
   actions_or_hooks?: string[];
@@ -390,13 +402,16 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       niche_name: activeMatrix.niche_name,
       theme_summary: activeMatrix.theme_summary,
       fixed_dna: activeMatrix.fixed_dna,
+      is_custom_dna: activeMatrix.is_custom_dna,
+      scene_blueprints: (activeMatrix.scene_blueprints || []).slice(0, 25),
       hierarchical_matrix: {
-        sub_genres: (activeMatrix.hierarchical_matrix?.sub_genres || []).slice(0, 10),
-        locations: (activeMatrix.hierarchical_matrix?.locations || []).slice(0, 10),
-        subjects_or_anomalies: (activeMatrix.hierarchical_matrix?.subjects_or_anomalies || []).slice(0, 10),
-        tools_and_probes: (activeMatrix.hierarchical_matrix?.tools_and_probes || []).slice(0, 10),
-        scale_anchors: (activeMatrix.hierarchical_matrix?.scale_anchors || []).slice(0, 10),
-        climaxes: (activeMatrix.hierarchical_matrix?.climaxes || []).slice(0, 10),
+        sub_genres: (activeMatrix.hierarchical_matrix?.sub_genres || []).slice(0, 25),
+        locations: (activeMatrix.hierarchical_matrix?.locations || []).slice(0, 25),
+        subjects_or_anomalies: (activeMatrix.hierarchical_matrix?.subjects_or_anomalies || []).slice(0, 25),
+        tools_and_probes: (activeMatrix.hierarchical_matrix?.tools_and_probes || []).slice(0, 25),
+        scale_anchors: (activeMatrix.hierarchical_matrix?.scale_anchors || []).slice(0, 25),
+        escalations: (activeMatrix.hierarchical_matrix?.escalations || []).slice(0, 25),
+        climaxes: (activeMatrix.hierarchical_matrix?.climaxes || []).slice(0, 25),
       },
     };
 

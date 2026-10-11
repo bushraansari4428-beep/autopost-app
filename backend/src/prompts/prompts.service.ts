@@ -22,7 +22,18 @@ export interface HierarchicalMatrix {
   subjects_or_anomalies: string[];
   tools_and_probes: string[];
   scale_anchors: string[];
+  escalations?: string[];
   climaxes: string[];
+}
+
+export interface UniqueSceneBlueprint {
+  sub_genre: string;
+  location: string;
+  subject: string;
+  tool: string;
+  anchor: string;
+  escalation: string;
+  climax: string;
 }
 
 export interface PromptMatrix {
@@ -30,6 +41,8 @@ export interface PromptMatrix {
   theme_summary: string;
   fixed_dna: FixedDNA;
   hierarchical_matrix: HierarchicalMatrix;
+  scene_blueprints?: UniqueSceneBlueprint[];
+  is_custom_dna?: boolean;
   // Legacy compatibility keys
   subjects: string[];
   locations: string[];
@@ -44,16 +57,6 @@ export interface GeneratedPromptItem {
   subject: string;
   text: string;
   similarity_score?: number;
-}
-
-interface UniqueSceneBlueprint {
-  sub_genre: string;
-  location: string;
-  subject: string;
-  tool: string;
-  anchor: string;
-  escalation: string;
-  climax: string;
 }
 
 const DEFAULT_CAMERA_MEDIUM =
@@ -1547,13 +1550,13 @@ export class PromptsService {
     return '';
   }
 
-  private async callGemini(systemPrompt: string, userPrompt: string, maxTokens = 1500): Promise<string | null> {
+  private async callGemini(systemPrompt: string, userPrompt: string, maxTokens = 2500): Promise<string | null> {
     const key = this.getGeminiKey();
     if (!key) return null;
 
     const candidateModels = [
-      'gemini-flash-lite-latest',
       'gemini-2.5-flash',
+      'gemini-flash-lite-latest',
       'gemini-3.5-flash-lite',
       'gemini-3.8-flash',
     ];
@@ -1561,6 +1564,13 @@ export class PromptsService {
     for (const model of candidateModels) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const genConfig: Record<string, any> = {
+          temperature: 0.55,
+          maxOutputTokens: maxTokens,
+        };
+        if (model.includes('2.5')) {
+          genConfig.thinkingConfig = { thinkingBudget: 0 };
+        }
         const res = await axios.post(
           url,
           {
@@ -1571,14 +1581,11 @@ export class PromptsService {
                 ],
               },
             ],
-            generationConfig: {
-              temperature: 0.85,
-              maxOutputTokens: maxTokens,
-            },
+            generationConfig: genConfig,
           },
           {
             headers: { 'Content-Type': 'application/json' },
-            timeout: 12000,
+            timeout: 15000,
           },
         );
 
@@ -1593,7 +1600,7 @@ export class PromptsService {
     return null;
   }
 
-  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 1500): Promise<string> {
+  private async queryBrain(systemPrompt: string, userPrompt: string, maxTokens = 2500): Promise<string> {
     // 1. Dedicated Local AI Model: Hugging Face Qwen 3.8 / 2.5 Space (with automatic cooldown if sleeping)
     try {
       const hfRes = await this.callHf(systemPrompt, userPrompt);
@@ -1654,6 +1661,34 @@ export class PromptsService {
     return [text];
   }
 
+  extractCameraMediumFromPrompt(rawText: string): string {
+    if (!rawText || !rawText.trim()) return DEFAULT_CAMERA_MEDIUM;
+    const positivePart = rawText.split(/##\s*Negative prompt/i)[0].trim();
+    const firstSentenceMatch = positivePart.match(/^(Create a \d+[\s-]second[^.?!]+[.?!])/i);
+    if (firstSentenceMatch && firstSentenceMatch[1] && firstSentenceMatch[1].trim().length > 35) {
+      return firstSentenceMatch[1].trim();
+    }
+    const firstLineSentence = positivePart.split(/(?<=[.?!])\s+/)[0]?.trim();
+    if (
+      firstLineSentence &&
+      firstLineSentence.length > 35 &&
+      firstLineSentence.length < 320 &&
+      /(?:9:16|vertical|video|camera|pov|shot|footage|cinematic)/i.test(firstLineSentence)
+    ) {
+      return firstLineSentence;
+    }
+    return DEFAULT_CAMERA_MEDIUM;
+  }
+
+  private isDefaultOutdoorAnomalyPrompt(rawText: string): boolean {
+    if (!rawText) return true;
+    const lower = rawText.toLowerCase();
+    return (
+      lower.includes('pure continuous first-person pov') &&
+      (lower.includes('within eight inches') || lower.includes('anchor realistic physical scale') || lower.includes('found-footage'))
+    );
+  }
+
   extractCoreSubjectFromPrompt(promptText: string): string {
     if (!promptText) return 'Unexplained physical phenomenon';
     const positivePart = promptText.split(/##\s*Negative prompt/i)[0].trim();
@@ -1686,63 +1721,98 @@ export class PromptsService {
     const userPrompts = this.parseUserPromptExamples(masterPrompt);
     const extractedNegative = this.extractNegativePrompt(masterPrompt);
     const sampleForDna = userPrompts[0] || masterPrompt;
+    const extractedCamera = this.extractCameraMediumFromPrompt(sampleForDna);
+    const isOutdoorAnomaly = this.isDefaultOutdoorAnomalyPrompt(sampleForDna);
+
+    const examplesSummary = userPrompts
+      .slice(0, 5)
+      .map((p, idx) => `EXAMPLE ${idx + 1}:\n${p.split(/##\s*Negative prompt/i)[0].trim()}`)
+      .join('\n\n');
 
     const sysPrompt = `You are a world-class AI Cinematography and Viral Video Engineering Director.
-Your task is LAYER 1: PROMPT DNA DECONSTRUCTION & BRAND-NEW CONCEPT BRAINSTORMING.
-Analyze the user's example prompt(s) to extract the fixed camera/timeline DNA, and brainstorm 100% BRAND-NEW, diverse visual concepts across completely different everyday objects and environments (NEVER repeat the user's example subjects, and DO NOT use rocks, stones, boulders, or slate slabs).
+Your task is LAYER 1: 100% ACCURATE PROMPT DNA LOCK & NEW VARIANT BLUEPRINT GENERATION.
+Analyze the user's example prompt(s) to lock 100% of their visual style, camera perspective, lens behavior, lighting mood, subject archetype, and 0–10s timeline choreography.
+Then generate 20 NEW, non-repeating Concept Variants (scene_blueprints) that stay 100% faithful to that exact visual world, camera setup, and viral formula while introducing fresh scenarios/subjects (never repeating the exact example subjects).
 Output strictly in valid JSON format.`;
 
     const userPrompt = `
-Analyze this MASTER PROMPT / EXAMPLE SET:
-"""${sampleForDna}"""
+Analyze these USER EXAMPLE PROMPT(S):
+"""${examplesSummary}"""
 
-Extract and return strictly valid JSON matching this schema:
+Extract the exact visual DNA and generate 20 100%-compatible New Concept Variants matching this JSON schema:
 {
-  "niche_name": "Short 2-4 word distinctive title for this series",
-  "theme_summary": "1-2 sentence core concept and visual identity summary",
+  "niche_name": "Short 2-4 word distinctive title for this exact series",
+  "theme_summary": "1-2 sentence summary of the locked visual style, camera setup, and core concept mechanic",
   "fixed_dna": {
-    "camera_and_medium": "Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay.",
+    "camera_and_medium": ${JSON.stringify(extractedCamera)},
     "timing_breakdown": [
-      "0-2s: Immediate visual hook / phenomenon introduction",
-      "0-3s: Handheld approach, natural mobile camera motion, auto-exposure balancing",
-      "3-6s: Close-up physical interaction with everyday object and scale anchor",
-      "6-8s: Secondary escalation defying expectations",
-      "8-10s: Sudden dramatic climax, operator steps backward, abrupt cut with NO face visible"
+      "0-2s: Exact opening visual hook & framing from the examples",
+      "2-6s: Exact camera movement & primary action/interaction choreography from the examples",
+      "6-8s: Exact secondary escalation / physical reaction from the examples",
+      "8-10s: Exact climax & ending cut style from the examples"
     ],
     "negative_prompt": ${JSON.stringify(extractedNegative)},
     "audio_rules": "",
-    "structural_template": ""
+    "structural_template": "2-3 sentences locking the exact camera angle, movement style, lighting quality, realism level, and physical mechanics that MUST remain 100% identical in every prompt."
   },
-  "hierarchical_matrix": {
-    "sub_genres": ["12 completely different environments (bridges, railway crossings, gardens, piers, courtyards, barns, parks, etc.)"],
-    "locations": ["12 diverse real-world settings with zero repetition"],
-    "subjects_or_anomalies": ["15 brand-new, visually distinct phenomena featuring different everyday objects (bicycles, lanterns, water bridges, swings, clocks, puddles, canoes, umbrellas, staircases, etc. - NO rocks or stones)"],
-    "tools_and_probes": ["12 diverse everyday items used to test or interact"],
-    "scale_anchors": ["12 diverse natural micro details (leaves, feathers, flowers, shells, insects) with NO mention of rocks or stones"],
-    "climaxes": ["12 high-impact visual climaxes with NO mention of rocks or stones"]
-  }
+  "scene_blueprints": [
+    {
+      "sub_genre": "Short 2-4 word variant name",
+      "location": "Specific setting, lighting, and atmosphere matching the examples' visual world",
+      "subject": "Specific 0-2s visual hook & primary subject variant (100% faithful to the examples' archetype, zero repetition)",
+      "tool": "Specific 2-6s camera movement & physical action/interaction matching the examples' choreography",
+      "anchor": "Specific foreground/background texture or scale detail visible at 2-6s",
+      "escalation": "Specific 6-8s escalation or transformation matching the examples' mechanics",
+      "climax": "Specific 8-10s climax and ending cut matching the examples' ending style"
+    }
+  ]
 }
-Return ONLY valid JSON. No conversational text.`;
+IMPORTANT: Provide 20 distinct items in "scene_blueprints". Return ONLY valid JSON.`;
 
     let parsedMatrix: PromptMatrix | null = null;
     try {
-      const raw = await this.queryBrain(sysPrompt, userPrompt, 2500);
+      const raw = await this.queryBrain(sysPrompt, userPrompt, 8192);
       const match = raw ? raw.match(/\{[\s\S]*\}/) : null;
       if (match) {
         const parsed = JSON.parse(match[0]);
-        if (parsed.niche_name && parsed.fixed_dna && parsed.hierarchical_matrix) {
-          parsed.fixed_dna.negative_prompt = extractedNegative;
-          parsed.fixed_dna.audio_rules = '';
-          parsed.fixed_dna.camera_and_medium = DEFAULT_CAMERA_MEDIUM;
+        const blueprints: UniqueSceneBlueprint[] = Array.isArray(parsed.scene_blueprints)
+          ? parsed.scene_blueprints.filter((b: any) => b && b.location && b.subject)
+          : [];
+
+        if (parsed.niche_name && (blueprints.length > 0 || parsed.hierarchical_matrix)) {
+          const cameraMed = parsed.fixed_dna?.camera_and_medium || extractedCamera;
+          const hMatrix: HierarchicalMatrix = {
+            sub_genres: blueprints.length > 0 ? blueprints.map(b => b.sub_genre || 'Variant') : (parsed.hierarchical_matrix?.sub_genres || []),
+            locations: blueprints.length > 0 ? blueprints.map(b => b.location) : (parsed.hierarchical_matrix?.locations || []),
+            subjects_or_anomalies: blueprints.length > 0 ? blueprints.map(b => b.subject) : (parsed.hierarchical_matrix?.subjects_or_anomalies || []),
+            tools_and_probes: blueprints.length > 0 ? blueprints.map(b => b.tool) : (parsed.hierarchical_matrix?.tools_and_probes || []),
+            scale_anchors: blueprints.length > 0 ? blueprints.map(b => b.anchor) : (parsed.hierarchical_matrix?.scale_anchors || []),
+            escalations: blueprints.length > 0 ? blueprints.map(b => b.escalation) : (parsed.hierarchical_matrix?.escalations || []),
+            climaxes: blueprints.length > 0 ? blueprints.map(b => b.climax) : (parsed.hierarchical_matrix?.climaxes || []),
+          };
+
           parsedMatrix = {
             niche_name: parsed.niche_name,
-            theme_summary: parsed.theme_summary || '100% unique 10-second vertical video series with zero concept repetition.',
-            fixed_dna: parsed.fixed_dna,
-            hierarchical_matrix: parsed.hierarchical_matrix,
-            subjects: parsed.hierarchical_matrix.subjects_or_anomalies || [],
-            locations: parsed.hierarchical_matrix.locations || [],
-            actions_or_hooks: parsed.hierarchical_matrix.climaxes || [],
-            camera_styles: [DEFAULT_CAMERA_MEDIUM],
+            theme_summary: parsed.theme_summary || '100% DNA-locked vertical video series with fresh concept variants.',
+            fixed_dna: {
+              camera_and_medium: cameraMed,
+              timing_breakdown: parsed.fixed_dna?.timing_breakdown || [
+                '0-2s: Immediate visual hook',
+                '2-6s: Camera movement and primary interaction',
+                '6-8s: Secondary escalation',
+                '8-10s: High-impact climax and cut',
+              ],
+              negative_prompt: extractedNegative,
+              audio_rules: '',
+              structural_template: parsed.fixed_dna?.structural_template || '',
+            },
+            hierarchical_matrix: hMatrix,
+            scene_blueprints: blueprints,
+            is_custom_dna: !isOutdoorAnomaly,
+            subjects: hMatrix.subjects_or_anomalies,
+            locations: hMatrix.locations,
+            actions_or_hooks: hMatrix.climaxes,
+            camera_styles: [cameraMed],
           };
         }
       }
@@ -1750,62 +1820,101 @@ Return ONLY valid JSON. No conversational text.`;
       this.logger.warn(`DNA matrix JSON fallback activated: ${e.message}`);
     }
 
-    const fallbackMatrix = this.getIntelligentFallbackMatrix(masterPrompt);
     if (!parsedMatrix) {
-      parsedMatrix = fallbackMatrix;
-    } else {
-      parsedMatrix.fixed_dna.negative_prompt = extractedNegative;
-      parsedMatrix.fixed_dna.audio_rules = '';
-      parsedMatrix.fixed_dna.camera_and_medium = DEFAULT_CAMERA_MEDIUM;
-      parsedMatrix.hierarchical_matrix.sub_genres = [
-        ...(parsedMatrix.hierarchical_matrix.sub_genres || []),
-        ...fallbackMatrix.hierarchical_matrix.sub_genres,
-      ].slice(0, 20);
-      parsedMatrix.hierarchical_matrix.locations = [
-        ...(parsedMatrix.hierarchical_matrix.locations || []),
-        ...fallbackMatrix.hierarchical_matrix.locations,
-      ].slice(0, 20);
-      parsedMatrix.hierarchical_matrix.subjects_or_anomalies = [
-        ...(parsedMatrix.hierarchical_matrix.subjects_or_anomalies || []),
-        ...fallbackMatrix.hierarchical_matrix.subjects_or_anomalies,
-      ].slice(0, 20);
-      parsedMatrix.hierarchical_matrix.tools_and_probes = [
-        ...(parsedMatrix.hierarchical_matrix.tools_and_probes || []),
-        ...fallbackMatrix.hierarchical_matrix.tools_and_probes,
-      ].slice(0, 20);
-      parsedMatrix.hierarchical_matrix.scale_anchors = [
-        ...(parsedMatrix.hierarchical_matrix.scale_anchors || []),
-        ...fallbackMatrix.hierarchical_matrix.scale_anchors,
-      ].slice(0, 20);
-      parsedMatrix.hierarchical_matrix.climaxes = [
-        ...(parsedMatrix.hierarchical_matrix.climaxes || []),
-        ...fallbackMatrix.hierarchical_matrix.climaxes,
-      ].slice(0, 20);
-      parsedMatrix.subjects = parsedMatrix.hierarchical_matrix.subjects_or_anomalies;
+      parsedMatrix = this.getIntelligentFallbackMatrix(masterPrompt);
     }
 
-    if (userPrompts.length > 1) {
-      parsedMatrix.niche_name = `Zero-Repeat Multi-Concept Series`;
-      parsedMatrix.theme_summary = `100% brand-new, unrepeated 10-second vertical video concepts inspired by your ${userPrompts.length} example prompts.`;
+    if (userPrompts.length > 1 && parsedMatrix) {
+      parsedMatrix.niche_name = parsedMatrix.niche_name || `Zero-Repeat Multi-Concept Series`;
     }
 
     return parsedMatrix;
   }
 
   /**
-   * Build a guaranteed-unique Scene Blueprint for any prompt index (1 to 1,000+),
-   * ensuring every single prompt features a completely different object, environment, and action.
+   * Build a guaranteed-unique, 100% DNA-faithful Scene Blueprint for any prompt index (1 to 1,000+).
+   * - If the session originates from Video Reverse-Engineering or a custom Master Prompt (`is_custom_dna` or `scene_blueprints`),
+   *   EVERY blueprint (from #1 to #20 and #21 to #1,000) is constructed 100% from that video's own extracted DNA and blueprints!
+   * - Only uses `MASTER_SCENE_BLUEPRINTS` when the prompt is in the default outdoor POV anomaly mode.
    */
   private getBlueprintForIndex(currentIdx: number, matrix: PromptMatrix, masterPrompt: string): UniqueSceneBlueprint {
     const slot = currentIdx - 1;
-    const baseCount = MASTER_SCENE_BLUEPRINTS.length;
+    const customBlueprints = Array.isArray(matrix?.scene_blueprints)
+      ? matrix.scene_blueprints.filter(b => b && b.location && b.subject)
+      : [];
 
+    const hm = matrix?.hierarchical_matrix;
+    const hasCustomMatrixArrays =
+      hm &&
+      Array.isArray(hm.subjects_or_anomalies) &&
+      hm.subjects_or_anomalies.length > 0 &&
+      hm.subjects_or_anomalies[0] !== MASTER_SCENE_BLUEPRINTS[0].subject;
+
+    const useCustomVideoDna =
+      Boolean(matrix?.is_custom_dna) ||
+      customBlueprints.length > 0 ||
+      hasCustomMatrixArrays ||
+      !this.isDefaultOutdoorAnomalyPrompt(masterPrompt);
+
+    if (useCustomVideoDna) {
+      // 1. Direct hit in custom / video-engineered scene_blueprints (covers Prompts 1..20 directly!)
+      if (slot < customBlueprints.length) {
+        return customBlueprints[slot];
+      }
+
+      // 2. Permute across the video's/prompt's own custom blueprints and hierarchical matrix for Prompts 21..1,000+
+      const locations = (hm?.locations && hm.locations.length > 0)
+        ? hm.locations
+        : customBlueprints.map(b => b.location);
+      const subjects = (hm?.subjects_or_anomalies && hm.subjects_or_anomalies.length > 0)
+        ? hm.subjects_or_anomalies
+        : customBlueprints.map(b => b.subject);
+      const tools = (hm?.tools_and_probes && hm.tools_and_probes.length > 0)
+        ? hm.tools_and_probes
+        : customBlueprints.map(b => b.tool);
+      const anchors = (hm?.scale_anchors && hm.scale_anchors.length > 0)
+        ? hm.scale_anchors
+        : customBlueprints.map(b => b.anchor);
+      const escalations = (hm?.escalations && hm.escalations.length > 0)
+        ? hm.escalations
+        : customBlueprints.map(b => b.escalation || 'the visual phenomenon intensifies rapidly with heightened physical motion and dynamic lighting response');
+      const climaxes = (hm?.climaxes && hm.climaxes.length > 0)
+        ? hm.climaxes
+        : customBlueprints.map(b => b.climax);
+      const subGenres = (hm?.sub_genres && hm.sub_genres.length > 0)
+        ? hm.sub_genres
+        : customBlueprints.map(b => b.sub_genre || 'Concept Variant');
+
+      if (subjects.length > 0 && locations.length > 0) {
+        const baseLen = subjects.length;
+        const cycle = Math.floor(slot / baseLen);
+
+        const subj = subjects[slot % subjects.length];
+        const loc = locations[(slot * 3 + cycle * 2) % locations.length];
+        const tool = tools.length > 0 ? tools[(slot * 5 + cycle * 3) % tools.length] : 'continuous camera tracking and close-up physical interaction';
+        const anchor = anchors.length > 0 ? anchors[(slot * 7 + cycle * 5) % anchors.length] : 'crisp foreground environmental texture anchoring realistic scale';
+        const esc = escalations.length > 0 ? escalations[(slot * 11 + cycle * 7) % escalations.length] : 'the primary subject escalates dramatically in speed and visual intensity';
+        const clim = climaxes.length > 0 ? climaxes[(slot * 13 + cycle * 11) % climaxes.length] : 'the action reaches a sudden high-impact climax right before the clip cuts abruptly';
+        const sg = subGenres.length > 0 ? subGenres[slot % subGenres.length] : `Variant #${currentIdx}`;
+
+        return {
+          sub_genre: `${sg} (Variant #${currentIdx})`,
+          location: loc,
+          subject: subj,
+          tool,
+          anchor,
+          escalation: esc,
+          climax: clim,
+        };
+      }
+    }
+
+    // Default outdoor POV anomaly pool (105 distinct hand-crafted blueprints + coprime permutation)
+    const baseCount = MASTER_SCENE_BLUEPRINTS.length;
     if (slot < baseCount) {
       return MASTER_SCENE_BLUEPRINTS[slot];
     }
 
-    // For prompts beyond the first 105 blueprints (e.g. up to 500 or 1,000 prompts),
-    // use coprime modular permutation across objects, settings, tools, and phase mutations
     const cycle = Math.floor(slot / baseCount);
     const b1 = MASTER_SCENE_BLUEPRINTS[slot % baseCount];
     const b2 = MASTER_SCENE_BLUEPRINTS[(slot * 7 + cycle * 3) % baseCount];
@@ -1833,20 +1942,23 @@ Return ONLY valid JSON. No conversational text.`;
     count: number,
   ): Promise<GeneratedPromptItem[]> {
     const extractedNegative = matrix?.fixed_dna?.negative_prompt || this.extractNegativePrompt(masterPrompt);
-    const cameraMedium = DEFAULT_CAMERA_MEDIUM;
+    const cameraMedium =
+      matrix?.fixed_dna?.camera_and_medium ||
+      this.extractCameraMediumFromPrompt(masterPrompt) ||
+      DEFAULT_CAMERA_MEDIUM;
+    const referencePositive = (masterPrompt || '').split(/##\s*Negative prompt/i)[0].trim().slice(0, 1800);
 
     const fixed: FixedDNA = {
       camera_and_medium: cameraMedium,
       timing_breakdown: matrix?.fixed_dna?.timing_breakdown || [
         '0-2s: Immediate visual hook',
-        '0-3s: Handheld approach and auto-exposure adjustment',
-        '3-6s: Close-up physical interaction and scale anchor',
-        '6-8s: Secondary escalation defying physics',
-        '8-10s: Sudden dramatic climax and abrupt cut with NO face visible',
+        '2-6s: Camera movement and primary interaction',
+        '6-8s: Secondary escalation',
+        '8-10s: Sudden dramatic climax and abrupt cut',
       ],
       negative_prompt: extractedNegative,
       audio_rules: '',
-      structural_template: '',
+      structural_template: matrix?.fixed_dna?.structural_template || matrix?.theme_summary || '',
     };
 
     const generateOne = async (currentIdx: number): Promise<GeneratedPromptItem> => {
@@ -1855,31 +1967,33 @@ Return ONLY valid JSON. No conversational text.`;
       let promptText = '';
       let lastSimilarity = 0;
 
-      const sysPrompt = `You are a world-class viral short-form cinematic AI video director.
+      const sysPrompt = `You are a world-class viral short-form AI Cinematography Director.
 Write a single ready-to-run 10-second vertical 9:16 video generation prompt for Prompt #${currentIdx}.
 
-CRITICAL ZERO-REPEAT & FORMATTING RULES:
-1. Begin the prompt with this exact sentence: "${fixed.camera_and_medium}"
-2. Setting MUST be: ${blueprint.location}.
-3. In the first second (0–2s), focus immediately on this brand-new visual phenomenon: ${blueprint.subject}.
-4. From 0–3 seconds: show cautious handheld steps approaching, natural mobile phone bobbing with breathing, and camera auto-exposure adjusting.
-5. From 3–6 seconds: lean within eight inches; an ordinary bare hand uses ${blueprint.tool} to physically test the phenomenon, framed alongside ${blueprint.anchor}.
-6. From 6–8 seconds: ${blueprint.escalation}.
-7. From 8–10 seconds: ${blueprint.climax}.
-8. STRICTLY NO AUDIO LINES: Do NOT include any "Audio:", "Audio Design:", "Sound:", or Foley descriptions anywhere in the prompt!
-9. NO ROCKS OR STONES: Do NOT focus on rocks, stones, boulders, pebbles, or slate slabs. Keep the focus 100% on the assigned object and phenomenon.
-10. Do NOT include any "PROMPT ${currentIdx}" header or markdown fences. Output ONLY the descriptive paragraph followed by the ## Negative prompt section.`;
+CRITICAL 100% VISUAL ACCURACY & NEW VARIANT RULES:
+1. 100% VISUAL & STRUCTURAL FIDELITY: Your generated prompt MUST match 100% of the camera perspective, lens feel, lighting mood, visual realism, pacing, and shot-by-shot choreography of this Reference Master Prompt:
+"""${referencePositive}"""
+${fixed.structural_template ? `Locked Visual Rules: ${fixed.structural_template}` : ''}
+2. OPENING CAMERA SENTENCE: Begin the prompt with: "${fixed.camera_and_medium}"
+3. NEW CONCEPT VARIANT #${currentIdx} (Execute this exact new variant within the 100% locked visual template above):
+   - Setting & Atmosphere: ${blueprint.location}
+   - Opening Visual Hook (0–2s): ${blueprint.subject}
+   - Camera Movement & Primary Action (2–6s): ${blueprint.tool}, with foreground/scale detail: ${blueprint.anchor}
+   - Escalation / Reaction (6–8s): ${blueprint.escalation}
+   - Climax & Ending Cut (8–10s): ${blueprint.climax}
+4. STRICTLY NO AUDIO LINES: Do NOT include any "Audio:", "Audio Design:", "Sound:", or Foley descriptions anywhere in the prompt!
+5. Do NOT include any "PROMPT ${currentIdx}" header or markdown fences. Output ONLY the rich descriptive paragraph (130–200 words) followed by the ## Negative prompt section.`;
 
-      const userPrompt = `Write the complete 10-second video prompt starting with "Create a 10-second vertical 9:16 raw smartphone video..." centered strictly on: ${blueprint.subject} in ${blueprint.location}. Remember: ZERO audio lines, and include the full ## Negative prompt at the end.`;
+      const userPrompt = `Write the complete, highly detailed 10-second video prompt for Variant #${currentIdx} starting with "${fixed.camera_and_medium}" and centered strictly on: ${blueprint.subject} in ${blueprint.location}. Keep 100% of the reference video's visual style, camera choreography, and timeline beats. Include ZERO audio lines, and end with the full ## Negative prompt.`;
 
       try {
-        const rawGenerated = await this.queryBrain(sysPrompt, userPrompt, 1500);
-        if (rawGenerated && rawGenerated.trim().length > 220) {
+        const rawGenerated = await this.queryBrain(sysPrompt, userPrompt, 2000);
+        if (rawGenerated && rawGenerated.trim().length > 200) {
           promptText = this.finalizePromptText(rawGenerated, fixed.negative_prompt);
         }
       } catch (_) {}
 
-      if (!promptText || promptText.length < 260) {
+      if (!promptText || promptText.length < 220) {
         promptText = this.assembleBlueprintPrompt(fixed, blueprint);
       }
 
@@ -1889,7 +2003,7 @@ CRITICAL ZERO-REPEAT & FORMATTING RULES:
 
       return {
         index: currentIdx,
-        sub_genre: `Unique Concept #${currentIdx} — ${blueprint.sub_genre}`,
+        sub_genre: `Variant #${currentIdx} — ${blueprint.sub_genre}`,
         location: blueprint.location,
         subject: blueprint.subject,
         text: promptText,
@@ -1955,12 +2069,17 @@ CRITICAL ZERO-REPEAT & FORMATTING RULES:
 
   private assembleBlueprintPrompt(fixed: FixedDNA, bp: UniqueSceneBlueprint): string {
     const camera = fixed.camera_and_medium || DEFAULT_CAMERA_MEDIUM;
+    const isPovHandTest = /first-person pov/i.test(camera) && !/^(?:from|at|between|during|the camera|a |an |in )/i.test(bp.tool.trim());
+
+    const action2to6 = isPovHandTest
+      ? `From 0–3 seconds, show cautious handheld steps approaching the scene, the smartphone bobbing naturally with the operator breathing and camera auto-exposure adjusting smoothly to the ambient light. From 3–6 seconds, crouch or lean within eight inches of the phenomenon; an ordinary bare hand enters the bottom of the frame holding ${bp.tool} and physically interacts with the subject, framed alongside ${bp.anchor}.`
+      : `From 2–6 seconds, ${bp.tool}, framed alongside ${bp.anchor} with natural camera motion and realistic lighting depth.`;
+
     const rawBody =
       `${camera} ` +
       `The setting is ${bp.location}. ` +
-      `In the first second, the camera points directly at an impossible visual hook: ${bp.subject}. ` +
-      `From 0–3 seconds, show cautious handheld steps approaching the scene, the smartphone bobbing naturally with the operator breathing and camera auto-exposure adjusting smoothly to the ambient daylight. ` +
-      `From 3–6 seconds, crouch or lean within eight inches of the phenomenon; an ordinary bare hand enters the bottom of the frame holding ${bp.tool} and physically tests the anomaly, with ${bp.anchor}. ` +
+      `In the first 0–2 seconds, the frame opens immediately on the primary visual hook: ${bp.subject}. ` +
+      `${action2to6} ` +
       `From 6–8 seconds, ${bp.escalation}. ` +
       `From 8–10 seconds, ${bp.climax}.`;
 
@@ -1984,13 +2103,14 @@ CRITICAL ZERO-REPEAT & FORMATTING RULES:
     const userPrompts = this.parseUserPromptExamples(masterPrompt);
     const isMultiPrompt = userPrompts.length > 1;
     const extractedNegative = this.extractNegativePrompt(masterPrompt);
+    const extractedCamera = this.extractCameraMediumFromPrompt(userPrompts[0] || masterPrompt);
 
     return {
       niche_name: isMultiPrompt ? `Zero-Repeat Multi-Concept Series` : 'Viral Found-Footage Series',
       theme_summary:
         '100% brand-new, unrepeated 10-second vertical 9:16 first-person POV smartphone videos across diverse everyday objects and environments.',
       fixed_dna: {
-        camera_and_medium: DEFAULT_CAMERA_MEDIUM,
+        camera_and_medium: extractedCamera,
         timing_breakdown: [
           '0-2s: Undeniable reality-bending visual hook on a unique everyday object',
           '0-3s: Cautious handheld steps, natural mobile phone wobble, auto-exposure balancing',
@@ -2008,12 +2128,15 @@ CRITICAL ZERO-REPEAT & FORMATTING RULES:
         subjects_or_anomalies: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.subject),
         tools_and_probes: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.tool),
         scale_anchors: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.anchor),
+        escalations: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.escalation),
         climaxes: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.climax),
       },
+      scene_blueprints: MASTER_SCENE_BLUEPRINTS.slice(0, 20),
+      is_custom_dna: false,
       subjects: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.subject),
       locations: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.location),
       actions_or_hooks: MASTER_SCENE_BLUEPRINTS.slice(0, 20).map(b => b.climax),
-      camera_styles: [DEFAULT_CAMERA_MEDIUM],
+      camera_styles: [extractedCamera],
     };
   }
 
@@ -2258,48 +2381,42 @@ CRITICAL ZERO-REPEAT & FORMATTING RULES:
     const fileUri = await this.uploadVideoToGemini(videoBuffer, mimeType);
     this.logger.log(`Gemini video upload ready: ${fileUri}`);
 
-    const anchorCount = Math.min(Math.max(sampleCount, 1), 5);
+    const anchorCount = Math.min(Math.max(sampleCount, 1), 10);
 
-    const promptText = `You are a world-class AI Cinematographer and Viral Short-Form Video Producer.
-Your task is NATIVE VIDEO REVERSE-ENGINEERING of this short video clip.
+    const promptText = `You are an elite AI Cinematography Director and Frame-Accurate Video Reverse-Engineer.
+Your task is NATIVE VIDEO REVERSE-ENGINEERING of this uploaded 10-second reference video clip.
 
-CRITICAL INSTRUCTION:
-Base your entire analysis 100% strictly on what is ACTUALLY visible in this specific video clip. Do NOT assume the video is about rocks, stones, tools, or biomes unless you actually observe them in the footage.
+CRITICAL 100% ACCURACY MANDATE:
+1. Watch every frame of this video clip from 0.0s to 10.0s and base your entire output 100% strictly on what is ACTUALLY visible in this specific footage.
+2. DO NOT drift away from the reference video's concept or visual style! When the user generates a video from your prompts, the resulting video MUST be a 95–100% visual, cinematic, and structural match to this reference video (exact same camera perspective, lens focal length, camera movement, lighting mood, color grading, realism level, subject archetype, physical scale, and 0–10s timing choreography), while each prompt is a FRESH NEW VARIANT / NEW EPISODE of this exact concept!
+3. Never replace the video's core archetype with random unrelated objects, and never assume rocks/stones/tools unless they are actually central to this footage.
 
-Perform these critical tasks:
+Perform these 4 tasks with 100% precision:
 
-TASK 1: DECONSTRUCT ORIGINAL VIDEO:
-- actual_subject_and_action: Factual description of what is actually happening in this video.
-- visual_hook_0_to_2s: The exact opening visual hook that grabs attention in the first 2 seconds.
-- camera_perspective: Framing, POV, camera movement, autofocus, handheld natural motion/wobble, lighting.
-- interaction_or_action: Main subject interaction, action, or escalation between 2-8 seconds.
-- climax_or_ending: The climax, final reaction, dramatic turn, or ending hook between 8-10 seconds.
-- viral_retention_formula: Why this video works psychologically (curiosity gap, tension curve, satisfying visuals).
+TASK 1: 100% FRAME-ACCURATE DECONSTRUCTION OF THE UPLOADED VIDEO ("original_analysis"):
+- actual_subject_and_action: Detailed, literal description of the exact subject(s), environment, scale, materials, textures, and physical action occurring in the video.
+- visual_hook: The exact 0–2s opening frame, subject positioning, and visual hook that grabs attention immediately.
+- camera_and_pov: Exact aspect ratio (vertical 9:16), camera type & perspective (e.g. first-person handheld smartphone POV, or 3rd-person tracking shot, or static/tripod, or macro close-up, or dashcam/CCTV), exact camera angle/tilt, lens depth-of-field, camera movement from 0s to 10s, and whether human faces/bodies/hands are visible or strictly absent.
+- interaction_or_action: Exact 2–6s camera movement and physical action/interaction choreography, plus any secondary 6–8s escalation.
+- climax: Exact 8–10s climax, final physical reaction, camera recoil or cut style.
+- viral_retention_formula: Why this exact visual structure & pacing hooks viewers.
 
-TASK 2: RE-SKIN INTO A 100% BRAND NEW CONCEPT (Same Viral Formula, Fresh Original Content):
-- Retain the EXACT viral retention curve, tension, and camera pacing, but create a 100% brand-new, copyright-free creative concept in the same style/genre.
-- title: Short distinctive concept title.
-- niche: Specific content niche.
-- core_hook: The new, 100% original hook that replaces the original video's subject.
-- new_biome: New creative environment or setting.
-- new_tool: New item, tool, or focal interaction element.
-- new_scale_anchor: New visual detail or texture element.
-- new_climax: New dramatic ending or reaction.
+TASK 2: 100% LOCKED VISUAL DNA + NEW VARIANT SERIES BLUEPRINT ("re_skinned_concept" & "master_prompt"):
+- Lock 100% of the reference video's visual medium, camera perspective/motion, lighting/weather mood, color palette, subject archetype, and 0–10s shot-by-second choreography.
+- Design a closely-matched New Concept Variant in the EXACT SAME visual world and archetype so the generated video looks 100% like a new episode from the exact same creator and template.
+- master_prompt: Write a complete, hyper-detailed 150–200 word ready-to-run 10-second vertical 9:16 video generation prompt for this concept. Start with a clear camera & medium sentence ("Create a 10-second vertical 9:16 ..."), describe the exact setting & lighting, then detail 0–2s, 2–6s, 6–8s, and 8–10s with extreme visual precision, followed by "## Negative prompt". Include ZERO "Audio:" or sound lines.
 
-TASK 3: COMPILE THE MASTER PROMPT:
-- Full, ready-to-run 10-second prompt for this new re-skinned concept with full camera POV, setting, 0-2s hook, 2-5s action, 5-8s escalation, 8-10s climax, and ## Negative prompt block. Do NOT include any "Audio:" or sound description lines in the prompt.
+TASK 3: 20 VIDEO-LOCKED CONCEPT VARIANTS ("matrix.scene_blueprints" & "matrix.fixed_dna"):
+- fixed_dna.camera_and_medium: The exact opening sentence ("Create a 10-second vertical 9:16 ...") that locks the exact camera perspective, medium, and framing rules of this video.
+- fixed_dna.structural_template: 2–3 sentences locking the exact camera angle, movement style, lighting mood, realism level, and physical mechanics of this video that MUST stay 100% identical in every prompt.
+- fixed_dna.negative_prompt: A comprehensive negative prompt tailored specifically to this video's aesthetic (if no human face is in the video, ban human face/selfie/face-cam; always ban subtitles, text overlays, logos, watermarks, blurry artifacts, distorted anatomy, extra fingers, deformed hands, and unnatural glitches).
+- scene_blueprints: Generate 20 distinct, complete Concept Variants (#1 through #20). EVERY SINGLE ONE of the 20 blueprints MUST stay 100% inside the reference video's exact visual style, camera setup, lighting mood, and subject archetype — each one giving a fresh, non-repeating variant of this exact video concept!
 
-TASK 4: HIERARCHICAL MATRIX & ${anchorCount} INITIAL TEST PROMPTS:
-- Create a focused, high-density matrix tailored to THIS concept where every item is a completely different object/scene:
-  * sub_genres: 10 distinct themes/sub-genres
-  * locations: 10 distinct locations
-  * subjects_or_anomalies: 10 distinct subjects/hooks (completely different objects, no repetition)
-  * tools_and_probes: 10 tools/objects/interaction details
-  * scale_anchors: 8 scale anchors/fine details
-  * climaxes: 10 climaxes/endings
-- test_prompts: Generate ${anchorCount} complete, ready-to-run 10-second variation prompts. Each prompt must feature a different object/scene, must have ZERO "Audio:" lines, and must include the complete ## Negative prompt block.
+TASK 4: ${anchorCount} FULL READY-TO-RUN TEST PROMPTS ("test_prompts"):
+- Using scene_blueprints #1 through #${anchorCount}, write ${anchorCount} complete, 150–200 word ready-to-run 10-second prompts.
+- Every test prompt (#1 through #${anchorCount}) MUST be 100% faithful to the reference video's camera DNA, lighting, subject archetype, and 0–10s choreography, have ZERO "Audio:" lines, and end with the complete "## Negative prompt" block.
 
-Return strictly valid JSON with this schema:
+Return strictly valid JSON matching this schema:
 {
   "original_analysis": {
     "actual_subject_and_action": "...",
@@ -2307,7 +2424,7 @@ Return strictly valid JSON with this schema:
     "camera_and_pov": "...",
     "interaction_or_action": "...",
     "climax": "...",
-    "audio_elements": "Natural environmental audio",
+    "audio_elements": "Visual-only prompt generation",
     "viral_retention_formula": "..."
   },
   "re_skinned_concept": {
@@ -2324,19 +2441,23 @@ Return strictly valid JSON with this schema:
     "niche_name": "...",
     "theme_summary": "...",
     "fixed_dna": {
-      "camera_and_medium": "...",
-      "timing_breakdown": ["0-2s...", "2-5s...", "5-8s...", "8-10s..."],
+      "camera_and_medium": "Create a 10-second vertical 9:16 ...",
+      "timing_breakdown": ["0-2s: ...", "2-6s: ...", "6-8s: ...", "8-10s: ..."],
       "negative_prompt": "...",
-      "audio_rules": ""
+      "audio_rules": "",
+      "structural_template": "..."
     },
-    "hierarchical_matrix": {
-      "sub_genres": ["..."],
-      "locations": ["..."],
-      "subjects_or_anomalies": ["..."],
-      "tools_and_probes": ["..."],
-      "scale_anchors": ["..."],
-      "climaxes": ["..."]
-    }
+    "scene_blueprints": [
+      {
+        "sub_genre": "Short variant title",
+        "location": "Specific setting & lighting matching 100% the reference video's world",
+        "subject": "Specific 0-2s visual hook & primary subject variant matching 100% the reference video's archetype",
+        "tool": "Specific 2-6s camera movement & physical action/interaction matching 100% the reference video's choreography",
+        "anchor": "Specific foreground/background texture or scale detail visible at 2-6s",
+        "escalation": "Specific 6-8s escalation or reaction matching 100% the reference video's mechanics",
+        "climax": "Specific 8-10s climax and ending cut matching 100% the reference video's ending"
+      }
+    ]
   },
   "test_prompts": [
     {
@@ -2344,38 +2465,15 @@ Return strictly valid JSON with this schema:
       "sub_genre": "...",
       "location": "...",
       "subject": "...",
-      "text": "Complete 10-second prompt #1 with ## Negative prompt and zero Audio lines"
+      "text": "Complete 150-200 word 10-second prompt #1 with ## Negative prompt and zero Audio lines"
     }
   ]
 }`;
 
-    const payload = {
-      contents: [
-        {
-          parts: [
-            {
-              fileData: {
-                fileUri,
-                mimeType,
-              },
-            },
-            {
-              text: promptText,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4096,
-        responseMimeType: 'application/json',
-      },
-    };
-
     const candidateModels = [
       'gemini-2.5-flash',
-      'gemini-flash-lite-latest',
       'gemini-3.5-flash',
+      'gemini-flash-lite-latest',
       'gemini-3.8-flash',
     ];
 
@@ -2386,9 +2484,36 @@ Return strictly valid JSON with this schema:
       try {
         this.logger.log(`Calling Gemini Video Vision with model: ${model}`);
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const genConfig: Record<string, any> = {
+          temperature: 0.4,
+          maxOutputTokens: 16384,
+          responseMimeType: 'application/json',
+        };
+        if (model.includes('2.5')) {
+          genConfig.thinkingConfig = { thinkingBudget: 0 };
+        }
+        const payload = {
+          contents: [
+            {
+              parts: [
+                {
+                  fileData: {
+                    fileUri,
+                    mimeType,
+                  },
+                },
+                {
+                  text: promptText,
+                },
+              ],
+            },
+          ],
+          generationConfig: genConfig,
+        };
+
         const res = await axios.post(url, payload, {
           headers: { 'Content-Type': 'application/json' },
-          timeout: 35000,
+          timeout: 55000,
         });
 
         const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -2410,7 +2535,7 @@ Return strictly valid JSON with this schema:
 
     if (!candidate) {
       const errDetail = lastError?.response?.data?.error?.message || lastError?.message || 'High server demand';
-      throw new Error(`Google Gemini Video Vision servers par high demand hai: ${errDetail}. Kuch lamhay baad dobara try karein.`);
+      throw new Error(`Video analysis server par temporary load hai: ${errDetail}. Kuch lamhay baad dobara try karein.`);
     }
 
     let cleanCandidate = candidate.trim();
@@ -2451,38 +2576,91 @@ Return strictly valid JSON with this schema:
         }
       }
       if (!repaired) {
-        throw new Error('Gemini Video Vision output format error. Please try analyzing again.');
+        throw new Error('Video analysis output format error. Please try analyzing again.');
       }
     }
 
     const nicheName = parsed.matrix?.niche_name || parsed.re_skinned_concept?.title || 'Viral Video Concept';
     const themeSummary = parsed.matrix?.theme_summary || parsed.re_skinned_concept?.core_hook || '10-second vertical video series';
-    const finalNegative = parsed.matrix?.fixed_dna?.negative_prompt && parsed.matrix.fixed_dna.negative_prompt.length > 40
-      ? parsed.matrix.fixed_dna.negative_prompt
+    const finalNegative = parsed.matrix?.fixed_dna?.negative_prompt && parsed.matrix.fixed_dna.negative_prompt.length > 35
+      ? parsed.matrix.fixed_dna.negative_prompt.trim()
       : DEFAULT_NEGATIVE_PROMPT;
+
+    const extractedCamera =
+      parsed.matrix?.fixed_dna?.camera_and_medium ||
+      this.extractCameraMediumFromPrompt(parsed.master_prompt || '') ||
+      DEFAULT_CAMERA_MEDIUM;
+
+    const rawBlueprints: UniqueSceneBlueprint[] = Array.isArray(parsed.matrix?.scene_blueprints)
+      ? parsed.matrix.scene_blueprints
+          .filter((b: any) => b && (b.subject || b.location))
+          .map((b: any, idx: number) => ({
+            sub_genre: b.sub_genre || `Variant #${idx + 1}`,
+            location: b.location || parsed.re_skinned_concept?.new_biome || 'authentic environment matching the reference video',
+            subject: b.subject || parsed.re_skinned_concept?.core_hook || 'primary visual hook matching the reference video',
+            tool: b.tool || parsed.re_skinned_concept?.new_tool || 'continuous camera motion and physical interaction matching the reference video',
+            anchor: b.anchor || parsed.re_skinned_concept?.new_scale_anchor || 'crisp foreground environmental detail anchoring realistic scale',
+            escalation: b.escalation || 'the visual action escalates with realistic physical intensity matching the reference video',
+            climax: b.climax || parsed.re_skinned_concept?.new_climax || 'high-impact climax and abrupt ending cut matching the reference video',
+          }))
+      : [];
+
+    const hMatrix: HierarchicalMatrix = {
+      sub_genres:
+        rawBlueprints.length > 0
+          ? rawBlueprints.map(b => b.sub_genre)
+          : (parsed.matrix?.hierarchical_matrix?.sub_genres || [parsed.re_skinned_concept?.niche || 'Signature Concept']),
+      locations:
+        rawBlueprints.length > 0
+          ? rawBlueprints.map(b => b.location)
+          : (parsed.matrix?.hierarchical_matrix?.locations || [parsed.re_skinned_concept?.new_biome || 'Signature Setting']),
+      subjects_or_anomalies:
+        rawBlueprints.length > 0
+          ? rawBlueprints.map(b => b.subject)
+          : (parsed.matrix?.hierarchical_matrix?.subjects_or_anomalies || [parsed.re_skinned_concept?.core_hook || 'Core Visual Hook']),
+      tools_and_probes:
+        rawBlueprints.length > 0
+          ? rawBlueprints.map(b => b.tool)
+          : (parsed.matrix?.hierarchical_matrix?.tools_and_probes || [parsed.re_skinned_concept?.new_tool || 'Focal Interaction']),
+      scale_anchors:
+        rawBlueprints.length > 0
+          ? rawBlueprints.map(b => b.anchor)
+          : (parsed.matrix?.hierarchical_matrix?.scale_anchors || [parsed.re_skinned_concept?.new_scale_anchor || 'Texture Detail']),
+      escalations:
+        rawBlueprints.length > 0
+          ? rawBlueprints.map(b => b.escalation)
+          : (parsed.matrix?.hierarchical_matrix?.escalations || ['Secondary physical escalation matching the reference video']),
+      climaxes:
+        rawBlueprints.length > 0
+          ? rawBlueprints.map(b => b.climax)
+          : (parsed.matrix?.hierarchical_matrix?.climaxes || [parsed.re_skinned_concept?.new_climax || 'Dramatic Climax']),
+    };
 
     const matrix: PromptMatrix = {
       niche_name: nicheName,
       theme_summary: themeSummary,
       fixed_dna: {
-        camera_and_medium: parsed.matrix?.fixed_dna?.camera_and_medium || DEFAULT_CAMERA_MEDIUM,
-        timing_breakdown: parsed.matrix?.fixed_dna?.timing_breakdown || ['0-2s: Hook', '2-5s: Development', '5-8s: Escalation', '8-10s: Climax'],
+        camera_and_medium: extractedCamera,
+        timing_breakdown: parsed.matrix?.fixed_dna?.timing_breakdown || [
+          '0-2s: Hook',
+          '2-6s: Camera movement & primary action',
+          '6-8s: Escalation',
+          '8-10s: Climax & cut',
+        ],
         negative_prompt: finalNegative,
         audio_rules: '',
-        structural_template: '',
+        structural_template:
+          parsed.matrix?.fixed_dna?.structural_template ||
+          parsed.original_analysis?.camera_and_pov ||
+          themeSummary,
       },
-      hierarchical_matrix: parsed.matrix?.hierarchical_matrix || {
-        sub_genres: [parsed.re_skinned_concept?.niche || 'Signature Concept'],
-        locations: [parsed.re_skinned_concept?.new_biome || 'Signature Setting'],
-        subjects_or_anomalies: [parsed.re_skinned_concept?.core_hook || 'Core Visual Hook'],
-        tools_and_probes: [parsed.re_skinned_concept?.new_tool || 'Focal Interaction'],
-        scale_anchors: [parsed.re_skinned_concept?.new_scale_anchor || 'Texture Detail'],
-        climaxes: [parsed.re_skinned_concept?.new_climax || 'Dramatic Climax'],
-      },
-      subjects: parsed.matrix?.hierarchical_matrix?.subjects_or_anomalies || [parsed.re_skinned_concept?.core_hook || 'Core Hook'],
-      locations: parsed.matrix?.hierarchical_matrix?.locations || [parsed.re_skinned_concept?.new_biome || 'Setting'],
-      actions_or_hooks: parsed.matrix?.hierarchical_matrix?.climaxes || [parsed.re_skinned_concept?.new_climax || 'Climax'],
-      camera_styles: ['Continuous vertical 9:16 POV'],
+      hierarchical_matrix: hMatrix,
+      scene_blueprints: rawBlueprints,
+      is_custom_dna: true,
+      subjects: hMatrix.subjects_or_anomalies,
+      locations: hMatrix.locations,
+      actions_or_hooks: hMatrix.climaxes,
+      camera_styles: [extractedCamera],
     };
 
     const cleanMasterPrompt = this.finalizePromptText(parsed.master_prompt || '', finalNegative);
@@ -2490,9 +2668,9 @@ Return strictly valid JSON with this schema:
     const testPrompts: GeneratedPromptItem[] = Array.isArray(parsed.test_prompts)
       ? parsed.test_prompts.map((p: any, i: number) => ({
           index: p.index || i + 1,
-          sub_genre: p.sub_genre || p.title || `Variation ${i + 1}`,
-          location: p.location || '',
-          subject: p.subject || '',
+          sub_genre: p.sub_genre || p.title || rawBlueprints[i]?.sub_genre || `Variant #${i + 1}`,
+          location: p.location || rawBlueprints[i]?.location || '',
+          subject: p.subject || rawBlueprints[i]?.subject || '',
           text: this.finalizePromptText(p.text || (typeof p === 'string' ? p : ''), finalNegative),
           similarity_score: 0,
         }))
@@ -2519,14 +2697,14 @@ Return strictly valid JSON with this schema:
     testPrompts: GeneratedPromptItem[];
   }> {
     const safeCount = Math.min(Math.max(sampleCount, 1), 20);
-    const visionAnchorCount = Math.min(safeCount, 5);
+    const visionAnchorCount = Math.min(safeCount, 10);
     const result = await this.reverseEngineerVideo(videoBuffer, visionAnchorCount, mimeType);
 
     let testPrompts = result.testPrompts || [];
 
     if (testPrompts.length < safeCount) {
       const needed = safeCount - testPrompts.length;
-      this.logger.log(`Supplementing ${needed} test prompts from Master Prompt and Matrix...`);
+      this.logger.log(`Generating remaining ${needed} video-locked test prompts from Video DNA & 20 Scene Blueprints...`);
       const additional = await this.generateBatch(
         result.masterPrompt,
         result.matrix,
