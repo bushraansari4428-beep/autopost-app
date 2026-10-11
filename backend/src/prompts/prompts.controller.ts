@@ -75,11 +75,12 @@ export class PromptsController {
       matrix: PromptMatrix;
       startIdx: number;
       count: number;
+      usedConcepts?: string[];
     },
   ) {
-    const { masterPrompt, matrix, startIdx = 1, count = 5 } = body;
+    const { masterPrompt, matrix, startIdx = 1, count = 5, usedConcepts = [] } = body;
     const safeCount = Math.min(Math.max(count, 1), 20); // Limit batch to 20 for responsive HTTP
-    const prompts = await this.promptsService.generateBatch(masterPrompt, matrix, startIdx, safeCount);
+    const prompts = await this.promptsService.generateBatch(masterPrompt, matrix, startIdx, safeCount, usedConcepts);
     return { success: true, prompts };
   }
 

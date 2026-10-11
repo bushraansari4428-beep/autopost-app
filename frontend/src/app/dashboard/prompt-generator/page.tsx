@@ -168,19 +168,17 @@ export default function PromptGeneratorPage() {
       const parts2 = text.split(/\n+\s*[-=_]{3,}\s*\n+/).map(p => p.trim()).filter(p => p.length > 30);
       if (parts2.length > 1) return parts2.length;
     }
-    const createRegex = /(?=(?:^|\n+)\s*(?:Create a|A) \d+[\s-]second)/gi;
+    const createRegex = /(?=(?:^|\n+)\s*(?:Create a|Cinematic|A)\s+\d+[\s-]second)/gi;
     const parts3 = text.split(createRegex).map(p => p.trim()).filter(p => p.length > 30);
     if (parts3.length > 1) return parts3.length;
     return 1;
   }, [masterPrompt]);
 
-  const handleUseSamplePrompt = () => {
-    const sample = `Create a 10-second vertical 9:16 raw smartphone video shot strictly from the rear camera in pure continuous first-person POV, with absolutely no selfie camera, no face-cam, and no picture-in-picture overlay. The setting is a misty pine forest clearing at dawn beside an old wooden footbridge over a shallow brook. In the first second, the camera points at a stream of crystal-clear water rising vertically upward from the creek into a floating hollow liquid ring spinning in mid-air. From 0–3 seconds, show cautious handheld steps approaching the wooden bridge rail, phone bobbing with natural breathing and camera auto-exposure adjusting to the morning mist. From 3–6 seconds, lean within eight inches of the floating water ring; an ordinary bare hand holds a dry pine branch and slowly touches the spinning rim of the water arch, with a small green fern leaf resting on the wooden rail to anchor realistic physical scale. From 6–8 seconds, the floating water ring suddenly freezes into solid transparent ice in mid-air while continuing to hover unsupported. From 8–10 seconds, the suspended ice ring shatters outward into thousands of sparkling droplets; the operator stumbles backward and the recording terminates abruptly with NO face or person visible.
-
-## Negative prompt
-human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, reaction face, talking head, vlogger overlay, avatar, split screen, napkins, tissues, paper, glass bowl, acrylic prop, cinematic CGI sheen, smooth gimbal stabilization, fantasy glowing magic runes, blue energy shields, sci-fi forcefields, cartoon water effects, alien technology, dramatic movie trailer soundtrack, bass drops, sound design risers, motion blur glitches, subtitles, text overlays, logos, watermarks, extra fingers, deformed hands, and narrative explanations. Maintain the convincing, unpolished aesthetic of authentic viral mobile found-footage captured spontaneously on a smartphone.`;
-    setMasterPrompt(sample);
+  const handleClearMasterPrompt = () => {
+    setMasterPrompt('');
     setMatrix(null);
+    setPrompts([]);
+    setCurrentPrompt(null);
   };
 
   const getAuthHeaders = () => {
@@ -362,11 +360,18 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
     setIsPaused(false);
 
     let activeMatrix = matrix;
+    let startingPrompts = isPaused ? [...prompts] : (matrix ? [...prompts] : []);
+    if (!isPaused && startingPrompts.length >= targetCount) {
+      startingPrompts = [];
+    }
 
     // Analyze Master Prompt if not already done
     if (!activeMatrix) {
+      startingPrompts = [];
+      setPrompts([]);
+      setCurrentPrompt(null);
       setIsAnalyzing(true);
-      setStatusMessage('Analyzing Master Prompt structure...');
+      setStatusMessage('Analyzing your example prompt(s) & extracting theme structure...');
       try {
         const res = await fetch(`${BACKEND_URL}/prompts/analyze`, {
           method: 'POST',
@@ -395,9 +400,8 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
 
     // Batch Generation Loop
     setIsGenerating(true);
-    setStatusMessage('Generating prompts in background...');
+    setStatusMessage('Generating unique concept variations...');
 
-    // Keep batch request payload ultra-compact (<4KB) to prevent 413 Request Entity Too Large
     const compactMatrix: PromptMatrix = {
       niche_name: activeMatrix.niche_name,
       theme_summary: activeMatrix.theme_summary,
@@ -415,8 +419,8 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
       },
     };
 
-    let currentIdx = prompts.length + 1;
-    let accumulated = [...prompts];
+    let currentIdx = startingPrompts.length + 1;
+    let accumulated = [...startingPrompts];
 
     while (currentIdx <= targetCount && !stopSignalRef.current) {
       const needed = Math.min(batchSize, targetCount - currentIdx + 1);
@@ -425,10 +429,14 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            masterPrompt: masterPrompt.slice(0, 8000),
+            masterPrompt: masterPrompt.slice(0, 15000),
             matrix: compactMatrix,
             startIdx: currentIdx,
-            count: needed
+            count: needed,
+            usedConcepts: accumulated
+              .slice(-80)
+              .map(p => `${p.subject || ''} @ ${p.location || ''}`)
+              .filter(s => s.trim().length > 5),
           })
         });
 
@@ -1128,13 +1136,15 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   <FileText className="w-4 h-4 text-blue-400" />
                   Master Prompt
                 </label>
-                <button
-                  type="button"
-                  onClick={handleUseSamplePrompt}
-                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold transition-colors flex items-center gap-1"
-                >
-                  Load Example
-                </button>
+                {masterPrompt.trim().length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearMasterPrompt}
+                    className="text-xs text-slate-400 hover:text-red-400 font-semibold transition-colors flex items-center gap-1"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
 
               <textarea
@@ -1142,6 +1152,10 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                 onChange={e => {
                   setMasterPrompt(e.target.value);
                   if (matrix) setMatrix(null);
+                  if (!isGenerating && prompts.length > 0) {
+                    setPrompts([]);
+                    setCurrentPrompt(null);
+                  }
                 }}
                 placeholder="Paste your Master Prompt here... You can paste a single prompt or multiple example prompts (PROMPT 1, PROMPT 2, etc.)"
                 rows={8}
@@ -1289,27 +1303,25 @@ human face, man face, selfie, front camera, picture-in-picture, PIP, face-cam, r
                   <div className="space-y-2.5 text-xs">
                     <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/70">
                       <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-                        Camera Setup
+                        Camera & Shot Style
                       </span>
                       <p className="text-slate-200 text-xs mt-1 leading-relaxed font-mono">
-                        {matrix.fixed_dna?.camera_and_medium || '9:16 vertical smartphone rear POV'}
+                        {matrix.fixed_dna?.camera_and_medium || 'Extracted directly from your example prompts'}
                       </p>
                     </div>
 
                     <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/70">
                       <span className="text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">
-                        Timeline Breakdown
+                        Structure & Flow Breakdown
                       </span>
                       <ul className="mt-1 space-y-1 text-slate-300 text-[11px] list-disc list-inside">
                         {matrix.fixed_dna?.timing_breakdown?.map((b, i) => (
                           <li key={i}>{b}</li>
                         )) || (
                           <>
-                            <li>0–2s: Visual hook & anomaly introduction</li>
-                            <li>0–3s: Handheld approach with terrain footsteps</li>
-                            <li>3–6s: Physical test with scale anchor</li>
-                            <li>6–8s: Secondary reaction & escalation</li>
-                            <li>8–10s: Concussive climax & cut</li>
+                            <li>Opening hook & primary subject</li>
+                            <li>Core design & environmental details</li>
+                            <li>Lighting, atmosphere & cinematography</li>
                           </>
                         )}
                       </ul>
