@@ -780,46 +780,53 @@ export default function PromptGeneratorPage() {
           {videoAnalysisResult && (
             <div className="space-y-6 animate-fadeIn">
               {/* Top Banner: Verification Alert */}
-              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-emerald-500/20 rounded-xl border border-emerald-500/30 text-emerald-400">
-                    <CheckCircle2 className="w-6 h-6" />
+              <div className="bg-gradient-to-br from-slate-900 via-indigo-950/60 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-xl space-y-5">
+                <div className="flex items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="w-11 h-11 bg-emerald-500/15 rounded-xl border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 shadow-inner">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                        Concept Synthesized & {videoAnalysisResult.testPrompts?.length || sampleCount} Test Prompts Ready
+                      </h3>
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                        Inspect the breakdown and test prompts below. When satisfied, expand to 20, 500, or 1,000 prompts with 1 click.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white">
-                      Concept Synthesized & {videoAnalysisResult.testPrompts?.length || sampleCount} Test Prompts Ready
-                    </h3>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Inspect the breakdown and test prompts below. When satisfied, expand to 500 or 1,000 prompts with 1 click.
-                    </p>
+
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-[11px] font-bold uppercase tracking-wider shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Ready to Scale</span>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <div className="pt-4 border-t border-indigo-500/20 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => handleApproveAndExpand(20)}
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white font-bold text-xs shadow-md border border-slate-700 transition-all"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-blue-300 hover:text-white font-bold text-xs shadow-md border border-slate-700/80 transition-all"
                   >
-                    <Layers className="w-4 h-4 text-blue-400" />
+                    <Layers className="w-4 h-4 text-blue-400 shrink-0" />
                     <span>Expand to 20 Prompts</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleApproveAndExpand(500)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 border border-emerald-400/20 transition-all"
                   >
-                    <CheckCheck className="w-4 h-4" />
+                    <CheckCheck className="w-4 h-4 shrink-0" />
                     <span>Approve & Expand to 500 Prompts</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleApproveAndExpand(1000)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-500/20 transition-all"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-500/20 border border-purple-400/20 transition-all"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 shrink-0" />
                     <span>Expand to 1,000 Prompts</span>
                   </button>
                 </div>
@@ -829,13 +836,16 @@ export default function PromptGeneratorPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Card 1: Original Video Deconstruction */}
                 <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3.5">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <Film className="w-4 h-4 text-blue-400" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Film className="w-4 h-4 text-blue-400 shrink-0" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200 whitespace-nowrap">
                         Original Video Deconstruction
                       </span>
                     </div>
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 shrink-0">
+                      Source Breakdown
+                    </span>
                   </div>
 
                   <div className="space-y-3 text-xs">
@@ -897,14 +907,17 @@ export default function PromptGeneratorPage() {
 
                 {/* Card 2: Re-Skinned Original Concept */}
                 <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3.5">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-purple-400" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200 whitespace-nowrap">
                         New Re-Skinned Concept
                       </span>
                     </div>
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                    <span
+                      title={videoAnalysisResult.reSkinnedConcept?.title || 'Original Concept Series'}
+                      className="text-[11px] font-bold px-3 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 truncate max-w-[200px]"
+                    >
                       {videoAnalysisResult.reSkinnedConcept?.title || 'Original Concept Series'}
                     </span>
                   </div>
@@ -999,28 +1012,30 @@ export default function PromptGeneratorPage() {
 
               {/* Card 3: Test Prompts Inspection Panel */}
               <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                  <div className="flex items-center gap-2.5">
-                    <Eye className="w-4 h-4 text-emerald-400" />
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20 text-emerald-400 shrink-0">
+                      <Eye className="w-4 h-4" />
+                    </div>
                     <div>
                       <h4 className="text-sm font-bold text-white">
                         Test Batch Verification ({videoAnalysisResult.testPrompts?.length || 0} Prompts Generated)
                       </h4>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-slate-400 mt-0.5">
                         Inspect each prompt individually. Check tone, camera instructions and Foley sound details.
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1">
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5">
                       <FileText className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
                       <input
                         type="text"
                         value={customFileName}
                         onChange={e => setCustomFileName(e.target.value)}
                         placeholder={getResolvedFilename(videoAnalysisResult.testPrompts?.length || 5).replace(/\.txt$/i, '')}
-                        className="bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none font-mono w-40"
+                        className="bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none font-mono w-44"
                         title="Rename output .txt file"
                       />
                       <span className="text-[11px] text-slate-500 font-mono">.txt</span>
@@ -1029,7 +1044,7 @@ export default function PromptGeneratorPage() {
                     <button
                       type="button"
                       onClick={handleDownloadTestPrompts}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors shrink-0"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Download .txt</span>
@@ -1038,7 +1053,7 @@ export default function PromptGeneratorPage() {
                     <button
                       type="button"
                       onClick={handleCopyAllTestPrompts}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors shrink-0"
                     >
                       {copiedAllTest ? (
                         <>
@@ -1056,7 +1071,7 @@ export default function PromptGeneratorPage() {
                     <button
                       type="button"
                       onClick={handleSendTestBatchToVps}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-600/40 transition-colors"
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-600/40 transition-colors shrink-0"
                     >
                       <Server className="w-3.5 h-3.5" />
                       <span>Send to VPS</span>
