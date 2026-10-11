@@ -561,17 +561,6 @@ export default function FacebookPagesPage() {
             )}
           </button>
           <button 
-            onClick={() => {
-              setShowCreateModal(true);
-              setCreateResults(null);
-              setCreateError('');
-              fetchSavedAccounts();
-            }}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-700 text-white font-bold shadow-lg shadow-teal-500/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
-          >
-            <span>🏭</span> AI Bulk Page Creator
-          </button>
-          <button 
             onClick={handleScanMonetization}
             disabled={isScanningCM}
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 hover:from-yellow-300 hover:to-amber-500 text-black font-extrabold shadow-lg shadow-yellow-500/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
