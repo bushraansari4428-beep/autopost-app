@@ -30,34 +30,208 @@ export default function FacebookPagesPage() {
   const [accessToken, setAccessToken] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1-Click Facebook OAuth state
+  // 1-Click Facebook OAuth & Multi-Meta-App state
   const [isConnectingOAuth, setIsConnectingOAuth] = useState(false);
+  const [metaApps, setMetaApps] = useState<any[]>([]);
+  const [loadingMetaApps, setLoadingMetaApps] = useState(true);
+  const [selectedMetaAppFilter, setSelectedMetaAppFilter] = useState<string>('ALL');
+  const [selectedOAuthAppId, setSelectedOAuthAppId] = useState<string>('911473734693149');
 
-  const initiateFacebookOAuth = () => {
-    const appId = '911473734693149';
+  // Inline Developer ID / App Name quick-rename state
+  const [inlineEditingAppId, setInlineEditingAppId] = useState<string | null>(null);
+  const [inlineOwnerIdName, setInlineOwnerIdName] = useState<string>('');
+  const [inlineAppName, setInlineAppName] = useState<string>('');
+  const [isSavingInline, setIsSavingInline] = useState(false);
+
+  // Add / Edit Meta Developer App Modal state
+  const [showMetaAppModal, setShowMetaAppModal] = useState(false);
+  const [editingMetaApp, setEditingMetaApp] = useState<any | null>(null);
+  const [metaFormSlot, setMetaFormSlot] = useState<number>(2);
+  const [metaFormAppName, setMetaFormAppName] = useState<string>('');
+  const [metaFormOwnerIdName, setMetaFormOwnerIdName] = useState<string>('');
+  const [metaFormAppId, setMetaFormAppId] = useState<string>('');
+  const [metaFormAppSecret, setMetaFormAppSecret] = useState<string>('');
+  const [metaFormPageIds, setMetaFormPageIds] = useState<string[]>([]);
+  const [isSavingMetaApp, setIsSavingMetaApp] = useState(false);
+  const [metaAppFormError, setMetaAppFormError] = useState<string>('');
+
+  const fetchMetaApps = async () => {
+    setLoadingMetaApps(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pages/meta-apps', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMetaApps(data);
+        if (data.length > 0 && !selectedOAuthAppId) {
+          setSelectedOAuthAppId(data[0].appId);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch Meta Developer Apps:', err);
+    } finally {
+      setLoadingMetaApps(false);
+    }
+  };
+
+  const openAddMetaAppModal = () => {
+    setEditingMetaApp(null);
+    setMetaFormSlot(metaApps.length + 1);
+    setMetaFormAppName(`Meta App #${metaApps.length + 1}`);
+    setMetaFormOwnerIdName('');
+    setMetaFormAppId('');
+    setMetaFormAppSecret('');
+    setMetaFormPageIds([]);
+    setMetaAppFormError('');
+    setShowMetaAppModal(true);
+  };
+
+  const openEditMetaAppModal = (app: any) => {
+    setEditingMetaApp(app);
+    setMetaFormSlot(app.slotNumber || 1);
+    setMetaFormAppName(app.appName || '');
+    setMetaFormOwnerIdName(app.ownerIdName || '');
+    setMetaFormAppId(app.appId || '');
+    setMetaFormAppSecret('');
+    setMetaFormPageIds((app.connectedPages || []).map((p: any) => p.id));
+    setMetaAppFormError('');
+    setShowMetaAppModal(true);
+  };
+
+  const handleSaveMetaAppModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingMetaApp(true);
+    setMetaAppFormError('');
+    try {
+      const token = localStorage.getItem('token');
+      if (editingMetaApp) {
+        const res = await fetch(`/api/pages/meta-apps/${editingMetaApp.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            slotNumber: metaFormSlot,
+            appName: metaFormAppName,
+            ownerIdName: metaFormOwnerIdName,
+            appId: metaFormAppId,
+            appSecret: metaFormAppSecret || undefined,
+            assignPageIds: metaFormPageIds
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          addToast(`✅ ${data.message}`, 'success');
+          setShowMetaAppModal(false);
+          fetchMetaApps();
+          fetchPages();
+        } else {
+          setMetaAppFormError(data.message || 'Failed to update Meta Developer App.');
+        }
+      } else {
+        const res = await fetch('/api/pages/meta-apps', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            slotNumber: metaFormSlot,
+            appName: metaFormAppName,
+            ownerIdName: metaFormOwnerIdName,
+            appId: metaFormAppId,
+            appSecret: metaFormAppSecret
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          addToast(`🎉 ${data.message}`, 'success');
+          setShowMetaAppModal(false);
+          fetchMetaApps();
+          fetchPages();
+        } else {
+          setMetaAppFormError(data.message || 'Failed to add Meta Developer App.');
+        }
+      }
+    } catch (err: any) {
+      setMetaAppFormError(err.message || 'Network error while saving Meta App.');
+    } finally {
+      setIsSavingMetaApp(false);
+    }
+  };
+
+  const handleInlineSaveOwnerId = async (app: any) => {
+    if (!inlineOwnerIdName.trim()) return;
+    setIsSavingInline(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pages/meta-apps/${app.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ownerIdName: inlineOwnerIdName.trim(),
+          appName: inlineAppName.trim() || app.appName
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(`✅ Developer ID & App Name saved: ${inlineOwnerIdName.trim()}`, 'success');
+        setInlineEditingAppId(null);
+        fetchMetaApps();
+        fetchPages();
+      } else {
+        addToast(data.message || 'Failed to save Developer ID name', 'error');
+      }
+    } catch (err: any) {
+      addToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setIsSavingInline(false);
+    }
+  };
+
+  const initiateFacebookOAuth = (targetAppId?: string) => {
+    const appId =
+      (typeof targetAppId === 'string' && targetAppId) ||
+      selectedOAuthAppId ||
+      metaApps[0]?.appId ||
+      '911473734693149';
+    localStorage.setItem('pending_meta_app_id', appId);
     const redirectUri = encodeURIComponent(window.location.origin + '/dashboard/pages');
     const scope = encodeURIComponent('pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata');
-    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+    const stateParam = encodeURIComponent(appId);
+    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code&state=${stateParam}`;
     window.location.href = oauthUrl;
   };
 
-  const handleOAuthCode = async (code: string) => {
+  const handleOAuthCode = async (code: string, stateAppId?: string | null) => {
     setIsConnectingOAuth(true);
     try {
       const token = localStorage.getItem('token');
       const redirectUri = window.location.origin + '/dashboard/pages';
+      const resolvedMetaAppId =
+        stateAppId || localStorage.getItem('pending_meta_app_id') || selectedOAuthAppId || '911473734693149';
       const res = await fetch('/api/pages/facebook/oauth-callback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ code, redirectUri })
+        body: JSON.stringify({ code, redirectUri, metaAppId: resolvedMetaAppId })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addToast(`🎉 Facebook Connected! ${data.pagesImported} new pages added, ${data.pagesUpdated} updated for ${data.accountName}!`, 'success');
+        addToast(
+          `🎉 Connected via ${data.metaAppName || 'Meta App'}! ${data.pagesImported} new pages added, ${data.pagesUpdated} updated for ${data.accountName}!`,
+          'success'
+        );
         fetchPages();
+        fetchMetaApps();
       } else {
         addToast(`Facebook Connection Failed: ${data.message || 'Unknown error'}`, 'error');
       }
@@ -66,6 +240,7 @@ export default function FacebookPagesPage() {
       addToast(`OAuth Error: ${err.message}`, 'error');
     } finally {
       setIsConnectingOAuth(false);
+      localStorage.removeItem('pending_meta_app_id');
       window.history.replaceState({}, '', window.location.pathname);
     }
   };
@@ -435,17 +610,19 @@ export default function FacebookPagesPage() {
 
   useEffect(() => {
     fetchPages();
+    fetchMetaApps();
 
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
+      const stateAppId = urlParams.get('state');
       const fbError = urlParams.get('error') || urlParams.get('error_description');
 
       if (fbError) {
         addToast(`Facebook Login Notice: ${fbError}`, 'error');
         window.history.replaceState({}, '', window.location.pathname);
       } else if (code) {
-        handleOAuthCode(code);
+        handleOAuthCode(code, stateAppId);
       }
     }
   }, []);
@@ -460,6 +637,7 @@ export default function FacebookPagesPage() {
       if (res.ok) {
         addToast('Facebook Page disconnected successfully', 'success');
         fetchPages();
+        fetchMetaApps();
       } else {
         const errData = await res.json().catch(() => ({}));
         addToast(`Failed to delete page: ${errData.message || 'Server error'}`, 'error');
@@ -517,6 +695,7 @@ export default function FacebookPagesPage() {
         setPageId('');
         setAccessToken('');
         fetchPages();
+        fetchMetaApps();
       } else {
         const errText = await res.text();
         setErrorMsg('Error: ' + errText);
@@ -529,37 +708,64 @@ export default function FacebookPagesPage() {
     }
   };
 
+  const filteredPages =
+    selectedMetaAppFilter === 'ALL'
+      ? pages
+      : pages.filter((p: any) => (p.metaAppId || '911473734693149') === selectedMetaAppFilter);
+
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex justify-between items-center mb-8">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
+      {/* Top Header Bar */}
+      <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Facebook Pages</h1>
-          <p className="text-gray-400 mt-1">Click on any connected Facebook Page card to view live real-time statistics & analytics.</p>
+          <p className="text-gray-400 mt-1 text-sm">
+            Manage your Meta Developer Apps, Tester IDs, and connected Facebook Pages with live analytics.
+          </p>
         </div>
+
         <div className="flex flex-wrap items-center gap-3">
-          <button 
-            onClick={initiateFacebookOAuth}
-            disabled={isConnectingOAuth}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            title="Connect any Facebook Account in 1-Click without copying tokens or developer accounts"
-          >
-            {isConnectingOAuth ? (
-              <>
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <span>Linking Facebook...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-                <span>Connect Facebook (1-Click)</span>
-              </>
+          {/* Meta App Selector + 1-Click Connect Combo */}
+          <div className="flex items-center bg-slate-900/90 border border-blue-500/40 rounded-xl p-1 shadow-lg">
+            {metaApps.length > 0 && (
+              <select
+                value={selectedOAuthAppId}
+                onChange={(e) => setSelectedOAuthAppId(e.target.value)}
+                className="bg-slate-950 text-blue-300 text-xs font-bold px-3 py-2 rounded-lg border border-slate-800 focus:outline-none focus:border-blue-500 mr-1.5 cursor-pointer"
+                title="Select which Meta Developer App to connect your Facebook ID with"
+              >
+                {metaApps.map((app: any) => (
+                  <option key={app.id} value={app.appId}>
+                    App #{app.slotNumber}: {app.appName} ({app.ownerIdName})
+                  </option>
+                ))}
+              </select>
             )}
-          </button>
+            <button 
+              onClick={() => initiateFacebookOAuth(selectedOAuthAppId)}
+              disabled={isConnectingOAuth}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Connect any Facebook Account in 1-Click using the selected Meta Developer App"
+            >
+              {isConnectingOAuth ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  <span>Linking Facebook...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                  <span>Connect Facebook (1-Click)</span>
+                </>
+              )}
+            </button>
+          </div>
+
           <button 
             onClick={handleScanMonetization}
             disabled={isScanningCM}
@@ -569,25 +775,266 @@ export default function FacebookPagesPage() {
             <span>{isScanningCM ? '⏳' : '💰'}</span>
             <span>{isScanningCM ? 'Scanning CM...' : 'Scan CM Invites'}</span>
           </button>
+
           <button 
             onClick={() => setShowModal(true)}
-            className="px-6 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold shadow-lg shadow-[#1877F2]/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+            className="px-5 py-2.5 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-semibold shadow-lg shadow-[#1877F2]/25 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer"
           >
             + Add Single Page
           </button>
         </div>
       </div>
 
+      {/* ===================================================================== */}
+      {/* 🛡️ META DEVELOPER APPS & CONNECTED PAGES OVERVIEW PANEL              */}
+      {/* ===================================================================== */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-extrabold uppercase tracking-wider">
+                Multi-App Load Balancer
+              </span>
+              <h2 className="text-lg sm:text-xl font-extrabold text-white">
+                Meta Developer Apps & Connected Pages
+              </h2>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              See which Facebook ID each Meta Developer App is built on, rename IDs anytime, and track how many running pages are linked to each app.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            {selectedMetaAppFilter !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => setSelectedMetaAppFilter('ALL')}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition cursor-pointer"
+              >
+                Show All Pages ({pages.length})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={openAddMetaAppModal}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/20 flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <span>➕</span>
+              <span>Add Meta Developer App</span>
+            </button>
+          </div>
+        </div>
+
+        {loadingMetaApps ? (
+          <div className="text-xs text-slate-400 py-4">Loading Meta Developer Apps...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {metaApps.map((app: any) => {
+              const isSelectedFilter = selectedMetaAppFilter === app.appId;
+              const isEditingThisInline = inlineEditingAppId === app.id;
+
+              return (
+                <div
+                  key={app.id}
+                  className={`rounded-2xl p-5 border transition-all flex flex-col justify-between space-y-4 ${
+                    isSelectedFilter
+                      ? 'bg-indigo-950/40 border-indigo-500 shadow-lg shadow-indigo-500/10'
+                      : 'bg-slate-950/80 border-slate-800/90 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="space-y-3.5">
+                    {/* Card Header: Slot Badge, App Name, Active Count & Edit Button */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2.5 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-300 font-mono text-[11px] font-extrabold uppercase">
+                            META APP #{app.slotNumber}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            {app.activePagesCount} Running / {app.connectedPagesCount} Pages
+                          </span>
+                        </div>
+                        <h3 className="text-base font-extrabold text-white mt-2">
+                          {app.appName}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          App ID: <span className="text-slate-300">{app.appId}</span>
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => openEditMetaAppModal(app)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-[11px] font-semibold transition cursor-pointer shrink-0"
+                        title="Edit Meta App details, Secret, or assigned pages"
+                      >
+                        ⚙️ Edit App
+                      </button>
+                    </div>
+
+                    {/* Developer Facebook ID Box (With 1-Click Inline Rename & Save) */}
+                    <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800/90 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Built On Facebook Developer ID:
+                        </span>
+                        {!isEditingThisInline && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInlineEditingAppId(app.id);
+                              setInlineOwnerIdName(app.ownerIdName || '');
+                              setInlineAppName(app.appName || '');
+                            }}
+                            className="text-[11px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>✏️</span>
+                            <span>Rename ID</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {isEditingThisInline ? (
+                        <div className="space-y-2 pt-1">
+                          <div>
+                            <label className="text-[10px] text-slate-400 block mb-0.5">
+                              Developer Facebook ID Name:
+                            </label>
+                            <input
+                              type="text"
+                              value={inlineOwnerIdName}
+                              onChange={(e) => setInlineOwnerIdName(e.target.value)}
+                              placeholder="e.g. Noor Ali Main FB ID"
+                              className="w-full bg-slate-950 border border-amber-500/50 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 block mb-0.5">
+                              Meta App Label / Name:
+                            </label>
+                            <input
+                              type="text"
+                              value={inlineAppName}
+                              onChange={(e) => setInlineAppName(e.target.value)}
+                              placeholder="e.g. Noor (Meta App #1)"
+                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                            />
+                          </div>
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setInlineEditingAppId(null)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-semibold cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleInlineSaveOwnerId(app)}
+                              disabled={isSavingInline}
+                              className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                            >
+                              {isSavingInline ? 'Saving...' : '💾 Save'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                          <span>👤</span>
+                          <span className="truncate">{app.ownerIdName || 'Not Named (Click Rename ID)'}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Connected Pages List Inside This Meta App Card */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold uppercase tracking-wider text-slate-400">
+                          Connected Pages ({app.connectedPagesCount})
+                        </span>
+                        {app.connectedPagesCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedMetaAppFilter(isSelectedFilter ? 'ALL' : app.appId)
+                            }
+                            className="text-blue-400 hover:text-blue-300 font-semibold cursor-pointer"
+                          >
+                            {isSelectedFilter ? 'Showing Only These ✓' : 'Filter Grid Below →'}
+                          </button>
+                        )}
+                      </div>
+
+                      {app.connectedPages && app.connectedPages.length > 0 ? (
+                        <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                          {app.connectedPages.map((pg: any) => (
+                            <div
+                              key={pg.id}
+                              className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800/80 text-xs"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className={`w-2 h-2 rounded-full shrink-0 ${
+                                    pg.status === 'ACTIVE' ? 'bg-emerald-400' : 'bg-yellow-400'
+                                  }`}
+                                />
+                                <span className="text-slate-200 font-semibold truncate">
+                                  {pg.name}
+                                </span>
+                              </div>
+                              {pg.connectedAccountName ? (
+                                <span className="text-[10px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 shrink-0 truncate max-w-[110px]">
+                                  ID: {pg.connectedAccountName}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-emerald-400 font-mono shrink-0">
+                                  Running
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-center text-[11px] text-slate-500">
+                          No pages connected to this Meta App yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Footer: 1-Click Connect specifically to THIS Meta App */}
+                  <div className="pt-3 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={() => initiateFacebookOAuth(app.appId)}
+                      disabled={isConnectingOAuth}
+                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                    >
+                      <span>🔗</span>
+                      <span>Connect Tester ID Pages to App #{app.slotNumber} (1-Click)</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ===================================================================== */}
+      {/* 📄 CONNECTED FACEBOOK PAGES GRID                                      */}
+      {/* ===================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
           <div className="text-gray-500 font-medium">Loading pages...</div>
-        ) : pages.length === 0 ? (
+        ) : filteredPages.length === 0 ? (
           <div className="col-span-full text-center py-12 text-gray-500">
-            <p className="text-lg mb-2">No Facebook Pages connected.</p>
-            <p className="text-sm">Click "+ Add FB Page" to authorize.</p>
+            <p className="text-lg mb-2">No Facebook Pages found for this filter.</p>
+            <p className="text-sm">Click "Connect Facebook (1-Click)" above to authorize pages.</p>
           </div>
         ) : (
-          pages.map(page => {
+          filteredPages.map(page => {
             const connectDate = new Date(page.createdAt || Date.now());
             const formattedConnectDate = connectDate.toLocaleDateString('en-US', {
               day: 'numeric',
@@ -628,6 +1075,9 @@ export default function FacebookPagesPage() {
                       />
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                        App #{page.metaAppSlot || 1}
+                      </span>
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                         page.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                       } border shadow-sm`}>
@@ -643,9 +1093,35 @@ export default function FacebookPagesPage() {
                   <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors truncate">{page.name}</h3>
                   <p className="text-gray-500 text-xs font-mono mb-4">ID: {page.pageId}</p>
                   
-                  {/* Token Validity & Attached Date Box */}
+                  {/* Meta Developer App + Token Validity & Attached Date Box */}
                   <div className="bg-gray-950/60 rounded-2xl p-4 mb-4 border border-gray-800/80 space-y-2.5 text-sm shadow-inner">
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 font-medium text-xs uppercase tracking-wider shrink-0">
+                        Meta Dev App:
+                      </span>
+                      <span className="text-indigo-300 font-bold text-xs bg-indigo-500/10 px-2.5 py-0.5 rounded-md border border-indigo-500/20 truncate">
+                        {page.metaAppName || 'Noor (Meta App #1)'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 font-medium text-xs uppercase tracking-wider shrink-0">
+                        Developer ID:
+                      </span>
+                      <span className="text-amber-300 font-bold text-xs bg-amber-500/10 px-2.5 py-0.5 rounded-md border border-amber-500/20 truncate">
+                        👤 {page.metaAppOwnerIdName || 'Primary Developer ID'}
+                      </span>
+                    </div>
+                    {page.connectedAccountName && (
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-gray-400 font-medium text-xs uppercase tracking-wider shrink-0">
+                          Tester FB ID:
+                        </span>
+                        <span className="text-emerald-300 font-bold text-xs bg-emerald-500/10 px-2.5 py-0.5 rounded-md border border-emerald-500/20 truncate">
+                          {page.connectedAccountName}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-1 border-t border-gray-800/60">
                       <span className="text-gray-400 font-medium text-xs uppercase tracking-wider">
                         Attached Date:
                       </span>
@@ -2122,6 +2598,219 @@ export default function FacebookPagesPage() {
           </div>
         </div>
       )}
+      {/* ===================================================================== */}
+      {/* 🛡️ ADD / EDIT META DEVELOPER APP MODAL                                */}
+      {/* ===================================================================== */}
+      {showMetaAppModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-[#0b0f19] border border-indigo-500/40 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl shadow-indigo-500/10 p-6 md:p-8 my-8">
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300 text-2xl shadow-lg">
+                  🛡️
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold text-white">
+                    {editingMetaApp ? `Edit Meta App #${editingMetaApp.slotNumber}` : 'Add New Meta Developer App'}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Save which Facebook Developer ID this app is built on, its App ID & Secret, and manage connected pages.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMetaAppModal(false)}
+                className="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMetaAppModal} className="space-y-4">
+              {metaAppFormError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
+                  ⚠️ {metaAppFormError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-200 block mb-1.5">
+                    App Slot #
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={metaFormSlot}
+                    onChange={(e) => setMetaFormSlot(Number(e.target.value))}
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-gray-200 block mb-1.5">
+                    Meta App Name / Label <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={metaFormAppName}
+                    onChange={(e) => setMetaFormAppName(e.target.value)}
+                    placeholder="e.g. Noor (Meta App #1)"
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-amber-300 block mb-1.5 flex items-center justify-between">
+                  <span>👤 Built On Facebook Developer ID Name <span className="text-red-400">*</span></span>
+                  <span className="text-[11px] text-slate-400 font-normal">Rename anytime</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={metaFormOwnerIdName}
+                  onChange={(e) => setMetaFormOwnerIdName(e.target.value)}
+                  placeholder="Enter the Facebook ID name on which this Developer App is created..."
+                  className="w-full bg-gray-950 border border-amber-500/40 rounded-xl px-3.5 py-2.5 text-white text-xs font-bold focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-200 block mb-1.5">
+                    Meta App ID <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={metaFormAppId}
+                    onChange={(e) => setMetaFormAppId(e.target.value)}
+                    placeholder="e.g. 911473734693149"
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-200 block mb-1.5">
+                    Meta App Secret {editingMetaApp ? '(Leave blank to keep current)' : <span className="text-red-400">*</span>}
+                  </label>
+                  <input
+                    type="password"
+                    required={!editingMetaApp}
+                    value={metaFormAppSecret}
+                    onChange={(e) => setMetaFormAppSecret(e.target.value)}
+                    placeholder={editingMetaApp ? editingMetaApp.secretPreview || '••••••••' : 'Paste App Secret from Meta Basic Settings'}
+                    className="w-full bg-gray-950 border border-gray-700 rounded-xl px-3.5 py-2.5 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {editingMetaApp && pages.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <label className="text-xs font-bold text-gray-200 block">
+                    Connected Pages Assigned to This Meta App ({metaFormPageIds.length} Selected)
+                  </label>
+                  <div className="max-h-40 overflow-y-auto custom-scrollbar bg-gray-950 border border-gray-800 rounded-xl p-2.5 space-y-1.5">
+                    {pages.map((pg: any) => {
+                      const isChecked = metaFormPageIds.includes(pg.id);
+                      return (
+                        <label
+                          key={pg.id}
+                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg hover:bg-gray-900 cursor-pointer text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setMetaFormPageIds((prev) => [...prev, pg.id]);
+                                } else {
+                                  setMetaFormPageIds((prev) => prev.filter((id) => id !== pg.id));
+                                }
+                              }}
+                              className="rounded border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-white font-semibold">{pg.name}</span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {pg.metaAppName || 'App #1'}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-[11px] text-indigo-300 space-y-1">
+                <div className="font-bold">📌 Meta Developer App Setup Reminder:</div>
+                <div>
+                  In Meta Developer Dashboard → <strong>Facebook Login → Settings → Valid OAuth Redirect URIs</strong>, make sure this URL is added:
+                </div>
+                <div className="font-mono text-white bg-slate-950 px-2.5 py-1 rounded border border-slate-800 select-all">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/dashboard/pages` : 'https://autopost-app-one.vercel.app/dashboard/pages'}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-800 flex items-center justify-between gap-3">
+                {editingMetaApp && metaApps.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const token = localStorage.getItem('token');
+                        const res = await fetch(`/api/pages/meta-apps/${editingMetaApp.id}`, {
+                          method: 'DELETE',
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                          addToast(data.message, 'info');
+                          setShowMetaAppModal(false);
+                          fetchMetaApps();
+                          fetchPages();
+                        } else {
+                          setMetaAppFormError(data.message || 'Could not remove Meta App');
+                        }
+                      } catch (err: any) {
+                        setMetaAppFormError(err.message);
+                      }
+                    }}
+                    className="py-2.5 px-4 rounded-xl font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-xs transition cursor-pointer"
+                  >
+                    🗑️ Remove App
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowMetaAppModal(false)}
+                    className="py-2.5 px-5 rounded-xl font-semibold text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 transition text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingMetaApp}
+                    className="py-2.5 px-6 rounded-xl font-extrabold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 transition text-xs shadow-lg shadow-indigo-500/20 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingMetaApp ? 'Saving & Verifying...' : '💾 Save Meta Developer App'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isConnectingOAuth && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-gray-900 border border-blue-500/40 rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl shadow-blue-500/20">

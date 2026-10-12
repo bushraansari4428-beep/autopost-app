@@ -21,8 +21,16 @@ export class PagesController {
   }
 
   @Post('facebook/oauth-callback')
-  facebookOAuthCallback(@Body() body: { code: string; redirectUri: string }, @Request() req: any) {
-    return this.pagesService.handleFacebookOAuthCallback(body.code, body.redirectUri, req.user);
+  facebookOAuthCallback(
+    @Body() body: { code: string; redirectUri: string; metaAppId?: string },
+    @Request() req: any
+  ) {
+    return this.pagesService.handleFacebookOAuthCallback(
+      body.code,
+      body.redirectUri,
+      req.user,
+      body.metaAppId
+    );
   }
 
   @Get('facebook/oauth-config')
@@ -30,6 +38,26 @@ export class PagesController {
     return {
       appId: process.env.FACEBOOK_APP_ID || '911473734693149',
     };
+  }
+
+  @Get('meta-apps')
+  getMetaApps(@Request() req: any) {
+    return this.pagesService.getMetaApps(req.user);
+  }
+
+  @Post('meta-apps')
+  createOrSaveMetaApp(@Body() body: any, @Request() req: any) {
+    return this.pagesService.createOrSaveMetaApp(body, req.user);
+  }
+
+  @Put('meta-apps/:id')
+  updateMetaApp(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.pagesService.updateMetaApp(id, body, req.user);
+  }
+
+  @Delete('meta-apps/:id')
+  deleteMetaApp(@Param('id') id: string) {
+    return this.pagesService.deleteMetaApp(id);
   }
 
   @Post('bulk-create-pages')

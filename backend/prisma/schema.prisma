@@ -62,6 +62,11 @@ model FacebookPage {
   monetizationNotifiedAt DateTime?
   bio                    String?
 
+  // Meta Developer App & Tester Account Tracking
+  metaAppId              String?
+  connectedAccountName   String?
+  connectedAccountUid    String?
+
   createdAt        DateTime        @default(now())
 }
 
@@ -280,4 +285,18 @@ model FacebookAccount {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model MetaDeveloperApp {
+  id          String   @id @default(uuid())
+  slotNumber  Int      @default(1)
+  appName     String
+  ownerIdName String
+  appId       String   @unique
+  appSecret   String
+  status      Status   @default(ACTIVE)
+  userId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 

@@ -59,6 +59,8 @@ export class PagesService {
   }
 
   async findAll(user?: any) {
+    await this.ensureDefaultMetaApp(user).catch(() => {});
+
     let pages;
     if (!user) {
       pages = await this.prisma.facebookPage.findMany({ orderBy: { createdAt: 'desc' } });
@@ -79,7 +81,18 @@ export class PagesService {
       });
     }
 
-    // Attach cloud queue count and mapping metadata for each page
+    const metaApps = await this.prisma.metaDeveloperApp.findMany({
+      orderBy: [{ slotNumber: 'asc' }, { createdAt: 'asc' }]
+    }).catch(() => [] as any[]);
+
+    const defaultApp = metaApps[0] || {
+      appId: process.env.FACEBOOK_APP_ID || '911473734693149',
+      appName: 'Noor (Meta App #1)',
+      ownerIdName: 'Primary Developer ID',
+      slotNumber: 1,
+    };
+
+    // Attach cloud queue count, mapping metadata, and Meta Developer App info for each page
     return Promise.all(pages.map(async (page: any) => {
       const activeMapping = await this.prisma.mapping.findFirst({
         where: { facebookPageId: page.id },
@@ -101,8 +114,15 @@ export class PagesService {
         isMegaCloud
       );
 
+      const resolvedAppId = page.metaAppId || defaultApp.appId;
+      const matchedApp = metaApps.find((a: any) => a.appId === resolvedAppId) || defaultApp;
+
       return {
         ...page,
+        metaAppId: resolvedAppId,
+        metaAppName: matchedApp.appName,
+        metaAppSlot: matchedApp.slotNumber,
+        metaAppOwnerIdName: matchedApp.ownerIdName,
         cloudQueueCount,
         isMegaCloudActive,
         sourcePlatform: activeMapping?.source?.platform || null,
@@ -1366,19 +1386,340 @@ export class PagesService {
   }
 
   /**
-   * 1-Click Facebook OAuth Flow
-   * Exchanges authorization code for long-lived user token and imports all authorized pages.
+   * Ensures Default Meta Developer App #1 exists in DB and links any untagged pages to it.
    */
-  async handleFacebookOAuthCallback(code: string, redirectUri: string, user: any) {
+  async ensureDefaultMetaApp(user?: any) {
+    const defaultAppId = process.env.FACEBOOK_APP_ID || '911473734693149';
+    const defaultSecret =
+      process.env.FACEBOOK_APP_SECRET ||
+      Buffer.from('YWZjYmY5MjZjZmM3YjZkOTJjZjgzYWNkZGM3OGNlMjE=', 'base64').toString('utf-8');
+
+    const existing = await this.prisma.metaDeveloperApp.findUnique({
+      where: { appId: defaultAppId },
+    });
+
+    if (!existing) {
+      await this.prisma.metaDeveloperApp.create({
+        data: {
+          slotNumber: 1,
+          appName: 'Noor (Meta App #1)',
+          ownerIdName: 'Noor Developer ID #1',
+          appId: defaultAppId,
+          appSecret: defaultSecret,
+          status: 'ACTIVE',
+          userId: user?.id || null,
+        },
+      }).catch(() => {});
+    }
+
+    // Backfill any FacebookPage records that don't have metaAppId set yet
+    await this.prisma.facebookPage.updateMany({
+      where: { metaAppId: null },
+      data: { metaAppId: defaultAppId },
+    }).catch(() => {});
+  }
+
+  /**
+   * Returns all configured Meta Developer Apps along with their Developer ID name,
+   * connected pages count, active running pages count, and full list of connected pages.
+   */
+  async getMetaApps(user?: any) {
+    await this.ensureDefaultMetaApp(user).catch(() => {});
+
+    const apps = await this.prisma.metaDeveloperApp.findMany({
+      orderBy: [{ slotNumber: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    let pages: any[] = [];
+    if (!user || user.role === 'ADMIN') {
+      pages = await this.prisma.facebookPage.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+    } else {
+      pages = await this.prisma.facebookPage.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    const defaultAppId = apps[0]?.appId || process.env.FACEBOOK_APP_ID || '911473734693149';
+
+    return apps.map((app: any, idx: number) => {
+      const appPages = pages.filter((p: any) => {
+        const pageAppId = p.metaAppId || defaultAppId;
+        return pageAppId === app.appId;
+      });
+
+      const activePages = appPages.filter((p: any) => p.status === 'ACTIVE');
+
+      return {
+        id: app.id,
+        slotNumber: app.slotNumber || idx + 1,
+        appName: app.appName,
+        ownerIdName: app.ownerIdName,
+        appId: app.appId,
+        secretPreview: app.appSecret
+          ? `${app.appSecret.substring(0, 4)}••••••••${app.appSecret.slice(-4)}`
+          : 'Not Set',
+        status: app.status,
+        connectedPagesCount: appPages.length,
+        activePagesCount: activePages.length,
+        connectedPages: appPages.map((p: any) => ({
+          id: p.id,
+          pageId: p.pageId,
+          name: p.name,
+          status: p.status,
+          connectedAccountName: p.connectedAccountName || null,
+          connectedAccountUid: p.connectedAccountUid || null,
+          createdAt: p.createdAt,
+        })),
+        createdAt: app.createdAt,
+        updatedAt: app.updatedAt,
+      };
+    });
+  }
+
+  /**
+   * Creates or updates a Meta Developer App slot.
+   * Automatically verifies App ID + App Secret with Meta Graph API when possible.
+   */
+  async createOrSaveMetaApp(
+    dto: {
+      appId: string;
+      appSecret: string;
+      appName?: string;
+      ownerIdName?: string;
+      slotNumber?: number;
+    },
+    user?: any
+  ) {
+    const cleanAppId = (dto.appId || '').trim();
+    const cleanAppSecret = (dto.appSecret || '').trim();
+
+    if (!cleanAppId || !cleanAppSecret) {
+      throw new BadRequestException('Meta App ID and App Secret are both required.');
+    }
+
+    let resolvedAppName = (dto.appName || '').trim();
+    const resolvedOwnerIdName = (dto.ownerIdName || '').trim() || 'Facebook Developer ID';
+
+    // Verify credentials against Meta Graph API and auto-fetch official App Name if needed
+    try {
+      const verifyUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${encodeURIComponent(cleanAppId)}&client_secret=${encodeURIComponent(cleanAppSecret)}&grant_type=client_credentials`;
+      const verifyRes = await fetch(verifyUrl, { signal: AbortSignal.timeout(10000) });
+      const verifyData: any = await verifyRes.json();
+
+      if (!verifyRes.ok || verifyData.error) {
+        throw new BadRequestException(
+          `Meta rejected App ID / App Secret: ${verifyData.error?.message || 'Invalid credentials'}`
+        );
+      }
+
+      if (!resolvedAppName && verifyData.access_token) {
+        const infoRes = await fetch(
+          `https://graph.facebook.com/v19.0/${encodeURIComponent(cleanAppId)}?fields=id,name&access_token=${encodeURIComponent(verifyData.access_token)}`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        if (infoRes.ok) {
+          const infoData: any = await infoRes.json();
+          if (infoData.name) {
+            resolvedAppName = infoData.name;
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
+      this.logger.warn(`Could not verify Meta App online, saving anyway: ${err.message}`);
+    }
+
+    const existingAppsCount = await this.prisma.metaDeveloperApp.count();
+    const existingByAppId = await this.prisma.metaDeveloperApp.findUnique({
+      where: { appId: cleanAppId },
+    });
+
+    const slotNumber =
+      dto.slotNumber || existingByAppId?.slotNumber || existingAppsCount + 1;
+
+    if (!resolvedAppName) {
+      resolvedAppName = `Meta App #${slotNumber}`;
+    }
+
+    let saved: any;
+    if (existingByAppId) {
+      saved = await this.prisma.metaDeveloperApp.update({
+        where: { id: existingByAppId.id },
+        data: {
+          appName: resolvedAppName,
+          ownerIdName: resolvedOwnerIdName,
+          appSecret: cleanAppSecret,
+          slotNumber,
+          status: 'ACTIVE',
+        },
+      });
+    } else {
+      saved = await this.prisma.metaDeveloperApp.create({
+        data: {
+          slotNumber,
+          appName: resolvedAppName,
+          ownerIdName: resolvedOwnerIdName,
+          appId: cleanAppId,
+          appSecret: cleanAppSecret,
+          status: 'ACTIVE',
+          userId: user?.id || null,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: `Meta Developer App "${saved.appName}" (${saved.ownerIdName}) saved successfully!`,
+      app: saved,
+    };
+  }
+
+  /**
+   * Renames the Developer ID (ownerIdName), App Name, or updates App ID / Secret for an existing Meta Developer App.
+   */
+  async updateMetaApp(
+    id: string,
+    dto: {
+      appName?: string;
+      ownerIdName?: string;
+      appId?: string;
+      appSecret?: string;
+      slotNumber?: number;
+      assignPageIds?: string[];
+    },
+    user?: any
+  ) {
+    const existing = await this.prisma.metaDeveloperApp.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Meta Developer App not found.');
+    }
+
+    const updateData: any = {};
+    if (dto.appName !== undefined && dto.appName.trim()) {
+      updateData.appName = dto.appName.trim();
+    }
+    if (dto.ownerIdName !== undefined && dto.ownerIdName.trim()) {
+      updateData.ownerIdName = dto.ownerIdName.trim();
+    }
+    if (dto.slotNumber !== undefined) {
+      updateData.slotNumber = Number(dto.slotNumber);
+    }
+    if (dto.appId !== undefined && dto.appId.trim()) {
+      updateData.appId = dto.appId.trim();
+    }
+    if (
+      dto.appSecret !== undefined &&
+      dto.appSecret.trim() &&
+      !dto.appSecret.includes('••••')
+    ) {
+      updateData.appSecret = dto.appSecret.trim();
+    }
+
+    const updated = await this.prisma.metaDeveloperApp.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // If appId changed, migrate any pages linked to the old appId
+    if (updateData.appId && updateData.appId !== existing.appId) {
+      await this.prisma.facebookPage.updateMany({
+        where: { metaAppId: existing.appId },
+        data: { metaAppId: updateData.appId },
+      });
+    }
+
+    // Optional: allow assigning specific pages to this Meta Developer App
+    if (Array.isArray(dto.assignPageIds) && dto.assignPageIds.length > 0) {
+      await this.prisma.facebookPage.updateMany({
+        where: { id: { in: dto.assignPageIds } },
+        data: { metaAppId: updated.appId },
+      });
+    }
+
+    return {
+      success: true,
+      message: `Updated "${updated.appName}" (Developer ID: ${updated.ownerIdName})`,
+      app: updated,
+    };
+  }
+
+  async deleteMetaApp(id: string) {
+    const existing = await this.prisma.metaDeveloperApp.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      throw new BadRequestException('Meta Developer App not found.');
+    }
+
+    const totalApps = await this.prisma.metaDeveloperApp.count();
+    if (totalApps <= 1) {
+      throw new BadRequestException('Cannot delete the only remaining Meta Developer App.');
+    }
+
+    await this.prisma.metaDeveloperApp.delete({
+      where: { id },
+    });
+
+    return {
+      success: true,
+      message: `Removed Meta Developer App "${existing.appName}".`,
+    };
+  }
+
+  /**
+   * 1-Click Facebook OAuth Flow
+   * Exchanges authorization code for long-lived user token using the selected Meta Developer App
+   * and imports all authorized pages tagged with that Meta Developer App.
+   */
+  async handleFacebookOAuthCallback(
+    code: string,
+    redirectUri: string,
+    user: any,
+    requestedMetaAppId?: string
+  ) {
     if (!code) {
       throw new BadRequestException('Authorization code is required.');
     }
 
-    const appId = process.env.FACEBOOK_APP_ID || '911473734693149';
-    const defaultSecret = Buffer.from('YWZjYmY5MjZjZmM3YjZkOTJjZjgzYWNkZGM3OGNlMjE=', 'base64').toString('utf-8');
-    const appSecret = process.env.FACEBOOK_APP_SECRET || defaultSecret;
+    await this.ensureDefaultMetaApp(user).catch(() => {});
 
-    this.logger.log(`Exchanging OAuth code with redirectUri: ${redirectUri}`);
+    let selectedMetaApp: any = null;
+    if (requestedMetaAppId) {
+      selectedMetaApp = await this.prisma.metaDeveloperApp.findFirst({
+        where: {
+          OR: [{ appId: requestedMetaAppId }, { id: requestedMetaAppId }],
+        },
+      }).catch(() => null);
+    }
+
+    if (!selectedMetaApp) {
+      selectedMetaApp = await this.prisma.metaDeveloperApp.findFirst({
+        orderBy: [{ slotNumber: 'asc' }, { createdAt: 'asc' }],
+      }).catch(() => null);
+    }
+
+    const appId =
+      selectedMetaApp?.appId || process.env.FACEBOOK_APP_ID || '911473734693149';
+    const defaultSecret = Buffer.from(
+      'YWZjYmY5MjZjZmM3YjZkOTJjZjgzYWNkZGM3OGNlMjE=',
+      'base64'
+    ).toString('utf-8');
+    const appSecret =
+      selectedMetaApp?.appSecret || process.env.FACEBOOK_APP_SECRET || defaultSecret;
+    const metaAppName = selectedMetaApp?.appName || 'Noor (Meta App #1)';
+    const metaAppOwnerIdName = selectedMetaApp?.ownerIdName || 'Primary Developer ID';
+
+    this.logger.log(
+      `Exchanging OAuth code with Meta App "${metaAppName}" (${appId}) and redirectUri: ${redirectUri}`
+    );
 
     // 1. Exchange authorization code for short-lived user access token
     const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
@@ -1419,7 +1760,7 @@ export class PagesService {
       this.logger.warn(`Could not exchange for long-lived token, falling back to short-lived token: ${err.message}`);
     }
 
-    // 3. Identify user account name and ID
+    // 3. Identify user account name and ID (Tester ID)
     let accountName = 'Facebook User';
     let accountId = 'user_oauth';
     try {
@@ -1484,10 +1825,13 @@ export class PagesService {
         success: true,
         accountName,
         accountId,
+        metaAppId: appId,
+        metaAppName,
+        metaAppOwnerIdName,
         pagesImported: 0,
         pagesUpdated: 0,
         pages: [],
-        message: `Account "${accountName}" connected, but no Facebook Pages were found under this account.`
+        message: `Account "${accountName}" connected via ${metaAppName}, but no Facebook Pages were found under this account.`
       };
     }
 
@@ -1512,6 +1856,9 @@ export class PagesService {
             name: pageName,
             accessToken: pageAccessToken,
             status: 'ACTIVE',
+            metaAppId: appId,
+            connectedAccountName: accountName,
+            connectedAccountUid: accountId,
             userId: user?.id || existing.userId
           }
         });
@@ -1523,6 +1870,9 @@ export class PagesService {
             name: pageName,
             accessToken: pageAccessToken,
             status: 'ACTIVE',
+            metaAppId: appId,
+            connectedAccountName: accountName,
+            connectedAccountUid: accountId,
             userId: user?.id,
             videosPerDay: 2
           }
@@ -1575,21 +1925,26 @@ export class PagesService {
         id: pageRecord.id,
         pageId,
         name: pageName,
-        status: pageRecord.status
+        status: pageRecord.status,
+        metaAppId: appId,
+        metaAppName
       });
     }
 
-    this.logger.log(`1-Click OAuth Sync Complete: ${pagesImported} new pages, ${pagesUpdated} updated for ${accountName}`);
+    this.logger.log(`1-Click OAuth Sync Complete via ${metaAppName}: ${pagesImported} new pages, ${pagesUpdated} updated for ${accountName}`);
 
     return {
       success: true,
       accountName,
       accountId,
+      metaAppId: appId,
+      metaAppName,
+      metaAppOwnerIdName,
       pagesImported,
       pagesUpdated,
       totalCount: fetchedPages.length,
       pages: syncedPages,
-      message: `Successfully connected ${fetchedPages.length} pages from ${accountName}!`
+      message: `Successfully connected ${fetchedPages.length} pages from ${accountName} via ${metaAppName}!`
     };
   }
 }
