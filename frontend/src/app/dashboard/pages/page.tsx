@@ -589,6 +589,79 @@ export default function FacebookPagesPage() {
     }
   };
 
+  const [youtubeChannels, setYoutubeChannels] = useState<any[]>([]);
+
+  const fetchYoutubeChannels = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pages/youtube-channels', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setYoutubeChannels(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch YouTube channels:', err);
+    }
+  };
+
+  const handleLinkYoutubeChannel = async (pageId: string, youtubeChannelId: string | null) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pages/${pageId}/link-youtube`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ youtubeChannelId })
+      });
+      if (res.ok) {
+        const matched = youtubeChannels.find((c: any) => c.id === youtubeChannelId);
+        setPages(prev =>
+          prev.map(p =>
+            p.id === pageId
+              ? { ...p, youtubeChannelId: youtubeChannelId || null, youtubeChannelName: matched ? matched.name : null }
+              : p
+          )
+        );
+        addToast(
+          youtubeChannelId && matched
+            ? `Linked to YouTube: ${matched.name}`
+            : 'YouTube channel unlinked',
+          'success'
+        );
+      } else {
+        addToast('Failed to update YouTube link', 'error');
+      }
+    } catch (err: any) {
+      addToast(`Error: ${err.message}`, 'error');
+    }
+  };
+
+  const handleAutoLinkYoutube = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pages/auto-link-youtube', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(
+          data.linkedCount > 0
+            ? `Auto-linked ${data.linkedCount} page(s) to matching YouTube channels`
+            : 'All matching YouTube channels are already linked',
+          'success'
+        );
+        fetchPages();
+      }
+    } catch (err: any) {
+      addToast(`Error: ${err.message}`, 'error');
+    }
+  };
+
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -611,6 +684,7 @@ export default function FacebookPagesPage() {
   useEffect(() => {
     fetchPages();
     fetchMetaApps();
+    fetchYoutubeChannels();
 
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -775,6 +849,17 @@ export default function FacebookPagesPage() {
             <span>{isScanningCM ? '⏳' : '💰'}</span>
             <span>{isScanningCM ? 'Scanning CM...' : 'Scan CM Invites'}</span>
           </button>
+
+          {youtubeChannels.length > 0 && (
+            <button
+              onClick={handleAutoLinkYoutube}
+              className="px-4 py-2.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer"
+              title="Automatically link Facebook Pages to matching YouTube Channels"
+            >
+              <span>📺</span>
+              <span>Auto-Link YouTube</span>
+            </button>
+          )}
 
           <button 
             onClick={() => setShowModal(true)}
@@ -1121,6 +1206,30 @@ export default function FacebookPagesPage() {
                         </span>
                       </div>
                     )}
+                    <div
+                      className="flex justify-between items-center gap-2 pt-1 border-t border-gray-800/60"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-gray-400 font-medium text-xs uppercase tracking-wider shrink-0">
+                        YouTube Shorts:
+                      </span>
+                      <select
+                        value={page.youtubeChannelId || ''}
+                        onChange={(e) => handleLinkYoutubeChannel(page.id, e.target.value || null)}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-md border focus:outline-none cursor-pointer max-w-[175px] truncate ${
+                          page.youtubeChannelId
+                            ? 'bg-red-500/15 text-red-300 border-red-500/30'
+                            : 'bg-gray-900 text-gray-400 border-gray-700/70'
+                        }`}
+                      >
+                        <option value="" className="bg-slate-950 text-gray-400">Not Linked</option>
+                        {youtubeChannels.map((ch: any) => (
+                          <option key={ch.id} value={ch.id} className="bg-slate-950 text-white">
+                            {ch.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex justify-between items-center pt-1 border-t border-gray-800/60">
                       <span className="text-gray-400 font-medium text-xs uppercase tracking-wider">
                         Attached Date:

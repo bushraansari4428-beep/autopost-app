@@ -1565,23 +1565,27 @@ export class SyncService {
       // Cleanup local temp file
       if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
       
-      // Auto-Delete from Mega.nz Cloud Storage
-      this.logsService.log('INFO', `Auto-Cleaning: Deleting video from Mega.nz to free up space...`);
-      
-      let megaEmail, megaPassword;
-      if (uploadHistory.facebookPage?.userId) {
-        const pageUser = await this.prisma.user.findUnique({ where: { id: uploadHistory.facebookPage.userId } });
-        if (pageUser) {
-          if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
-            this.logsService.log('ERROR', `Mega Cloud credentials missing for user ${pageUser.id}. Cannot auto-delete.`);
-          } else {
-            megaEmail = pageUser.megaEmail;
-            megaPassword = pageUser.megaPassword;
+      // Auto-Delete from Mega.nz Cloud Storage (unless linked to a YouTube Channel for parallel Shorts upload)
+      if (uploadHistory.facebookPage?.youtubeChannelId) {
+        this.logsService.log('INFO', `Retaining Mega.nz video temporarily for parallel YouTube Shorts upload...`);
+      } else {
+        this.logsService.log('INFO', `Auto-Cleaning: Deleting video from Mega.nz to free up space...`);
+        
+        let megaEmail, megaPassword;
+        if (uploadHistory.facebookPage?.userId) {
+          const pageUser = await this.prisma.user.findUnique({ where: { id: uploadHistory.facebookPage.userId } });
+          if (pageUser) {
+            if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
+              this.logsService.log('ERROR', `Mega Cloud credentials missing for user ${pageUser.id}. Cannot auto-delete.`);
+            } else {
+              megaEmail = pageUser.megaEmail;
+              megaPassword = pageUser.megaPassword;
+            }
           }
         }
+        
+        await this.megaService.deleteFile(targetUrl, megaEmail || undefined, megaPassword || undefined);
       }
-      
-      await this.megaService.deleteFile(targetUrl, megaEmail || undefined, megaPassword || undefined);
     } else if (isTiktokOrCdn || isXhsOrRedNote) {
       this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
       const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
@@ -1690,22 +1694,31 @@ export class SyncService {
     
     this.logsService.log('INFO', `Success! Facebook Post ID: ${fbData.id}`);
     
-    // Update DB
+    const hasLinkedYoutube = Boolean(uploadHistory.facebookPage?.youtubeChannelId);
+
+    // Update DB (and queue parallel YouTube Shorts upload if page is linked to a YouTube channel)
     await this.prisma.uploadHistory.update({
       where: { id: uploadHistory.id },
       data: { 
         status: 'COMPLETED',
         facebookPostId: fbData.id,
-        errorMessage: null
+        errorMessage: null,
+        youtubeStatus: hasLinkedYoutube ? 'PENDING' : null,
       }
     });
+
+    if (hasLinkedYoutube) {
+      this.logsService.log('INFO', `[Parallel YouTube Shorts] Queued "${video.title}" for linked YouTube Channel!`);
+    }
 
     // Real-Time WhatsApp Alert
     this.whatsappService.sendVideoActivityAlert({
       pageName: uploadHistory.facebookPage?.name,
       videoTitle: video.title,
       sourcePlatform: uploadHistory.video?.source?.platform,
-      action: 'Video Successfully Uploaded to Facebook! ✅',
+      action: hasLinkedYoutube
+        ? 'Video Uploaded to Facebook ✅ (Parallel YouTube Shorts Queued 📺)'
+        : 'Video Successfully Uploaded to Facebook! ✅',
       details: `Post ID: ${fbData.id}`,
     }).catch(() => {});
   }

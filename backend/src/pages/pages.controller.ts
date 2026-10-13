@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, Patch, Res, UseGuards, Request } from '@nestjs/common';
 import { PagesService } from './pages.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -58,6 +58,41 @@ export class PagesController {
   @Delete('meta-apps/:id')
   deleteMetaApp(@Param('id') id: string) {
     return this.pagesService.deleteMetaApp(id);
+  }
+
+  @Get('youtube-channels')
+  getYoutubeChannels(@Request() req: any) {
+    return this.pagesService.getYoutubeChannels(req.user);
+  }
+
+  @Post('youtube-studio-sync')
+  syncYoutubeStudioChannel(@Body() body: any, @Request() req: any) {
+    return this.pagesService.syncYoutubeStudioChannel(body, req.user);
+  }
+
+  @Post('auto-link-youtube')
+  autoLinkYoutubeChannels(@Request() req: any) {
+    return this.pagesService.autoLinkYoutubeChannels(req.user);
+  }
+
+  @Get('youtube-mirror-queue')
+  getYoutubeMirrorQueue() {
+    return this.pagesService.getYoutubeMirrorQueue();
+  }
+
+  @Get('youtube-mirror-stream/:uploadHistoryId')
+  streamYoutubeMirrorVideo(@Param('uploadHistoryId') uploadHistoryId: string, @Res() res: any) {
+    return this.pagesService.streamYoutubeMirrorVideo(uploadHistoryId, res);
+  }
+
+  @Post('youtube-mirror-complete/:uploadHistoryId')
+  completeYoutubeMirrorUpload(@Param('uploadHistoryId') uploadHistoryId: string, @Body() body: any) {
+    return this.pagesService.completeYoutubeMirrorUpload(uploadHistoryId, body);
+  }
+
+  @Patch(':id/link-youtube')
+  linkYoutubeChannel(@Param('id') id: string, @Body() body: { youtubeChannelId: string | null }) {
+    return this.pagesService.linkYoutubeChannel(id, body.youtubeChannelId);
   }
 
   @Post('bulk-create-pages')

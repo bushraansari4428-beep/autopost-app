@@ -67,6 +67,9 @@ model FacebookPage {
   connectedAccountName   String?
   connectedAccountUid    String?
 
+  // Linked YouTube Channel for 1-Click Parallel Shorts Mirroring
+  youtubeChannelId       String?
+
   createdAt        DateTime        @default(now())
 }
 
@@ -132,17 +135,21 @@ model Video {
 }
 
 model UploadHistory {
-  id             String       @id @default(uuid())
-  videoId        String
-  facebookPageId String
-  status         UploadStatus @default(PENDING)
-  facebookPostId String?
-  attempts       Int          @default(0)
-  errorMessage   String?
-  video          Video        @relation(fields: [videoId], references: [id])
-  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id])
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                String       @id @default(uuid())
+  videoId           String
+  facebookPageId    String
+  status            UploadStatus @default(PENDING)
+  facebookPostId    String?
+  attempts          Int          @default(0)
+  errorMessage      String?
+  youtubeStatus     String?      // PENDING, PROCESSING, COMPLETED, FAILED
+  youtubeVideoId    String?
+  youtubeUploadedAt DateTime?
+  youtubeError      String?
+  video             Video        @relation(fields: [videoId], references: [id])
+  facebookPage      FacebookPage @relation(fields: [facebookPageId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 }
 
 enum UploadStatus {

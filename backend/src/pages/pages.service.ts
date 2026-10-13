@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { MegaService } from '../workers/mega.service';
+import * as fs from 'fs';
 
 @Injectable()
 export class PagesService {
@@ -8,7 +10,8 @@ export class PagesService {
 
   constructor(
     private prisma: PrismaService,
-    private whatsappService: WhatsappService
+    private whatsappService: WhatsappService,
+    private megaService: MegaService,
   ) {}
 
   async create(createPageDto: any) {
@@ -85,6 +88,10 @@ export class PagesService {
       orderBy: [{ slotNumber: 'asc' }, { createdAt: 'asc' }]
     }).catch(() => [] as any[]);
 
+    const youtubeChannels = await this.prisma.youtubeChannel.findMany({
+      orderBy: { createdAt: 'desc' }
+    }).catch(() => [] as any[]);
+
     const defaultApp = metaApps[0] || {
       appId: process.env.FACEBOOK_APP_ID || '911473734693149',
       appName: 'Noor (Meta App #1)',
@@ -92,7 +99,7 @@ export class PagesService {
       slotNumber: 1,
     };
 
-    // Attach cloud queue count, mapping metadata, and Meta Developer App info for each page
+    // Attach cloud queue count, mapping metadata, Meta Developer App info, and Linked YouTube Channel for each page
     return Promise.all(pages.map(async (page: any) => {
       const activeMapping = await this.prisma.mapping.findFirst({
         where: { facebookPageId: page.id },
@@ -116,6 +123,9 @@ export class PagesService {
 
       const resolvedAppId = page.metaAppId || defaultApp.appId;
       const matchedApp = metaApps.find((a: any) => a.appId === resolvedAppId) || defaultApp;
+      const matchedYt = page.youtubeChannelId
+        ? youtubeChannels.find((yt: any) => yt.id === page.youtubeChannelId)
+        : null;
 
       return {
         ...page,
@@ -123,6 +133,8 @@ export class PagesService {
         metaAppName: matchedApp.appName,
         metaAppSlot: matchedApp.slotNumber,
         metaAppOwnerIdName: matchedApp.ownerIdName,
+        youtubeChannelId: matchedYt ? matchedYt.id : null,
+        youtubeChannelName: matchedYt ? matchedYt.name : null,
         cloudQueueCount,
         isMegaCloudActive,
         sourcePlatform: activeMapping?.source?.platform || null,
@@ -1947,6 +1959,262 @@ export class PagesService {
       message: `Successfully connected ${fetchedPages.length} pages from ${accountName} via ${metaAppName}!`
     };
   }
+
+  // =========================================================
+  // YOUTUBE SHORTS PARALLEL MIRRORING & 1-TIME STUDIO SYNC
+  // =========================================================
+
+  async getYoutubeChannels(user?: any) {
+    const where: any = {};
+    if (user && user.role !== 'ADMIN' && user.id) {
+      where.OR = [{ userId: user.id }, { userId: null }];
+    }
+    return this.prisma.youtubeChannel.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async syncYoutubeStudioChannel(
+    body: { channelId: string; name: string; profileSlug: string; thumbnailUrl?: string },
+    user?: any
+  ) {
+    const channelId = (body.channelId || '').trim();
+    const name = (body.name || '').trim();
+    const profileSlug = (body.profileSlug || '').trim();
+
+    if (!channelId || !name || !profileSlug) {
+      throw new BadRequestException('channelId, name, and profileSlug are required');
+    }
+
+    const saved = await this.prisma.youtubeChannel.upsert({
+      where: { channelId },
+      create: {
+        channelId,
+        name,
+        thumbnailUrl: body.thumbnailUrl || null,
+        refreshToken: `VPS_STUDIO:${profileSlug}`,
+        sessionCookie: profileSlug,
+        status: 'ACTIVE',
+        userId: user?.id || null,
+      },
+      update: {
+        name,
+        thumbnailUrl: body.thumbnailUrl || undefined,
+        refreshToken: `VPS_STUDIO:${profileSlug}`,
+        sessionCookie: profileSlug,
+        status: 'ACTIVE',
+      },
+    });
+
+    // Automatically link any Facebook Page that has the exact same normalized name
+    const normYt = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const allPages = await this.prisma.facebookPage.findMany();
+    let autoLinkedPageName: string | null = null;
+
+    for (const p of allPages) {
+      const normPage = (p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normPage && normYt && (normPage === normYt || normPage.includes(normYt) || normYt.includes(normPage))) {
+        if (!p.youtubeChannelId) {
+          await this.prisma.facebookPage.update({
+            where: { id: p.id },
+            data: { youtubeChannelId: saved.id },
+          });
+          autoLinkedPageName = p.name;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      channel: saved,
+      autoLinkedPageName,
+    };
+  }
+
+  async linkYoutubeChannel(pageId: string, youtubeChannelId: string | null) {
+    const updated = await this.prisma.facebookPage.update({
+      where: { id: pageId },
+      data: { youtubeChannelId: youtubeChannelId || null },
+    });
+    return {
+      success: true,
+      id: updated.id,
+      youtubeChannelId: updated.youtubeChannelId,
+    };
+  }
+
+  async autoLinkYoutubeChannels(user?: any) {
+    const pages = await this.prisma.facebookPage.findMany();
+    const channels = await this.prisma.youtubeChannel.findMany({ where: { status: 'ACTIVE' } });
+
+    const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const linked: Array<{ pageName: string; channelName: string }> = [];
+
+    for (const page of pages) {
+      const nPage = normalize(page.name);
+      if (!nPage) continue;
+
+      const match = channels.find(ch => {
+        const nCh = normalize(ch.name);
+        return nCh && (nCh === nPage || nCh.includes(nPage) || nPage.includes(nCh));
+      });
+
+      if (match && page.youtubeChannelId !== match.id) {
+        await this.prisma.facebookPage.update({
+          where: { id: page.id },
+          data: { youtubeChannelId: match.id },
+        });
+        linked.push({ pageName: page.name, channelName: match.name });
+      }
+    }
+
+    return {
+      success: true,
+      linkedCount: linked.length,
+      linked,
+    };
+  }
+
+  async getYoutubeMirrorQueue() {
+    const pendingUploads = await this.prisma.uploadHistory.findMany({
+      where: {
+        status: 'COMPLETED',
+        youtubeStatus: 'PENDING',
+        facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' },
+      },
+      include: {
+        video: { include: { source: true } },
+        facebookPage: true,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 10,
+    });
+
+    if (pendingUploads.length === 0) return [];
+
+    const channels = await this.prisma.youtubeChannel.findMany();
+    const channelMap = new Map(channels.map(c => [c.id, c]));
+
+    const items: any[] = [];
+    for (const u of pendingUploads) {
+      const ytChannelId = u.facebookPage?.youtubeChannelId;
+      if (!ytChannelId) continue;
+
+      const ch = channelMap.get(ytChannelId);
+      if (!ch || ch.status !== 'ACTIVE') continue;
+
+      const profileSlug = ch.sessionCookie || (ch.refreshToken?.startsWith('VPS_STUDIO:') ? ch.refreshToken.replace('VPS_STUDIO:', '') : ch.channelId);
+      const rawTitle = (u.video?.title || 'Viral Short').split('\n')[0].trim();
+      const fullCaption = (u.video?.description || u.video?.title || rawTitle).trim();
+
+      items.push({
+        uploadHistoryId: u.id,
+        facebookPageId: u.facebookPageId,
+        facebookPageName: u.facebookPage?.name,
+        youtubeChannelDbId: ch.id,
+        youtubeChannelId: ch.channelId,
+        youtubeChannelName: ch.name,
+        profileSlug,
+        videoTitle: rawTitle,
+        caption: fullCaption,
+        videoUrl: u.video?.url || '',
+        sourcePlatform: u.video?.source?.platform || 'MEGA_CLOUD',
+        createdAt: u.createdAt,
+      });
+    }
+
+    return items;
+  }
+
+  async streamYoutubeMirrorVideo(uploadHistoryId: string, res: any) {
+    const record = await this.prisma.uploadHistory.findUnique({
+      where: { id: uploadHistoryId },
+      include: { video: true },
+    });
+
+    if (!record || !record.video?.url) {
+      throw new BadRequestException('UploadHistory or video URL not found');
+    }
+
+    const targetUrl = record.video.url;
+    if (targetUrl.includes('mega.nz') || targetUrl.includes('mega.io')) {
+      const downloadedPath = await this.megaService.downloadFile(targetUrl);
+      if (!downloadedPath || !fs.existsSync(downloadedPath)) {
+        throw new BadRequestException('Failed to download video from Mega.nz');
+      }
+
+      res.setHeader('Content-Type', 'video/mp4');
+      const stream = fs.createReadStream(downloadedPath);
+      stream.on('close', () => {
+        if (fs.existsSync(downloadedPath)) {
+          try { fs.unlinkSync(downloadedPath); } catch (_) {}
+        }
+      });
+      stream.pipe(res);
+      return;
+    }
+
+    throw new BadRequestException('Unsupported video URL for mirror streaming');
+  }
+
+  async completeYoutubeMirrorUpload(
+    uploadHistoryId: string,
+    body: { status: 'COMPLETED' | 'FAILED'; youtubeVideoId?: string; youtubeUrl?: string; error?: string }
+  ) {
+    const record = await this.prisma.uploadHistory.findUnique({
+      where: { id: uploadHistoryId },
+      include: {
+        video: { include: { source: true } },
+        facebookPage: true,
+      },
+    });
+
+    if (!record) {
+      throw new BadRequestException('UploadHistory not found');
+    }
+
+    const isSuccess = body.status === 'COMPLETED';
+    await this.prisma.uploadHistory.update({
+      where: { id: uploadHistoryId },
+      data: {
+        youtubeStatus: body.status,
+        youtubeVideoId: body.youtubeVideoId || body.youtubeUrl || null,
+        youtubeUploadedAt: isSuccess ? new Date() : null,
+        youtubeError: body.error || null,
+      },
+    });
+
+    // Clean up Mega.nz file once YouTube mirror finishes (if MEGA_CLOUD source)
+    const videoUrl = record.video?.url || '';
+    if (videoUrl.includes('mega.nz') || videoUrl.includes('mega.io')) {
+      try {
+        let megaEmail: string | undefined;
+        let megaPassword: string | undefined;
+        if (record.facebookPage?.userId) {
+          const pageUser = await this.prisma.user.findUnique({ where: { id: record.facebookPage.userId } });
+          if (pageUser?.megaEmail && pageUser?.megaPassword) {
+            megaEmail = pageUser.megaEmail;
+            megaPassword = pageUser.megaPassword;
+          }
+        }
+        await this.megaService.deleteFile(videoUrl, megaEmail, megaPassword);
+      } catch (_) {}
+    }
+
+    if (isSuccess) {
+      this.whatsappService.sendVideoActivityAlert({
+        pageName: record.facebookPage?.name || 'Facebook Page',
+        videoTitle: record.video?.title || 'Short Video',
+        sourcePlatform: 'YOUTUBE_SHORTS_MIRROR',
+        action: 'Parallel YouTube Short Uploaded! 📺✅',
+        details: body.youtubeUrl ? `Link: ${body.youtubeUrl}` : `YouTube ID: ${body.youtubeVideoId || 'Published'}`,
+      }).catch(() => {});
+    }
+
+    return { success: true };
+  }
 }
+
 
 
