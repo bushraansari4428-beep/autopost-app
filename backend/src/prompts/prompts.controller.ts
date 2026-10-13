@@ -109,5 +109,24 @@ export class PromptsController {
   acknowledgeVpsFile(@Body() body: { id: string }) {
     return this.promptsService.acknowledgeVpsFile(body?.id || '');
   }
+
+  @Post('vps-inventory')
+  async updateVpsInventory(
+    @Body()
+    body: {
+      files: Array<{ filename: string; remainingPrompts: number; matchedPage?: string }>;
+      forceAlert?: boolean;
+    },
+  ) {
+    return this.promptsService.updateVpsPromptInventory(body?.files || [], Boolean(body?.forceAlert));
+  }
+
+  @Get('vps-inventory')
+  getVpsInventory() {
+    return {
+      success: true,
+      inventory: this.promptsService.getVpsPromptInventory(),
+    };
+  }
 }
 

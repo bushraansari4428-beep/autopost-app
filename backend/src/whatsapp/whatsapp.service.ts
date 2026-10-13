@@ -11,8 +11,62 @@ export class WhatsappService implements OnModuleInit {
   private readonly sentStockAlertSlots = new Set<string>();
   private readonly missedSlotAlerts = new Set<string>();
   private readonly tokenAlertedPages = new Set<string>();
+  private readonly lowPromptAlertedKeys = new Set<string>();
   private isCheckingAlerts = false;
+  private isCheckingReports = false;
   private lastTokenCheckTime = 0;
+
+  // Live VPS Auto Bulk Video Generator Prompt Files Inventory
+  private vpsPromptFiles: Map<
+    string,
+    { filename: string; remainingPrompts: number; matchedPage?: string; updatedAt: string }
+  > = new Map([
+    [
+      'Stickhead_Skits-50-prompts.txt',
+      {
+        filename: 'Stickhead_Skits-50-prompts.txt',
+        remainingPrompts: 9,
+        matchedPage: 'Stickhead Skits',
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+    [
+      'Unexplained_Finds-100-prompts.txt',
+      {
+        filename: 'Unexplained_Finds-100-prompts.txt',
+        remainingPrompts: 91,
+        matchedPage: 'Unexplained Finds',
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+    [
+      'Marine mafia-1000- prompts.txt',
+      {
+        filename: 'Marine mafia-1000- prompts.txt',
+        remainingPrompts: 929,
+        matchedPage: 'Marine Mafia',
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+    [
+      'EA_Hustle_1000-prompts.txt',
+      {
+        filename: 'EA_Hustle_1000-prompts.txt',
+        remainingPrompts: 934,
+        matchedPage: 'Sea hustle',
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+    [
+      'Viral_Anomaly_Found_Footage_500_Prompts.txt',
+      {
+        filename: 'Viral_Anomaly_Found_Footage_500_Prompts.txt',
+        remainingPrompts: 500,
+        matchedPage: 'General / Backup',
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+  ]);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -36,7 +90,15 @@ export class WhatsappService implements OnModuleInit {
       existingYtFails.forEach((f) => this.sentAlertIds.add(`yt_cloud_fail_${f.id}`));
     } catch (_) {}
 
-    // Check every 45 seconds for scheduled WhatsApp daily reports (8:00 AM & 8:00 PM PKT)
+    // Run an immediate startup check after 8 seconds so if Render cold-starts during a report window,
+    // any missed 8:00 AM / 8:00 PM report is dispatched right away
+    setTimeout(() => {
+      this.checkAndSendScheduledReports().catch((err) => {
+        this.logger.error('Error in initial scheduled WhatsApp report check:', err.message);
+      });
+    }, 8000);
+
+    // Check every 45 seconds for scheduled WhatsApp daily reports (8:00 AM & 8:00 PM PKT with catch-up window)
     // and scheduled low stock alerts (7:00 AM, 12:00 PM, 5:00 PM PKT)
     setInterval(() => {
       this.checkAndSendScheduledReports().catch((err) => {
@@ -59,7 +121,7 @@ export class WhatsappService implements OnModuleInit {
 
   /**
    * Unified WhatsApp message dispatcher supporting:
-   * 1. Green-API Master Gateway (Instance + Token in server env)
+   * 1. Green-API Master Gateway (Dedicated 7107 cluster + standard api.green-api.com failover)
    * 2. UltraMsg Gateway (Instance + Token in server env)
    * 3. CallMeBot Gateway (if personal API Key is supplied)
    */
@@ -77,30 +139,44 @@ export class WhatsappService implements OnModuleInit {
       cleanDigits = '92' + cleanDigits;
     }
 
-    // Option A: Green-API Gateway (Zero-config for user)
-    const greenInstance = process.env.GREEN_API_INSTANCE_ID || '710722741413';
-    const greenToken = process.env.GREEN_API_TOKEN || '60a1dd7a5f9e41b7bbfed4e57a3335fc5df38d4f8fe54caf9c';
+    // Option A: Green-API Gateway (Dedicated cluster host first + standard host fallback)
+    const greenInstance = (process.env.GREEN_API_INSTANCE_ID || '710722741413').trim();
+    const greenToken = (process.env.GREEN_API_TOKEN || '60a1dd7a5f9e41b7bbfed4e57a3335fc5df38d4f8fe54caf9c').trim();
     if (greenInstance && greenToken) {
-      try {
-        this.logger.log(`Dispatching WhatsApp via Green-API Gateway to ${cleanDigits}...`);
-        const url = `https://api.green-api.com/waInstance${greenInstance.trim()}/sendMessage/${greenToken.trim()}`;
-        const res = await axios.post(
-          url,
-          {
-            chatId: `${cleanDigits}@c.us`,
-            message: message,
-          },
-          { timeout: 25000 }
-        );
+      const clusterPrefix = greenInstance.slice(0, 4);
+      const greenEndpoints = [
+        `https://${clusterPrefix}.api.greenapi.com/waInstance${greenInstance}/sendMessage/${greenToken}`,
+        `https://api.green-api.com/waInstance${greenInstance}/sendMessage/${greenToken}`,
+      ];
 
-        if (res.data && res.data.idMessage) {
-          return { success: true, message: 'WhatsApp report delivered via Green-API Gateway!' };
+      let lastErrorDetail: any = null;
+      for (const url of greenEndpoints) {
+        try {
+          const hostLabel = url.split('/waInstance')[0];
+          this.logger.log(`Dispatching WhatsApp via Green-API (${hostLabel}) to ${cleanDigits}...`);
+          const res = await axios.post(
+            url,
+            {
+              chatId: `${cleanDigits}@c.us`,
+              message: message,
+            },
+            { timeout: 15000 }
+          );
+
+          if (res.data && res.data.idMessage) {
+            return { success: true, message: 'WhatsApp report delivered via Green-API Gateway!' };
+          }
+        } catch (err: any) {
+          lastErrorDetail = err.response?.data?.message || err.response?.data || err.message;
+          this.logger.warn(`Green-API host failed (${url.split('/waInstance')[0]}): ${lastErrorDetail}`);
         }
-      } catch (err: any) {
-        const errorDetail = err.response?.data?.message || err.response?.data || err.message;
-        this.logger.error('Green-API dispatch failed:', errorDetail);
-        return { success: false, message: `Green-API error: ${typeof errorDetail === 'object' ? JSON.stringify(errorDetail) : errorDetail}` };
       }
+
+      this.logger.error('All Green-API hosts failed:', lastErrorDetail);
+      return {
+        success: false,
+        message: `Green-API error: ${typeof lastErrorDetail === 'object' ? JSON.stringify(lastErrorDetail) : lastErrorDetail}`,
+      };
     }
 
     // Option B: UltraMsg Gateway (Zero-config for user)
@@ -170,6 +246,137 @@ export class WhatsappService implements OnModuleInit {
   }
 
   /**
+   * Updates the live VPS Auto Bulk Video Generator Prompt Files inventory
+   * and triggers an instant WhatsApp notification if any file has <= 10 prompts remaining.
+   */
+  async updateVpsPromptInventory(
+    files: Array<{ filename: string; remainingPrompts: number; matchedPage?: string }>,
+    forceAlert = false,
+  ) {
+    if (!Array.isArray(files) || files.length === 0) {
+      return { success: true, count: this.vpsPromptFiles.size, lowFilesAlerted: 0 };
+    }
+
+    const nowIso = new Date().toISOString();
+    const currentPktDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Karachi',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+    const lowFilesToAlert: Array<{ filename: string; remainingPrompts: number; matchedPage?: string }> = [];
+
+    for (const item of files) {
+      if (!item || !item.filename) continue;
+      const cleanName = item.filename.trim();
+      const remaining = Math.max(0, Number(item.remainingPrompts) || 0);
+      const matchedPage = item.matchedPage || this.inferPageFromPromptFilename(cleanName);
+
+      this.vpsPromptFiles.set(cleanName, {
+        filename: cleanName,
+        remainingPrompts: remaining,
+        matchedPage,
+        updatedAt: nowIso,
+      });
+
+      // If file was restocked (> 10 prompts), clear previous low-stock alert locks for this file
+      if (remaining > 10) {
+        for (const key of Array.from(this.lowPromptAlertedKeys)) {
+          if (key.includes(`_${cleanName}_`)) {
+            this.lowPromptAlertedKeys.delete(key);
+          }
+        }
+      } else {
+        // File has <= 10 prompts left! Alert once per day per remaining count (or if forceAlert is true)
+        const alertKey = `low_prompt_${currentPktDate}_${cleanName}_${remaining}`;
+        const dailyFileKey = `low_prompt_daily_${currentPktDate}_${cleanName}`;
+        if (forceAlert || (!this.lowPromptAlertedKeys.has(alertKey) && !this.lowPromptAlertedKeys.has(dailyFileKey))) {
+          this.lowPromptAlertedKeys.add(alertKey);
+          this.lowPromptAlertedKeys.add(dailyFileKey);
+          lowFilesToAlert.push({ filename: cleanName, remainingPrompts: remaining, matchedPage });
+        }
+      }
+    }
+
+    if (lowFilesToAlert.length > 0) {
+      await this.sendLowPromptFilesAlert(lowFilesToAlert);
+    }
+
+    return {
+      success: true,
+      count: this.vpsPromptFiles.size,
+      lowFilesAlerted: lowFilesToAlert.length,
+      inventory: this.getVpsPromptInventory(),
+    };
+  }
+
+  getVpsPromptInventory() {
+    return Array.from(this.vpsPromptFiles.values()).sort((a, b) => a.remainingPrompts - b.remainingPrompts);
+  }
+
+  private inferPageFromPromptFilename(filename: string): string {
+    const lower = filename.toLowerCase();
+    if (lower.includes('stickhead')) return 'Stickhead Skits';
+    if (lower.includes('unexplained')) return 'Unexplained Finds';
+    if (lower.includes('marine')) return 'Marine Mafia';
+    if (lower.includes('hustle')) return 'Sea hustle';
+    if (lower.includes('rare') && lower.includes('animal')) return 'Rare Animal Encounters';
+    if (lower.includes('goofy')) return 'Goofy Critters';
+    if (lower.includes('aircraft')) return 'Aircraft Expert';
+    if (lower.includes('terminal')) return 'Terminal Task';
+    if (lower.includes('luxury')) return 'Luxury Altitude';
+    if (lower.includes('lens')) return 'Lens To Soul';
+    if (lower.includes('unseen')) return 'Unseen Artistry';
+    return filename.replace(/[-_]?\d+[-_]?prompts?\.txt$/i, '').replace(/\.txt$/i, '').replace(/[-_]+/g, ' ').trim();
+  }
+
+  /**
+   * Sends a dedicated WhatsApp notification when any VPS .txt prompt file has <= 10 prompts remaining
+   */
+  async sendLowPromptFilesAlert(
+    lowFiles: Array<{ filename: string; remainingPrompts: number; matchedPage?: string }>,
+  ) {
+    if (!lowFiles || lowFiles.length === 0) return { success: false, message: 'No low files to alert' };
+
+    const pktTimeStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Karachi',
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(new Date());
+
+    let fileLines = '';
+    for (const f of lowFiles) {
+      const statusBadge =
+        f.remainingPrompts === 0
+          ? '🔴 *0 Prompts Baki (File Khatam Ho Gayi Hai!)*'
+          : `⚠️ *Sirf ${f.remainingPrompts} Prompts Reh Gayi Hain!* (<= 10 Alert)`;
+      fileLines += `📂 *File:* *${f.filename}*\n`;
+      if (f.matchedPage) {
+        fileLines += `   • 📌 *Page:* *${f.matchedPage}*\n`;
+      }
+      fileLines += `   • 🔢 *Status:* ${statusBadge}\n\n`;
+    }
+
+    const message =
+`🚨 *VPS Prompt File Low Stock Alert!*
+━━━━━━━━━━━━━━━━━━━━
+⚠️ *Bhai, aap ke VPS Auto Bulk Video Generator me niche di gayi Prompt File(s) me 10 ya us se kam prompts reh gayi hain:*
+
+${fileLines.trim()}
+
+🕒 *Alert Time:* ${pktTimeStr} PKT
+━━━━━━━━━━━━━━━━━━━━
+💡 *Action Required:* Baraye meharbani is prompt file ko restock kar lein ya *Prompt Generator* se new prompt file VPS par send kar dein taake kisi bhi page ki prompt file khatam na ho aur video generation chalti rahe!`;
+
+    await this.sendAlertToRecipients(message);
+    this.logger.log(`Dispatched Low Prompt File WhatsApp Alert for ${lowFiles.length} file(s).`);
+    return { success: true, alerted: lowFiles.length };
+  }
+
   /**
    * Returns list of Facebook Pages that have an active Mega Cloud mapping that is ON (status === ACTIVE and scheduledTime != '00:00')
    */
@@ -202,13 +409,12 @@ export class WhatsappService implements OnModuleInit {
 
   /**
    * Constructs the comprehensive Executive Daily Report (Sent at 8:00 AM & 8:00 PM PKT):
-   * - Page Name
-   * - Daily updated followers count (queried fresh from Facebook Graph API)
-   * - Uploaded videos in last 24h with exact Titles and Upload Times (Video 1, Video 2, etc.)
-   * - Daily posting target and count of videos posted
-   * - Current Mega Cloud stock / remaining quota in cloud queue for AI content pages
-   * - YouTube Shorts updates
-   * - System health & token status
+   * - Clearly highlighted Page Name for every page
+   * - Explicit Upload Status (Uploaded vs Not Uploaded)
+   * - Exact Upload Time(s) in PKT for every uploaded video
+   * - Live Followers count with daily update
+   * - Video Stock / Cloud Queue ready count + newly stocked videos in last 24h
+   * - VPS Auto Bulk Video Generator Prompt Files status (highlighting any file with <= 10 prompts left)
    */
   async generateReportContent(userId?: string): Promise<string> {
     const now = new Date();
@@ -239,14 +445,21 @@ export class WhatsappService implements OnModuleInit {
       orderBy: { createdAt: 'asc' },
     });
 
+    let totalUploadedPagesCount = 0;
+    let totalVideosUploaded24h = 0;
+    let totalReadyStockVideos = 0;
+    const stockedPagesSummary: string[] = [];
+
     let fbSection = '';
     if (pages.length === 0) {
       fbSection = '  _Koi active Facebook Page nahi mila._\n';
     } else {
-      for (const page of pages) {
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
         let totalFollowers = 0;
+        let newFollowersToday = 0;
 
-        // Fetch fresh follower count from Facebook Graph API daily
+        // Fetch fresh follower count & daily adds from Facebook Graph API
         if (page.accessToken) {
           try {
             const res = await axios.get(
@@ -254,14 +467,28 @@ export class WhatsappService implements OnModuleInit {
               { timeout: 8000 }
             );
             if (res.data) {
-              totalFollowers = res.data.followers_count || res.data.fan_count || 0;
+              totalFollowers = res.data.followers_count ?? res.data.fan_count ?? 0;
+            }
+            // Optional daily new followers check via page_fan_adds insight
+            const insRes = await axios
+              .get(
+                `https://graph.facebook.com/v19.0/${page.pageId}/insights?metric=page_fan_adds&period=day&access_token=${page.accessToken}`,
+                { timeout: 5000 }
+              )
+              .catch(() => null);
+            const addsValues = insRes?.data?.data?.[0]?.values;
+            if (Array.isArray(addsValues) && addsValues.length > 0) {
+              const latestVal = addsValues[addsValues.length - 1]?.value;
+              if (typeof latestVal === 'number' && latestVal > 0) {
+                newFollowersToday = latestVal;
+              }
             }
           } catch (fbErr: any) {
             this.logger.warn(`Could not fetch followers for ${page.name}: ${fbErr.message}`);
           }
         }
 
-        // Fetch completed uploads in the last 24 hours
+        // Fetch completed video uploads to Facebook in the last 24 hours
         const completedUploads = await this.prisma.uploadHistory.findMany({
           where: {
             facebookPageId: page.id,
@@ -280,88 +507,132 @@ export class WhatsappService implements OnModuleInit {
           orderBy: { createdAt: 'asc' },
         });
 
+        // Fetch how many new videos were generated/stocked into Cloud Queue in the last 24h
+        const newlyStocked24h = await this.prisma.uploadHistory.count({
+          where: {
+            facebookPageId: page.id,
+            status: 'COMPLETED',
+            facebookPostId: 'MEGA_CLOUD_UPLOAD',
+            createdAt: { gte: last24h },
+          },
+        });
+
+        // Always check remaining ready video stock in Cloud Queue for this page
+        const cloudQueueCount = await this.prisma.video.count({
+          where: {
+            source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
+            uploads: {
+              none: {
+                facebookPageId: page.id,
+                status: 'COMPLETED',
+                facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' },
+              },
+            },
+          },
+        });
+
         // Fetch failed uploads in the last 24 hours
-        const failedUploads = await this.prisma.uploadHistory.findMany({
+        const failedUploadsCount = await this.prisma.uploadHistory.count({
           where: {
             facebookPageId: page.id,
             status: 'FAILED',
             createdAt: { gte: last24h },
           },
-          take: 3,
         });
 
-        // Determine if page uses Mega Cloud (Self-uploaded AI content)
-        const megaMapping = page.mappings?.find(
-          (m) => m.source?.platform === 'MEGA_CLOUD' || m.source?.url?.startsWith('cloud://')
-        );
-        const hasMegaCloud = !!megaMapping || page.mappings?.some((m) => m.source?.platform === 'MEGA_CLOUD');
-
-        let cloudQueueCount = 0;
-        if (hasMegaCloud) {
-          cloudQueueCount = await this.prisma.video.count({
-            where: {
-              source: { platform: 'MEGA_CLOUD', url: `cloud://${page.pageId}` },
-              uploads: {
-                none: {
-                  facebookPageId: page.id,
-                  status: 'COMPLETED',
-                  facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' },
-                },
-              },
-            },
-          });
+        if (completedUploads.length > 0) {
+          totalUploadedPagesCount++;
+          totalVideosUploaded24h += completedUploads.length;
+        }
+        if (cloudQueueCount > 0) {
+          totalReadyStockVideos += cloudQueueCount;
+          stockedPagesSummary.push(`*${page.name.trim()}* (${cloudQueueCount} videos)`);
         }
 
         const primaryMapping = page.mappings?.find((m) => m.status === 'ACTIVE') || page.mappings?.[0];
-        const targetPerDay = primaryMapping?.videosPerDay || page.videosPerDay || 2;
-        const scheduleSlots = primaryMapping?.scheduledTime || page.scheduledTime || 'Auto';
+        const isTikTokSource = primaryMapping?.source?.platform === 'TIKTOK';
+        const isPaused = primaryMapping?.status === 'PAUSED';
+        const scheduleSlots = primaryMapping?.scheduledTime || page.scheduledTime || '04:30, 19:00';
+        const slotCount = scheduleSlots.split(',').map((s) => s.trim()).filter(Boolean).length;
+        const targetPerDay = Math.max(primaryMapping?.videosPerDay || 0, page.videosPerDay || 0, slotCount || 2);
 
-        fbSection += `🔹 *${page.name}*\n`;
-        fbSection += `   • 👥 Total Followers: *${totalFollowers > 0 ? totalFollowers.toLocaleString() : 'Active'}* (Updated Today)\n`;
-        fbSection += `   • 📊 Daily Quota: *${targetPerDay} videos/day* (*${completedUploads.length}* posted in 24h ${completedUploads.length >= targetPerDay ? '✅' : '⏳'})\n`;
+        // 1. Highlighted Page Header
+        fbSection += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        fbSection += `📌 *${i + 1}. PAGE: ${page.name.trim().toUpperCase()}*\n`;
 
-        // Detail each uploaded video with Title and Upload Time
-        if (completedUploads.length === 0) {
-          fbSection += `   • 🎬 Videos Posted (24h): *0* videos posted\n`;
-        } else {
+        // 2. Clear Video Upload Status & Upload Time(s)
+        if (completedUploads.length > 0) {
+          fbSection += `┣ 📤 *Upload Status:* ✅ *VIDEO UPLOADED (${completedUploads.length}/${targetPerDay} Today)*\n`;
           completedUploads.forEach((u, idx) => {
             const uploadTimeStr = new Intl.DateTimeFormat('en-GB', {
               timeZone: 'Asia/Karachi',
               hour: '2-digit',
               minute: '2-digit',
               hour12: true,
-            }).format(u.updatedAt || u.createdAt);
+            })
+              .format(u.updatedAt || u.createdAt)
+              .toUpperCase();
 
             const rawTitle = (u.video?.title || 'Video').trim();
-            const cleanTitle = rawTitle.length > 55 ? rawTitle.substring(0, 52) + '...' : rawTitle;
-            fbSection += `   • 🎬 Video ${idx + 1}: *"${cleanTitle}"* (Uploaded: ${uploadTimeStr} PKT)\n`;
+            const cleanTitle = rawTitle.length > 42 ? rawTitle.substring(0, 39) + '...' : rawTitle;
+            fbSection += `┣ 🕒 *Video ${idx + 1} Time:* *${uploadTimeStr} PKT* — _"${cleanTitle}"_\n`;
           });
-        }
-
-        // Show Mega Cloud queue remaining stock for AI content pages
-        if (hasMegaCloud) {
-          let stockBadge = '✅';
-          if (cloudQueueCount === 0) {
-            stockBadge = '🔴 *(Stock Empty! 0 Videos Remaining)*';
-          } else if (cloudQueueCount <= 2) {
-            stockBadge = `🟡 *(Low Stock! ${cloudQueueCount} Remaining)*`;
-          }
-          fbSection += `   • 📁 Mega Cloud Stock: *${cloudQueueCount}* videos left in queue ${stockBadge}\n`;
         } else {
-          const srcPlatform = primaryMapping?.source?.platform || 'AUTOMATED';
-          const srcName = primaryMapping?.source?.name || 'Downloader Feed';
-          fbSection += `   • 🔗 Auto Downloader: *${srcPlatform}* (${srcName})\n`;
+          fbSection += `┣ 📤 *Upload Status:* ❌ *NO VIDEO UPLOADED YET (0/${targetPerDay})*\n`;
+          fbSection += `┣ 🕒 *Upload Time:* _Last 24h me koi video upload nahi hui_\n`;
         }
 
-        fbSection += `   • 🕒 Schedule: *${scheduleSlots}* PKT\n`;
-        if (failedUploads.length > 0) {
-          fbSection += `   • ⚠️ Failures: *${failedUploads.length}* upload error(s) in last 24h\n`;
+        // 3. Followers Count with Daily Update
+        const followersText = `${totalFollowers.toLocaleString()} Followers`;
+        const dailyGrowthBadge =
+          newFollowersToday > 0 ? ` *(+${newFollowersToday} New Today 📈)*` : ` _(Daily Live Update ✅)_`;
+        fbSection += `┣ 👥 *Followers:* *${followersText}*${dailyGrowthBadge}\n`;
+
+        // 4. Video Stock / Cloud Queue / Newly Created Videos Status
+        const newStockTag = newlyStocked24h > 0 ? ` *(+${newlyStocked24h} New Videos Stocked Today 🆕)*` : '';
+        if (cloudQueueCount > 0) {
+          const stockHealth = cloudQueueCount <= 2 ? '🟡 *(Low Stock)*' : '✅ *(Stock Ready)*';
+          fbSection += `┣ 📦 *Video Stock:* *${cloudQueueCount} Videos in Stock* ${stockHealth}${newStockTag}\n`;
+        } else if (isTikTokSource) {
+          fbSection += `┣ 📦 *Video Stock / Source:* 🔗 *TikTok Auto-Downloader Active* _(0 Cloud Stock)_\n`;
+        } else {
+          fbSection += `┣ 📦 *Video Stock:* 🔴 *0 Videos in Stock (Stock Empty!)*${newStockTag}\n`;
         }
-        fbSection += `\n`;
+
+        // 5. Schedule & Errors
+        const statusTag = isPaused ? '⏸️ Paused' : '🟢 Active';
+        fbSection += `┗ ⏰ *Schedule:* *${scheduleSlots} PKT* (${statusTag})${failedUploadsCount > 0 ? ` | ⚠️ *${failedUploadsCount} Failed*` : ''}\n\n`;
       }
     }
 
-    // 2. Fetch YouTube Channels (Cloud active channels)
+    // 2. Stocked Pages Quick Summary
+    let stockOverviewSection = '';
+    if (stockedPagesSummary.length > 0) {
+      stockOverviewSection =
+`📦 *PAGES WITH READY VIDEO STOCK (${totalReadyStockVideos} Total Videos):*
+   • ${stockedPagesSummary.join('\n   • ')}\n\n`;
+    }
+
+    // 3. VPS Auto Bulk Video Generator Prompt Files Status
+    const promptInventory = this.getVpsPromptInventory();
+    let vpsPromptSection = '';
+    if (promptInventory.length > 0) {
+      vpsPromptSection = `📂 *VPS PROMPT FILES STATUS (Auto Bulk Generator):*\n`;
+      for (const pf of promptInventory) {
+        const isLow = pf.remainingPrompts <= 10;
+        const badge =
+          pf.remainingPrompts === 0
+            ? '🔴 *0 LEFT (KHATAM! NEW FILE DEIN)*'
+            : isLow
+            ? `🚨 *SIRF ${pf.remainingPrompts} PROMPTS BAKI (RESTOCK KAREIN!)*`
+            : `✅ *${pf.remainingPrompts} Prompts Left*`;
+        const pageLabel = pf.matchedPage ? ` _(${pf.matchedPage})_` : '';
+        vpsPromptSection += `   • 📄 *${pf.filename}*${pageLabel}: ${badge}\n`;
+      }
+      vpsPromptSection += `\n`;
+    }
+
+    // 4. Fetch YouTube Channels (Cloud active channels)
     const ytFilter = userId ? { userId } : {};
     const ytChannels = await this.prisma.youtubeChannel.findMany({
       where: {
@@ -388,29 +659,26 @@ export class WhatsappService implements OnModuleInit {
         });
 
         ytSection += `🔹 *${ch.name}*\n`;
-        ytSection += `   • 📊 Daily Quota: *${ch.videosPerDay || 1}/day* (*${completedShorts.length}* posted in 24h)\n`;
-        if (completedShorts.length === 0) {
-          ytSection += `   • 🎬 Shorts Posted: *0* shorts in last 24h\n`;
-        } else {
-          completedShorts.forEach((s, idx) => {
-            const shortTime = s.uploadedAt
-              ? new Intl.DateTimeFormat('en-GB', {
-                  timeZone: 'Asia/Karachi',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true,
-                }).format(s.uploadedAt)
-              : 'Earlier';
-            const shortTitle = (s.title || 'Short').slice(0, 50);
-            ytSection += `   • 🎬 Short ${idx + 1}: *"${shortTitle}"* (Uploaded: ${shortTime} PKT)\n`;
-          });
-        }
-        ytSection += `   • 📁 Cloud Queue: *${ytPendingQueue}* shorts left\n`;
-        ytSection += `   • 🕒 Scheduled Times: *${ch.scheduledTime || 'Auto'}* PKT\n\n`;
+        ytSection += `   • 📤 Upload Status: ${completedShorts.length > 0 ? `✅ *${completedShorts.length} Uploaded*` : '❌ *No Short Uploaded*'}\n`;
+        completedShorts.forEach((s, idx) => {
+          const shortTime = s.uploadedAt
+            ? new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Karachi',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })
+                .format(s.uploadedAt)
+                .toUpperCase()
+            : 'Earlier';
+          const shortTitle = (s.title || 'Short').slice(0, 45);
+          ytSection += `   • 🕒 Short ${idx + 1} Time: *${shortTime} PKT* — _"${shortTitle}"_\n`;
+        });
+        ytSection += `   • 📦 Video Stock: *${ytPendingQueue}* shorts left in queue\n\n`;
       }
     }
 
-    // 3. System Health & Token Alerts
+    // 5. System Health & Token Alerts
     const tokenIssues = await this.prisma.uploadHistory.count({
       where: {
         status: 'FAILED',
@@ -419,20 +687,27 @@ export class WhatsappService implements OnModuleInit {
       },
     });
 
-    let alertSection = '✅ All Page tokens, credentials & automation healthy.';
+    const lowPromptCount = promptInventory.filter((p) => p.remainingPrompts <= 10).length;
+    let alertSection = '✅ All Page tokens, schedules & automation healthy.';
     if (tokenIssues > 0) {
       alertSection = `⚠️ *ATTENTION:* ${tokenIssues} upload(s) failed due to invalid/expired Facebook token. Please check Pages dashboard!`;
     }
+    if (lowPromptCount > 0) {
+      alertSection += `\n🚨 *PROMPT ALERT:* ${lowPromptCount} VPS Prompt File(s) me 10 ya us se kam prompts reh gayi hain! Baraye meharbani new prompt file restock karein.`;
+    }
 
-    const message = 
+    const message =
 `📊 *AutoPost Executive Daily Report*
-🗓 *Date & Time:* ${pktDateStr} PKT
+🗓 *Date & Time:* ${pktDateStr.toUpperCase()} PKT
+📈 *24h Summary:* *${totalUploadedPagesCount}/${pages.length} Pages Uploaded* (*${totalVideosUploaded24h} Videos Posted*)
 ━━━━━━━━━━━━━━━━━━━━
 
-📄 *FACEBOOK PAGES UPDATE:*
+📄 *ALL FACEBOOK PAGES STATUS:*
+
 ${fbSection.trim()}
 
-${ytSection ? `${ytSection.trim()}\n━━━━━━━━━━━━━━━━━━━━\n` : ''}⚙️ *System Health & Watchdog:*
+━━━━━━━━━━━━━━━━━━━━
+${stockOverviewSection}${vpsPromptSection}${ytSection ? `${ytSection.trim()}\n━━━━━━━━━━━━━━━━━━━━\n` : ''}⚙️ *System Health & Watchdog:*
 ${alertSection}
 ━━━━━━━━━━━━━━━━━━━━
 🤖 _AutoPost Executive Monitoring Engine_`;
@@ -441,78 +716,104 @@ ${alertSection}
   }
 
   /**
+   * Helper to convert "HH:MM" into total minutes from midnight (0..1439)
+   */
+  private parseTimeToMinutes(hhmm: string): number | null {
+    const parts = (hhmm || '').trim().split(':').map(Number);
+    if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+    return parts[0] * 60 + parts[1];
+  }
+
+  /**
    * Scheduled WhatsApp Executive Daily Reporter:
    * Triggers TWICE daily at 8:00 AM (08:00) and 8:00 PM (20:00) PKT,
    * plus any custom times specified by the user.
-   * Tracks sent slots per date so neither morning nor evening reports are skipped.
+   * Uses a 3-hour catch-up window (e.g. 08:00-11:00 AM and 20:00-23:00 PM PKT) so Render cold-starts
+   * or transient network delays NEVER skip a scheduled morning or evening report.
    */
   async checkAndSendScheduledReports() {
-    const now = new Date();
+    if (this.isCheckingReports) return;
+    this.isCheckingReports = true;
 
-    const currentPktTime = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Karachi',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(now); // e.g. "08:00" or "20:00"
+    try {
+      const now = new Date();
 
-    const currentPktDate = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Karachi',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(now); // e.g. "2026-09-26"
+      const currentPktTime = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Karachi',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(now); // e.g. "08:00" or "20:00"
 
-    const activeConfigs = await this.prisma.whatsAppConfig.findMany({
-      where: {
-        enabled: true,
-      },
-    });
+      const currentPktDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Karachi',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(now); // e.g. "2026-10-13"
 
-    for (const config of activeConfigs) {
-      if (!config.phoneNumber) continue;
+      const currentMins = this.parseTimeToMinutes(currentPktTime);
+      if (currentMins === null) return;
 
-      // Primary schedule slots: 8:00 AM (08:00) and 8:00 PM (20:00) PKT
-      let targetSlots = ['08:00', '20:00'];
-      if (config.reportTime && config.reportTime.trim()) {
-        const customSlots = config.reportTime.split(',').map((s) => s.trim()).filter(Boolean);
-        targetSlots = Array.from(new Set([...customSlots, '08:00', '20:00']));
-      }
+      const activeConfigs = await this.prisma.whatsAppConfig.findMany({
+        where: {
+          enabled: true,
+        },
+      });
 
-      if (targetSlots.includes(currentPktTime)) {
-        const slotKey = `${currentPktDate}_${currentPktTime}`;
-        const sentSlots = (config.lastSentDate || '').split(',').map((s) => s.trim());
+      for (const config of activeConfigs) {
+        if (!config.phoneNumber) continue;
 
-        if (!sentSlots.includes(slotKey)) {
-          this.logger.log(`Dispatching executive WhatsApp report for ${config.phoneNumber} at ${currentPktTime} PKT (Slot: ${slotKey})`);
+        // Primary schedule slots: 8:00 AM (08:00) and 8:00 PM (20:00) PKT
+        let targetSlots = ['08:00', '20:00'];
+        if (config.reportTime && config.reportTime.trim()) {
+          const customSlots = config.reportTime.split(',').map((s) => s.trim()).filter(Boolean);
+          targetSlots = Array.from(new Set([...customSlots, '08:00', '20:00']));
+        }
 
-          const report = await this.generateReportContent(config.userId || undefined);
-          const result = await this.dispatchWhatsAppMessage(config.phoneNumber, report, config.apiKey || undefined);
+        const sentSlots = (config.lastSentDate || '').split(',').map((s) => s.trim()).filter(Boolean);
 
-          if (result.success) {
-            // Keep only today's sent slots to prevent unbounded growth
-            const updatedSentSlots = sentSlots
-              .filter((s) => s.startsWith(currentPktDate))
-              .concat(slotKey);
+        for (const slot of targetSlots) {
+          const slotMins = this.parseTimeToMinutes(slot);
+          if (slotMins === null) continue;
 
-            await this.prisma.whatsAppConfig.update({
-              where: { id: config.id },
-              data: { lastSentDate: updatedSentSlots.join(',') },
-            });
-            this.logger.log(`Scheduled WhatsApp report delivered successfully to ${config.phoneNumber} (${slotKey})`);
-          } else {
-            this.logger.warn(`Failed to dispatch scheduled WhatsApp report: ${result.message}`);
+          // Match if current PKT time is within [slotMins, slotMins + 180 mins] (3-hour catch-up window)
+          if (currentMins >= slotMins && currentMins <= slotMins + 180) {
+            const slotKey = `${currentPktDate}_${slot}`;
+
+            if (!sentSlots.includes(slotKey)) {
+              this.logger.log(
+                `Dispatching executive WhatsApp report for ${config.phoneNumber} at ${currentPktTime} PKT (Target Slot: ${slotKey})`
+              );
+
+              const report = await this.generateReportContent(config.userId || undefined);
+              const result = await this.dispatchWhatsAppMessage(config.phoneNumber, report, config.apiKey || undefined);
+
+              if (result.success) {
+                sentSlots.push(slotKey);
+                const updatedSentSlots = Array.from(new Set(sentSlots.filter((s) => s.startsWith(currentPktDate))));
+
+                await this.prisma.whatsAppConfig.update({
+                  where: { id: config.id },
+                  data: { lastSentDate: updatedSentSlots.join(',') },
+                });
+                this.logger.log(`Scheduled WhatsApp report delivered successfully to ${config.phoneNumber} (${slotKey})`);
+              } else {
+                this.logger.warn(`Failed to dispatch scheduled WhatsApp report (${slotKey}): ${result.message}`);
+              }
+            }
           }
         }
       }
+    } finally {
+      this.isCheckingReports = false;
     }
   }
 
   /**
    * Scheduled Low Video Stock Checker:
-   * Triggers ONLY 3 times a day at 07:00 AM, 12:00 PM, and 05:00 PM PKT.
+   * Triggers ONLY 3 times a day at 07:00 AM, 12:00 PM, and 05:00 PM PKT (with a 60-minute catch-up window).
    * Gathers all pages with low/empty Mega Cloud stock and sends a single consolidated warning.
-   * Completely eliminates the 10-minute repeat spam.
    */
   async checkAndSendScheduledStockAlerts() {
     const now = new Date();
@@ -521,21 +822,29 @@ ${alertSection}
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-    }).format(now); // e.g. "07:00", "12:00", "17:00"
+    }).format(now);
 
     const currentPktDate = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Karachi',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).format(now); // "2026-09-26"
+    }).format(now);
+
+    const currentMins = this.parseTimeToMinutes(currentPktTime);
+    if (currentMins === null) return;
 
     const STOCK_ALERT_TIMES = ['07:00', '12:00', '17:00']; // 7:00 AM, 12:00 PM, 5:00 PM PKT
-    if (!STOCK_ALERT_TIMES.includes(currentPktTime)) {
+    const matchedSlot = STOCK_ALERT_TIMES.find((slot) => {
+      const slotMins = this.parseTimeToMinutes(slot);
+      return slotMins !== null && currentMins >= slotMins && currentMins <= slotMins + 60;
+    });
+
+    if (!matchedSlot) {
       return;
     }
 
-    const slotKey = `stock_${currentPktDate}_${currentPktTime}`;
+    const slotKey = `stock_${currentPktDate}_${matchedSlot}`;
     if (this.sentStockAlertSlots.has(slotKey)) {
       return;
     }
@@ -601,7 +910,7 @@ ${itemsList.trim()}
 🤖 _AutoPost Stock Monitor (Scheduled at 7:00 AM, 12:00 PM & 5:00 PM PKT)_`;
 
     await this.sendAlertToRecipients(alertMessage);
-    this.logger.log(`Dispatched scheduled low-stock alert for ${lowStockPages.length} pages at ${currentPktTime} PKT`);
+    this.logger.log(`Dispatched scheduled low-stock alert for ${lowStockPages.length} pages at ${currentPktTime} PKT (Slot: ${matchedSlot})`);
   }
 
   /**

@@ -131,4 +131,26 @@ ${body.promptNumber ? `🔢 *Prompt:* #${body.promptNumber}\n` : ''}${body.detai
     const result = await this.whatsappService.dispatchWhatsAppMessage(phone, messageText, config?.apiKey || undefined);
     return result;
   }
+
+  /**
+   * Live VPS Auto Bulk Video Generator Prompt Files Inventory & <=10 Prompts Alert Endpoint
+   */
+  @Post('vps-prompt-inventory')
+  async updateVpsPromptInventory(
+    @Body()
+    body: {
+      files: Array<{ filename: string; remainingPrompts: number; matchedPage?: string }>;
+      forceAlert?: boolean;
+    },
+  ) {
+    return this.whatsappService.updateVpsPromptInventory(body?.files || [], Boolean(body?.forceAlert));
+  }
+
+  @Get('vps-prompt-inventory')
+  getVpsPromptInventory() {
+    return {
+      success: true,
+      inventory: this.whatsappService.getVpsPromptInventory(),
+    };
+  }
 }

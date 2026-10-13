@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { exec } from 'child_process';
 import * as util from 'util';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 const execPromise = util.promisify(exec);
 
@@ -65,6 +66,8 @@ const GENERIC_VIDEO_NEGATIVE_FALLBACK =
 @Injectable()
 export class PromptsService {
   private readonly logger = new Logger(PromptsService.name);
+
+  constructor(@Optional() private readonly whatsappService?: WhatsappService) {}
 
   private readonly hfSpaceUrl = process.env.HF_SPACE_URL || 'https://bushraa2-my-ai-brain.hf.space';
 
@@ -1055,6 +1058,23 @@ Write Prompt #${idx} as a 100% brand-new, unrepeated variation in the exact same
     return { success: true };
   }
 
+  async updateVpsPromptInventory(
+    files: Array<{ filename: string; remainingPrompts: number; matchedPage?: string }>,
+    forceAlert = false,
+  ) {
+    if (this.whatsappService) {
+      return this.whatsappService.updateVpsPromptInventory(files, forceAlert);
+    }
+    return { success: true, count: files.length, lowFilesAlerted: 0, inventory: files };
+  }
+
+  getVpsPromptInventory() {
+    if (this.whatsappService) {
+      return this.whatsappService.getVpsPromptInventory();
+    }
+    return [];
+  }
+
   async pushToVps(filename: string, content: string, vpsUrl?: string): Promise<{ success: boolean; message: string; filePath?: string; filename?: string }> {
     const safeFilename = this.sanitizeFilename(filename);
     const exportDir = path.join(process.cwd(), 'uploads', 'prompts');
@@ -1063,6 +1083,15 @@ Write Prompt #${idx} as a 100% brand-new, unrepeated variation in the exact same
     }
     const localFilePath = path.join(exportDir, safeFilename);
     fs.writeFileSync(localFilePath, content, 'utf-8');
+
+    // Update live VPS prompt inventory count immediately when user pushes a new file
+    try {
+      const parsedPrompts = this.parseUserPromptExamples(content);
+      const count = parsedPrompts.length > 0 ? parsedPrompts.length : (content.match(/PROMPT\s*#?\s*\d+/gi) || []).length || 1;
+      if (this.whatsappService) {
+        await this.whatsappService.updateVpsPromptInventory([{ filename: safeFilename, remainingPrompts: count }], false);
+      }
+    } catch (_) {}
 
     const queueId = `vps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const queueItem = {
