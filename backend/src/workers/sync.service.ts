@@ -259,9 +259,8 @@ export class SyncService {
           for (const timeStr of timeSlots) {
             const [schedH, schedM] = timeStr.split(':').map(Number);
             const schedTotalMins = schedH * 60 + schedM;
-            if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
+            if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 480) {
               activeSlot = timeStr;
-              break;
             }
           }
           

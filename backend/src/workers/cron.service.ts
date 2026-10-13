@@ -75,22 +75,61 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
             }
 
             const timeSlots = mapping.scheduledTime.split(',').map(t => t.trim()).filter(Boolean);
-            let isDue = false;
+            const currentTotalMins = pkHours * 60 + pkMinutes;
+            let matchedSlotStr: string | null = null;
 
             for (const timeStr of timeSlots) {
               const [schedH, schedM] = timeStr.split(':').map(Number);
               const schedTotalMins = schedH * 60 + schedM;
-              const currentTotalMins = pkHours * 60 + pkMinutes;
 
-              if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 30) {
-                // If we match any slot, we mark it as due. 
-                // We rely on sync.service to check if the quota for this specific slot is reached.
-                isDue = true;
-                break;
+              // 8-hour (480 mins) catch-up window so if a page is restocked after 04:30 AM,
+              // its morning video is still queued and posted today without skipping the day.
+              if (currentTotalMins >= schedTotalMins && currentTotalMins <= schedTotalMins + 480) {
+                matchedSlotStr = timeStr;
               }
             }
-            if (isDue) {
-               dueMappingIds.push(mapping.id);
+
+            if (matchedSlotStr) {
+              const [schedH, schedM] = matchedSlotStr.split(':').map(Number);
+              const slotStartPkt = new Date(pktTime);
+              slotStartPkt.setUTCHours(schedH, schedM, 0, 0);
+              const startOfSlotUTC = new Date(slotStartPkt.getTime() - (5 * 60 * 60 * 1000));
+
+              const uploadsThisSlot = await this.prisma.uploadHistory.count({
+                where: {
+                  facebookPageId: mapping.facebookPageId,
+                  createdAt: { gte: startOfSlotUTC },
+                  video: { sourceId: source.id },
+                  status: { not: 'FAILED' },
+                  OR: [
+                    { facebookPostId: null },
+                    { facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } }
+                  ]
+                }
+              });
+
+              if (uploadsThisSlot < (mapping.videosPerDay || 1)) {
+                const unuploadedCount = await this.prisma.video.count({
+                  where: {
+                    sourceId: source.id,
+                    uploads: {
+                      none: {
+                        facebookPageId: mapping.facebookPageId,
+                        OR: [
+                          { status: 'PENDING' },
+                          { status: 'PROCESSING' },
+                          { status: 'COMPLETED', facebookPostId: { not: 'MEGA_CLOUD_UPLOAD' } },
+                          { status: 'FAILED' }
+                        ]
+                      }
+                    }
+                  }
+                });
+
+                if (unuploadedCount > 0) {
+                  dueMappingIds.push(mapping.id);
+                }
+              }
             }
           } else {
             if (!mapping.scheduledTime || mapping.scheduledTime === '00:00') {
@@ -118,7 +157,7 @@ export class CronService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (dueMappingIds.length > 0) {
-          if (process.env.GITHUB_ACTIONS === 'true' || process.env.IS_WORKER === 'true') {
+          if (source.platform === 'MEGA_CLOUD' || process.env.GITHUB_ACTIONS === 'true' || process.env.IS_WORKER === 'true') {
              await this.syncService.monitorSource(source.id, dueMappingIds);
           }
           hasWorkToDo = true;
