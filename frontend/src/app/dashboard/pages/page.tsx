@@ -594,8 +594,13 @@ export default function FacebookPagesPage() {
   const fetchYoutubeChannels = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/pages/youtube-channels', {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(`/api/pages/youtube-channels?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        }
       });
       if (res.ok) {
         const data = await res.json();
@@ -636,6 +641,8 @@ export default function FacebookPagesPage() {
             : 'YouTube channel unlinked',
           'success'
         );
+        // Sync full state in background
+        fetchPages();
       } else {
         addToast('Failed to update YouTube link', 'error');
       }
@@ -649,7 +656,10 @@ export default function FacebookPagesPage() {
       const token = localStorage.getItem('token');
       const res = await fetch('/api/pages/auto-link-youtube', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+        }
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -659,25 +669,42 @@ export default function FacebookPagesPage() {
             : 'All matching YouTube channels are already linked',
           'success'
         );
-        fetchPages();
+        await fetchPages();
+        await fetchYoutubeChannels();
       }
     } catch (err: any) {
       addToast(`Error: ${err.message}`, 'error');
     }
   };
 
+  const handleSyncChannels = async () => {
+    try {
+      addToast('🔄 Syncing YouTube channels & pages...', 'info');
+      await fetchYoutubeChannels();
+      await fetchPages();
+      addToast('✅ YouTube channels synced successfully!', 'success');
+    } catch (err: any) {
+      addToast(`Sync error: ${err.message}`, 'error');
+    }
+  };
+
   const fetchPages = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/pages', {
+      const res = await fetch(`/api/pages?_t=${Date.now()}`, {
+        cache: 'no-store',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         }
       });
       if (res.ok) {
         const data = await res.json();
         setPages(data);
       }
+      // Ensure channels are refreshed whenever pages are refreshed
+      fetchYoutubeChannels();
     } catch (err) {
       console.error('Failed to fetch pages:', err);
     } finally {
@@ -852,6 +879,15 @@ export default function FacebookPagesPage() {
           >
             <span>{isScanningCM ? '⏳' : '💰'}</span>
             <span>{isScanningCM ? 'Scanning CM...' : 'Scan CM Invites'}</span>
+          </button>
+
+          <button
+            onClick={handleSyncChannels}
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-200 font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer shadow"
+            title="Refresh YouTube channels and pages from database"
+          >
+            <span>🔄</span>
+            <span>Sync Channels</span>
           </button>
 
           {youtubeChannels.length > 0 && (
@@ -1227,11 +1263,16 @@ export default function FacebookPagesPage() {
                         }`}
                       >
                         <option value="" className="bg-slate-950 text-gray-400">Not Linked</option>
+                        {/* 1. If this page has a linked channel, ALWAYS render it explicitly so select value never defaults to Not Linked */}
+                        {page.youtubeChannelId && (
+                          <option value={page.youtubeChannelId} className="bg-slate-950 text-emerald-400 font-bold">
+                            ✓ {page.youtubeChannelName || youtubeChannels.find((c: any) => c.id === page.youtubeChannelId)?.name || 'Linked Channel'}
+                          </option>
+                        )}
+                        {/* 2. Available unlinked channels (excluding current page channel and channels linked to any other page) */}
                         {youtubeChannels
                           .filter((ch: any) => {
-                            // Always show the channel currently linked to THIS page
-                            if (page.youtubeChannelId === ch.id) return true;
-                            // Exclude channels already attached to ANY other page
+                            if (page.youtubeChannelId === ch.id) return false;
                             const isLinkedToAnotherPage = pages.some(
                               (otherPage: any) => otherPage.id !== page.id && otherPage.youtubeChannelId === ch.id
                             );

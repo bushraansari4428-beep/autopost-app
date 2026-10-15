@@ -133,7 +133,7 @@ export class PagesService {
         metaAppName: matchedApp.appName,
         metaAppSlot: matchedApp.slotNumber,
         metaAppOwnerIdName: matchedApp.ownerIdName,
-        youtubeChannelId: matchedYt ? matchedYt.id : null,
+        youtubeChannelId: matchedYt ? matchedYt.id : (page.youtubeChannelId || null),
         youtubeChannelName: matchedYt ? matchedYt.name : null,
         cloudQueueCount,
         isMegaCloudActive,
@@ -2074,6 +2074,11 @@ export class PagesService {
       });
 
       if (match && page.youtubeChannelId !== match.id) {
+        // Enforce 1-to-1 mapping: unlink this channel from any other page first
+        await this.prisma.facebookPage.updateMany({
+          where: { youtubeChannelId: match.id, id: { not: page.id } },
+          data: { youtubeChannelId: null },
+        });
         await this.prisma.facebookPage.update({
           where: { id: page.id },
           data: { youtubeChannelId: match.id },
