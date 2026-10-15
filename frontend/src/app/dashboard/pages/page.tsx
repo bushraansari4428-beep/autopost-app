@@ -620,11 +620,15 @@ export default function FacebookPagesPage() {
       if (res.ok) {
         const matched = youtubeChannels.find((c: any) => c.id === youtubeChannelId);
         setPages(prev =>
-          prev.map(p =>
-            p.id === pageId
-              ? { ...p, youtubeChannelId: youtubeChannelId || null, youtubeChannelName: matched ? matched.name : null }
-              : p
-          )
+          prev.map(p => {
+            if (p.id === pageId) {
+              return { ...p, youtubeChannelId: youtubeChannelId || null, youtubeChannelName: matched ? matched.name : null };
+            }
+            if (youtubeChannelId && p.youtubeChannelId === youtubeChannelId) {
+              return { ...p, youtubeChannelId: null, youtubeChannelName: null };
+            }
+            return p;
+          })
         );
         addToast(
           youtubeChannelId && matched
@@ -1223,11 +1227,21 @@ export default function FacebookPagesPage() {
                         }`}
                       >
                         <option value="" className="bg-slate-950 text-gray-400">Not Linked</option>
-                        {youtubeChannels.map((ch: any) => (
-                          <option key={ch.id} value={ch.id} className="bg-slate-950 text-white">
-                            {ch.name}
-                          </option>
-                        ))}
+                        {youtubeChannels
+                          .filter((ch: any) => {
+                            // Always show the channel currently linked to THIS page
+                            if (page.youtubeChannelId === ch.id) return true;
+                            // Exclude channels already attached to ANY other page
+                            const isLinkedToAnotherPage = pages.some(
+                              (otherPage: any) => otherPage.id !== page.id && otherPage.youtubeChannelId === ch.id
+                            );
+                            return !isLinkedToAnotherPage;
+                          })
+                          .map((ch: any) => (
+                            <option key={ch.id} value={ch.id} className="bg-slate-950 text-white">
+                              {ch.name}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div className="flex justify-between items-center pt-1 border-t border-gray-800/60">

@@ -2033,6 +2033,19 @@ export class PagesService {
   }
 
   async linkYoutubeChannel(pageId: string, youtubeChannelId: string | null) {
+    if (youtubeChannelId) {
+      // Enforce 1-to-1 mapping: unlink any other page that currently has this YouTube channel
+      await this.prisma.facebookPage.updateMany({
+        where: {
+          youtubeChannelId,
+          id: { not: pageId },
+        },
+        data: {
+          youtubeChannelId: null,
+        },
+      });
+    }
+
     const updated = await this.prisma.facebookPage.update({
       where: { id: pageId },
       data: { youtubeChannelId: youtubeChannelId || null },
