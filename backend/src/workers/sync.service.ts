@@ -96,7 +96,30 @@ export class SyncService {
       }
 
       // Remove ALL hashtags from the first line text
-      const cleanText = firstLine.replace(/#\S+/g, '').replace(/\s+/g, ' ').trim();
+      let cleanText = firstLine.replace(/#\S+/g, '').replace(/\s+/g, ' ').trim();
+
+      // Safeguard: Strip technical prompt generation preamble keywords and file suffix numbers
+      if (cleanText) {
+        const preambles = [
+          /^(?:Create|Generate|Produce)\s+(?:an?|the)?\s*/i,
+          /^(?:Cinematic|Photorealistic|Ultra-realistic|Documentary-style|Documentary|Raw|Fictional)\s+/i,
+          /^\d+[\s–-]*(?:seconds?|secs?)\s+/i,
+          /^(?:multi[\s–-]*angle|single[\s–-]*continuous|zero[\s–-]*cuts?)\s+/i,
+          /^(?:drone\s+(?:sequence|orbit|shot|footage|movement|clip)|camera\s+(?:flow|sequence|movement|shot))\s*(?:of\s+)?(?:an?|the)?\s*/i,
+          /^(?:handheld|smartphone|pov|helicopter)\s*(?:shot|footage|video|clip)?\s*(?:of\s+)?(?:an?|the)?\s*/i,
+          /^(?:video|clip|footage|sequence)\s+(?:filmed\s+entirely\s+from|shot\s+strictly\s+from|showing|featuring|of)\s*(?:an?|the)?\s*/i,
+          /^(?:8k|4k|hd|60fps|vertical\s+9[:/]16|horizontal\s+16[:/]9)\s*/i,
+          /^(?:of\s+)?(?:an?|the)\s+/i,
+        ];
+        let prevText = '';
+        while (cleanText !== prevText) {
+          prevText = cleanText;
+          for (const p of preambles) {
+            cleanText = cleanText.replace(p, '').trim();
+          }
+        }
+        cleanText = cleanText.replace(/_\d+$/, '').trim();
+      }
 
       if (cleanText) {
         // Output clean first line + custom hashtags
