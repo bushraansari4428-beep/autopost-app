@@ -224,6 +224,10 @@ notebook = {
                 "    pipe.vae.enable_tiling()\n",
                 "    pipe.vae.enable_slicing()\n",
                 "\n",
+                "# Slices 3D attention tensor computation to prevent 160GB memory spike on Tesla T4\n",
+                "if hasattr(pipe, 'enable_attention_slicing'):\n",
+                "    pipe.enable_attention_slicing(1)\n",
+                "\n",
                 "torch.cuda.empty_cache()\n",
                 "print(\"\\n👑 Alibaba Wan 2.1 (14B) Dual-GPU Loaded Successfully!\")"
             ]
@@ -308,6 +312,7 @@ notebook = {
                 "                negative_prompt=\"blurry, low quality, distorted, deformed, cartoon, anime, artificial, CGI render, watermark, text\",\n",
                 "                height=height,\n",
                 "                width=width,\n",
+                "                num_frames=41,\n",
                 "                num_inference_steps=NUM_INFERENCE_STEPS,\n",
                 "                guidance_scale=6.0,\n",
                 "            ).frames[0]\n",
