@@ -8,7 +8,6 @@
   "enable_gpu": true,
   "enable_tpu": false,
   "enable_internet": true,
-  "accelerator": "NvidiaTeslaT4",
   "dataset_sources": [],
   "competition_sources": [],
   "kernel_sources": [],
