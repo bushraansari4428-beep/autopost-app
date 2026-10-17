@@ -8,14 +8,15 @@ notebook = {
             "metadata": {},
             "source": [
                 "# 🚀 AutoPost AI — Alibaba Wan 2.1 (14B) Autonomous GPU Worker\n",
-                "### Photorealistic Video Generation Engine for AutoPost App & Facebook Pages\n",
+                "### 🎬 Ultra-Realistic Video Generation Engine (Google Veo 3 / Sora Rival)\n",
                 "\n",
-                "**Specs & Architecture:**\n",
-                "- 🎬 **Google Veo 3 / Sora-grade Photorealism:** Uses the full Alibaba Wan 2.1 14-Billion parameter foundation model.\n",
-                "- ⚡ **100% Free Kaggle Compute:** Runs on Kaggle's free Dual-T4 GPUs (32GB VRAM) for up to 12 hours headlessly.\n",
-                "- 🏷️ **Smart Video Title & Caption Cleaning:** Strips technical prompt clutter (`Cinematic 10-second multi-angle drone sequence...`) so your Facebook video caption is 100% natural and professional.\n",
-                "- ☁️ **Direct AutoPost Cloud Queue:** Automatically uploads finished `.mp4` videos directly to your page's Cloud Queue on Render.\n",
-                "- 📱 **Green API WhatsApp Alerts:** Real-time progress and completion alerts sent directly to your phone.\n",
+                "**Architecture & Specifications:**\n",
+                "- 👑 **Exclusively Powered by Wan 2.1 (14B):** Runs the full 14-Billion parameter foundation model for photorealistic physical lighting, depth, and cinematic realism.\n",
+                "- ⚡ **Kaggle Dual-T4 GPU Engine:** Memory offloaded to run smoothly on Kaggle's free GPU without Out-Of-Memory errors.\n",
+                "- 🏷️ **Smart Video Title & Caption Cleaning:** Strips prompt preambles (`Cinematic 10-second multi-angle drone sequence...`) so video titles & Facebook captions are 100% natural.\n",
+                "- ☁️ **Direct AutoPost Cloud Queue:** Finished videos are uploaded straight to your page's Cloud Queue on Render and scheduled automatically.\n",
+                "- 📱 **Green API WhatsApp Alerts:** Real-time generation progress and completion summary delivered to your phone.\n",
+                "- 🌙 **12-Hour Autonomous Background Run:** You can close your laptop/browser once launched via 'Save & Run All (Commit)'.\n",
                 "\n",
                 "---"
             ]
@@ -25,7 +26,7 @@ notebook = {
             "metadata": {},
             "source": [
                 "## ⚙️ Step 1: Check GPU & Install Dependencies\n",
-                "Run this cell first. It verifies your Kaggle GPU and installs the latest Hugging Face Diffusers engine."
+                "Verifies the attached GPU and installs the latest Hugging Face Diffusers pipeline."
             ]
         },
         {
@@ -53,8 +54,7 @@ notebook = {
             "metadata": {},
             "source": [
                 "## 🔑 Step 2: AutoPost App Configuration & Settings\n",
-                "Your AutoPost backend token and WhatsApp credentials are pre-configured below.\n",
-                "You can change the target page, batch size, or model variant."
+                "Dedicated exclusively to **Wan 2.1 (14B)**. Configure your target page, batch size, and resolution."
             ]
         },
         {
@@ -72,12 +72,11 @@ notebook = {
                 "GREEN_API_TOKEN = \"60a1dd7a5f9e41b7bbfed4e57a3335fc5df38d4f8fe54caf9c\"\n",
                 "WHATSAPP_PHONE = \"923400060008\"\n",
                 "\n",
-                "# Model & Generation Settings\n",
-                "# Choose \"14B\" for supreme Veo 3-level realism, or \"1.3B\" for fast lightweight testing\n",
-                "MODEL_VARIANT = \"14B\"  # \"14B\" or \"1.3B\"\n",
+                "# Dedicated 14B Model Identifier\n",
+                "MODEL_ID = \"Wan-AI/Wan2.1-T2V-14B-Diffusers\"\n",
                 "\n",
-                "# Video Resolution Preset\n",
-                "# \"FAST_HD\" (480x832 vertical) renders 2.5x faster; \"FULL_HD\" (720x1280) is ultra-sharp\n",
+                "# Video Resolution Preset (9:16 Vertical for Reels/Shorts)\n",
+                "# \"FAST_HD\" (480x832) renders faster; \"FULL_HD\" (720x1280) is ultra-crisp\n",
                 "RESOLUTION_PRESET = \"FAST_HD\"  # Options: \"FAST_HD\" (480x832) or \"FULL_HD\" (720x1280)\n",
                 "NUM_INFERENCE_STEPS = 30  # 30 steps gives incredible photorealism\n",
                 "BATCH_SIZE = 5  # Number of videos to generate in this run\n",
@@ -86,7 +85,8 @@ notebook = {
                 "TARGET_PAGE_NAME = \"Beyond Edge Abodes\"  # Or None to auto-target first active page\n",
                 "\n",
                 "print(f\"Configured for AutoPost Backend: {BACKEND_URL}\")\n",
-                "print(f\"Target Page: {TARGET_PAGE_NAME} | Model: Wan 2.1 ({MODEL_VARIANT})\")"
+                "print(f\"Target Page: {TARGET_PAGE_NAME}\")\n",
+                "print(f\"Model: {MODEL_ID} (14-Billion Foundation Model)\")"
             ]
         },
         {
@@ -127,8 +127,8 @@ notebook = {
                 "    \"\"\"\n",
                 "    Cleans technical AI preambles from prompt to produce natural, viral Facebook titles.\n",
                 "    Example:\n",
-                "    'Cinematic 10-second multi-angle drone sequence of a luxury architectural villa...'\n",
-                "    -> 'Luxury Architectural Villa Nestled Deep In Sahara Sand Dunes'\n",
+                "    'Cinematic 10-second multi-angle drone sequence of a luxury architectural villa nestled deep within Sahara...'\n",
+                "    -> 'Luxury Architectural Villa Nestled Deep Within Sahara Sand Dunes'\n",
                 "    \"\"\"\n",
                 "    preambles = [\n",
                 "        r'^(?:Create|Generate|Produce)\\s+(?:an?|the)?\\s*',\n",
@@ -170,9 +170,9 @@ notebook = {
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## 🧠 Step 4: Load Alibaba Wan 2.1 DiT Pipeline\n",
-                "This cell loads the model into PyTorch with `enable_model_cpu_offload()` and VAE tiling,\n",
-                "allowing the 14-Billion parameter foundation model to run smoothly on Kaggle's T4 GPU without memory errors."
+                "## 🧠 Step 4: Load Alibaba Wan 2.1 (14B) DiT Pipeline\n",
+                "Loads the full **14-Billion parameter foundation model** with `enable_model_cpu_offload()` and VAE tiling,\n",
+                "ensuring zero out-of-memory errors on Kaggle GPU."
             ]
         },
         {
@@ -184,21 +184,20 @@ notebook = {
                 "import torch\n",
                 "from diffusers import WanPipeline\n",
                 "\n",
-                "model_id = \"Wan-AI/Wan2.1-T2V-14B-Diffusers\" if MODEL_VARIANT == \"14B\" else \"Wan-AI/Wan2.1-T2V-1.3B-Diffusers\"\n",
-                "print(f\"⏳ Loading {model_id} into GPU memory with CPU offload...\")\n",
+                "print(f\"⏳ Loading full Wan 2.1 (14B) model into memory: {MODEL_ID}...\")\n",
                 "\n",
                 "pipe = WanPipeline.from_pretrained(\n",
-                "    model_id,\n",
+                "    MODEL_ID,\n",
                 "    torch_dtype=torch.bfloat16\n",
                 ")\n",
                 "\n",
-                "# Enable memory optimization for Kaggle Dual-T4\n",
+                "# Enable memory offload and tiling for Kaggle T4\n",
                 "pipe.enable_model_cpu_offload()\n",
                 "if hasattr(pipe, 'vae') and pipe.vae is not None:\n",
                 "    pipe.vae.enable_tiling()\n",
                 "    pipe.vae.enable_slicing()\n",
                 "\n",
-                "print(\"\\n🎉 Wan 2.1 Pipeline Loaded and Ready for Generation!\")"
+                "print(\"\\n👑 Alibaba Wan 2.1 (14B) Loaded Successfully!\")"
             ]
         },
         {
@@ -206,8 +205,7 @@ notebook = {
             "metadata": {},
             "source": [
                 "## 🎬 Step 5: Prompts Pool & Autonomous Batch Execution\n",
-                "Paste your prompts below or keep the test batch for **Beyond Edge Abodes**.\n",
-                "Each video is rendered, saved with a clean title, uploaded to Cloud Queue, and scheduled on Facebook automatically!"
+                "Renders each video using **Wan 2.1 (14B)**, saves with clean natural title, uploads directly to Cloud Queue, and sends WhatsApp alerts!"
             ]
         },
         {
@@ -220,7 +218,7 @@ notebook = {
                 "from pathlib import Path\n",
                 "import time\n",
                 "\n",
-                "# Prompts Pool (You can paste any list of prompts here)\n",
+                "# Prompts Pool for Beyond Edge Abodes (or paste any prompts here)\n",
                 "prompts_pool = [\n",
                 "    \"Cinematic 10-second multi-angle drone sequence of a luxury architectural villa nestled deep within a secluded, wind-swept Sahara sand dune field. Symmetrical brutalist concrete cube with recessed copper windows.\",\n",
                 "    \"Cinematic 10-second multi-angle drone sequence of a luxury architectural villa perched on the jagged basalt sea cliffs of the Faroe Islands. Cantilevered cedar observation deck with outdoor fire pit.\",\n",
@@ -247,7 +245,7 @@ notebook = {
                 "\n",
                 "page_id = target_page['id']\n",
                 "page_name = target_page.get('name', 'Beyond Edge Abodes')\n",
-                "print(f\"\\n=== Starting Video Generation for: '{page_name}' ===\")\n",
+                "print(f\"\\n=== Starting Wan 2.1 (14B) Video Generation for: '{page_name}' ===\")\n",
                 "print(f\"Cloud Queue Target ID: {page_id}\")\n",
                 "\n",
                 "# Resolution setup (Vertical 9:16 for Reels/Shorts)\n",
@@ -268,7 +266,7 @@ notebook = {
                 "    video_path = output_dir / f\"{safe_name}.mp4\"\n",
                 "    \n",
                 "    print(f\"\\n==================================================\")\n",
-                "    print(f\"🎬 [{idx}/{len(selected_batch)}] Generating: '{clean_title}'\")\n",
+                "    print(f\"🎬 [{idx}/{len(selected_batch)}] Wan 2.1 (14B) Generating: '{clean_title}'\")\n",
                 "    print(f\"Resolution: {width}x{height} (9:16) | Steps: {NUM_INFERENCE_STEPS}\")\n",
                 "    print(f\"Prompt: {prompt[:120]}...\")\n",
                 "    print(f\"==================================================\")\n",
@@ -298,10 +296,10 @@ notebook = {
                 "            \n",
                 "            # Send WhatsApp alert\n",
                 "            send_whatsapp(\n",
-                "                f\"🎬 *Video Uploaded to Cloud Queue!*\\n\\n\"\n",
+                "                f\"🎬 *Wan 2.1 (14B) Video Uploaded!*\\n\\n\"\n",
                 "                f\"📌 *Page:* *{page_name}*\\n\"\n",
                 "                f\"🏷️ *Title:* {clean_title}\\n\"\n",
-                "                f\"🤖 *Model:* Alibaba Wan 2.1 ({MODEL_VARIANT})\\n\"\n",
+                "                f\"🤖 *Model:* Alibaba Wan 2.1 (14B DiT)\\n\"\n",
                 "                f\"⚡ *Status:* Queued for scheduled posting! 🚀\"\n",
                 "            )\n",
                 "        else:\n",
@@ -314,14 +312,14 @@ notebook = {
                 "\n",
                 "# Final Batch WhatsApp Notification\n",
                 "summary_msg = (\n",
-                "    f\"🏆 *AutoPost Kaggle Worker Finished!*\\n\\n\"\n",
+                "    f\"🏆 *Wan 2.1 (14B) Batch Finished!*\\n\\n\"\n",
                 "    f\"📌 *Page:* *{page_name}*\\n\"\n",
                 "    f\"🎬 *Videos Generated & Uploaded:* *{uploaded_count}/{len(selected_batch)}*\\n\"\n",
-                "    f\"🤖 *Model:* *Alibaba Wan 2.1 ({MODEL_VARIANT})*\\n\"\n",
+                "    f\"🤖 *Model:* *Alibaba Wan 2.1 (14B DiT)*\\n\"\n",
                 "    f\"✨ *All videos are live in Cloud Queue and will auto-post per page schedule!*\"\n",
                 ")\n",
                 "send_whatsapp(summary_msg)\n",
-                "print(f\"\\n🎉 All done! Uploaded {uploaded_count} videos to {page_name}. WhatsApp summary sent.\")"
+                "print(f\"\\n🎉 All done! Uploaded {uploaded_count} Wan 2.1 14B videos to {page_name}. WhatsApp summary sent.\")"
             ]
         }
     ],
