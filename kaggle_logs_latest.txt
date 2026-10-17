@@ -1,0 +1,128 @@
+[{"stream_name":"stderr","time":7.030596078,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.030679046,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.030689951,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.030693856,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":7.633924189,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.633961706,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.633974992,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.633979143,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":8.811185369,"data":"=== Checking GPU Status ===\n"}
+,{"stream_name":"stdout","time":8.811228543,"data":"Sat Oct 17 08:01:25 2026       \r\n"}
+,{"stream_name":"stdout","time":8.811233904,"data":"+-----------------------------------------------------------------------------------------+\r\n"}
+,{"stream_name":"stdout","time":8.811238875,"data":"| NVIDIA-SMI 580.178.04             Driver Version: 580.178.04     CUDA Version: 13.0     |\r\n"}
+,{"stream_name":"stdout","time":8.81124431,"data":"+-----------------------------------------+------------------------+----------------------+\r\n"}
+,{"stream_name":"stdout","time":8.811249725,"data":"| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\r\n"}
+,{"stream_name":"stdout","time":8.81125636,"data":"| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\r\n"}
+,{"stream_name":"stdout","time":8.811263215,"data":"|                                         |                        |               MIG M. |\r\n"}
+,{"stream_name":"stdout","time":8.811270347,"data":"|=========================================+========================+======================|\r\n"}
+,{"stream_name":"stdout","time":8.861892997,"data":"|   0  Tesla T4                       Off |   00000000:00:04.0 Off |                    0 |\r\n"}
+,{"stream_name":"stdout","time":8.861916751999999,"data":"| N/A   56C    P8             10W /   70W |       0MiB /  15360MiB |      0%      Default |\r\n"}
+,{"stream_name":"stdout","time":8.86192246,"data":"|                                         |                        |                  N/A |\r\n"}
+,{"stream_name":"stdout","time":8.861926932,"data":"+-----------------------------------------+------------------------+----------------------+\r\n"}
+,{"stream_name":"stdout","time":8.861931234,"data":"|   1  Tesla T4                       Off |   00000000:00:05.0 Off |                    0 |\r\n"}
+,{"stream_name":"stdout","time":8.861935176,"data":"| N/A   56C    P8             11W /   70W |       0MiB /  15360MiB |      0%      Default |\r\n"}
+,{"stream_name":"stdout","time":8.86193891,"data":"|                                         |                        |                  N/A |\r\n"}
+,{"stream_name":"stdout","time":8.861942587,"data":"+-----------------------------------------+------------------------+----------------------+\r\n"}
+,{"stream_name":"stdout","time":8.861946258,"data":"\r\n"}
+,{"stream_name":"stdout","time":8.861949647,"data":"+-----------------------------------------------------------------------------------------+\r\n"}
+,{"stream_name":"stdout","time":8.861953344,"data":"| Processes:                                                                              |\r\n"}
+,{"stream_name":"stdout","time":8.86197186,"data":"|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\r\n"}
+,{"stream_name":"stdout","time":8.861974677,"data":"|        ID   ID                                                               Usage      |\r\n"}
+,{"stream_name":"stdout","time":8.86197703,"data":"|=========================================================================================|\r\n"}
+,{"stream_name":"stdout","time":8.861979378000001,"data":"|  No running processes found                                                             |\r\n"}
+,{"stream_name":"stdout","time":8.861981796,"data":"+-----------------------------------------------------------------------------------------+\r\n"}
+,{"stream_name":"stdout","time":9.267063318,"data":"\n"}
+,{"stream_name":"stdout","time":9.267102135,"data":"=== Installing Hugging Face Diffusers \u0026 Dependencies ===\n"}
+,{"stream_name":"stdout","time":10.481081205,"data":"Found existing installation: torchao 0.10.0\r\n"}
+,{"stream_name":"stdout","time":10.582380928,"data":"Uninstalling torchao-0.10.0:\r\n"}
+,{"stream_name":"stdout","time":10.989280311,"data":"  Successfully uninstalled torchao-0.10.0\r\n"}
+,{"stream_name":"stdout","time":21.91273682,"data":"  Installing build dependencies ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":22.217487409,"data":"  Getting requirements to build wheel ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":22.471956542,"data":"  Preparing metadata (pyproject.toml) ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":23.029344678,"data":"\u001b[?25l   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m0.0/839.9 kB\u001b[0m \u001b[31m?\u001b[0m eta \u001b[36m-:--:--\u001b[0m\r\u001b[2K   \u001b[91m━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[90m╺\u001b[0m\u001b[90m━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m399.4/839.9 kB\u001b[0m \u001b[31m11.8 MB/s\u001b[0m eta \u001b[36m0:00:01\u001b[0m\r\u001b[2K   \u001b[91m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[91m╸\u001b[0m \u001b[32m839.7/839.9 kB\u001b[0m \u001b[31m19.0 MB/s\u001b[0m eta \u001b[36m0:00:01\u001b[0m\r\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m839.9/839.9 kB\u001b[0m \u001b[31m11.5 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\r\n"}
+,{"stream_name":"stdout","time":25.155185423,"data":"\u001b[?25h  Building wheel for diffusers (pyproject.toml) ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":34.013052458,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":34.013093486,"data":"gradio 6.26.0 requires huggingface-hub\u003c2.0,\u003e=1.16.0, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":34.013099326,"data":"datasets 4.8.5 requires huggingface-hub\u003c2.0,\u003e=0.25.0, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":34.01310339,"data":"transformers 5.16.1 requires huggingface-hub\u003c2.0,\u003e=1.5.0, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":34.013107376,"data":"gradio-client 2.6.1 requires huggingface-hub\u003c2.0,\u003e=0.19.3, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":34.013150896,"data":"tokenizers 0.23.1 requires huggingface-hub\u003c2.0,\u003e=0.16.4, but you have huggingface-hub 2.2.0 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":36.113699479,"data":"\u001b[0m\u001b[?25l   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m0.0/846.4 kB\u001b[0m \u001b[31m?\u001b[0m eta \u001b[36m-:--:--\u001b[0m\r\u001b[2K   \u001b[91m━━━━━━━━━━━━━━━━━\u001b[0m\u001b[90m╺\u001b[0m\u001b[90m━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m368.6/846.4 kB\u001b[0m \u001b[31m10.9 MB/s\u001b[0m eta \u001b[36m0:00:01\u001b[0m\r\u001b[2K   \u001b[91m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[91m╸\u001b[0m \u001b[32m839.7/846.4 kB\u001b[0m \u001b[31m18.4 MB/s\u001b[0m eta \u001b[36m0:00:01\u001b[0m\r\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m846.4/846.4 kB\u001b[0m \u001b[31m11.3 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\r\n"}
+,{"stream_name":"stdout","time":39.045486369,"data":"\u001b[?25h\n"}
+,{"stream_name":"stdout","time":39.045523274,"data":"✅ Dependencies installed successfully!\n"}
+,{"stream_name":"stdout","time":39.061556885,"data":"Configured for AutoPost Backend: https://autopost-app-1.onrender.com\n"}
+,{"stream_name":"stdout","time":39.061601151,"data":"Target Page: Beyond Edge Abodes\n"}
+,{"stream_name":"stdout","time":39.061606317,"data":"Model: Wan-AI/Wan2.1-T2V-14B-Diffusers (14-Billion Foundation Model)\n"}
+,{"stream_name":"stdout","time":39.149022727,"data":"✅ Helper functions loaded successfully!\n"}
+,{"stream_name":"stdout","time":70.500606134,"data":"⏳ Loading full Wan 2.1 (14B) model into memory: Wan-AI/Wan2.1-T2V-14B-Diffusers...\n"}
+,{"stream_name":"stderr","time":70.50156544,"data":"/usr/local/lib/python3.13/dist-packages/diffusers/utils/deprecation_utils.py:23: FutureWarning: `torch_dtype` is deprecated and will be removed in version 1.0.0. Please use `dtype` instead.\n"}
+,{"stream_name":"stderr","time":70.501593163,"data":"  deprecate(\"torch_dtype\", \"1.0.0\", _TORCH_DTYPE_DEPRECATION_MESSAGE)\n"}
+,{"stream_name":"stderr","time":70.501597642,"data":"\n"}
+,{"stream_name":"stderr","time":70.501600575,"data":"/usr/local/lib/python3.13/dist-packages/diffusers/utils/deprecation_utils.py:23: FutureWarning: `torch_dtype` is deprecated and will be removed in version 1.0.0. Please use `dtype` instead.\n"}
+,{"stream_name":"stderr","time":70.501604729,"data":"  deprecate(\"torch_dtype\", \"1.0.0\", _TORCH_DTYPE_DEPRECATION_MESSAGE)\n"}
+,{"stream_name":"stderr","time":70.569188361,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":70.569221016,"data":"\n"}
+,{"stream_name":"stderr","time":70.569225372,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":803.500918006,"data":"Kernel died while waiting for execute reply.\n"}
+,{"stream_name":"stderr","time":804.551020439,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":804.552506148,"data":"  File \"/usr/local/lib/python3.13/dist-packages/nbclient/client.py\", line 949, in async_execute_cell\n"}
+,{"stream_name":"stderr","time":804.552531608,"data":"    exec_reply = await self.task_poll_for_reply\n"}
+,{"stream_name":"stderr","time":804.552711735,"data":"                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.55272391,"data":"  File \"/usr/local/lib/python3.13/dist-packages/nbclient/client.py\", line 730, in _async_poll_for_reply\n"}
+,{"stream_name":"stderr","time":804.552729716,"data":"    msg = await ensure_async(self.kc.shell_channel.get_msg(timeout=new_timeout))\n"}
+,{"stream_name":"stderr","time":804.552739485,"data":"          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.55274408,"data":"  File \"/usr/local/lib/python3.13/dist-packages/nbclient/util.py\", line 96, in ensure_async\n"}
+,{"stream_name":"stderr","time":804.552749158,"data":"    result = await obj\n"}
+,{"stream_name":"stderr","time":804.552753943,"data":"             ^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.552758697,"data":"  File \"/usr/local/lib/python3.13/dist-packages/jupyter_client/channels.py\", line 224, in get_msg\n"}
+,{"stream_name":"stderr","time":804.552763725,"data":"    ready = await self.socket.poll(timeout)\n"}
+,{"stream_name":"stderr","time":804.552768056,"data":"            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.552772501,"data":"asyncio.exceptions.CancelledError\n"}
+,{"stream_name":"stderr","time":804.552781297,"data":"\n"}
+,{"stream_name":"stderr","time":804.552786171,"data":"During handling of the above exception, another exception occurred:\n"}
+,{"stream_name":"stderr","time":804.552791319,"data":"\n"}
+,{"stream_name":"stderr","time":804.552795865,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":804.556935054,"data":"  File \"\u003cstring\u003e\", line 1, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":804.556996693,"data":"    import sys;import papermill as pm;pm.execute_notebook(\"__notebook__.ipynb\",\"__notebook__.ipynb\",progress_bar=False,log_output=True,stdout_file=sys.stdout,stderr_file=sys.stderr,allow_errors=False,timeout=43200)\n"}
+,{"stream_name":"stderr","time":804.557004557,"data":"                                      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.557009241,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/execute.py\", line 116, in execute_notebook\n"}
+,{"stream_name":"stderr","time":804.557013503,"data":"    nb = papermill_engines.execute_notebook_with_engine(\n"}
+,{"stream_name":"stderr","time":804.557016849,"data":"        engine_name,\n"}
+,{"stream_name":"stderr","time":804.557020006,"data":"    ...\u003c9 lines\u003e...\n"}
+,{"stream_name":"stderr","time":804.557023775,"data":"        **engine_kwargs,\n"}
+,{"stream_name":"stderr","time":804.557027655,"data":"    )\n"}
+,{"stream_name":"stderr","time":804.557031661,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/engines.py\", line 49, in execute_notebook_with_engine\n"}
+,{"stream_name":"stderr","time":804.557035375,"data":"    return self.get_engine(engine_name).execute_notebook(nb, kernel_name, **kwargs)\n"}
+,{"stream_name":"stderr","time":804.557038863,"data":"           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.557042733,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/engines.py\", line 371, in execute_notebook\n"}
+,{"stream_name":"stderr","time":804.557046497,"data":"    cls.execute_managed_notebook(nb_man, kernel_name, log_output=log_output, **kwargs)\n"}
+,{"stream_name":"stderr","time":804.557050009,"data":"    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.557063439,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/engines.py\", line 443, in execute_managed_notebook\n"}
+,{"stream_name":"stderr","time":804.557067869,"data":"    return PapermillNotebookClient(nb_man, **final_kwargs).execute()\n"}
+,{"stream_name":"stderr","time":804.557071449,"data":"           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n"}
+,{"stream_name":"stderr","time":804.557074711,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/clientwrap.py\", line 45, in execute\n"}
+,{"stream_name":"stderr","time":804.557078851,"data":"    self.papermill_execute_cells()\n"}
+,{"stream_name":"stderr","time":804.557082701,"data":"    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n"}
+,{"stream_name":"stderr","time":804.557086338,"data":"  File \"/usr/local/lib/python3.13/dist-packages/papermill/clientwrap.py\", line 72, in papermill_execute_cells\n"}
+,{"stream_name":"stderr","time":804.557089845,"data":"    self.execute_cell(cell, index)\n"}
+,{"stream_name":"stderr","time":804.557093377,"data":"    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":804.557096623,"data":"  File \"/usr/local/lib/python3.13/dist-packages/nbclient/util.py\", line 84, in wrapped\n"}
+,{"stream_name":"stderr","time":804.557100795,"data":"    return just_run(coro(*args, **kwargs))\n"}
+,{"stream_name":"stderr","time":804.557106318,"data":"  File \"/usr/local/lib/python3.13/dist-packages/nbclient/util.py\", line 62, in just_run\n"}
+,{"stream_name":"stderr","time":804.557110573,"data":"    return loop.run_until_complete(coro)\n"}
+,{"stream_name":"stderr","time":804.557114172,"data":"           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n"}
+,{"stream_name":"stderr","time":804.557117884,"data":"  File \"/usr/lib/python3.13/asyncio/base_events.py\", line 726, in run_until_complete\n"}
+,{"stream_name":"stderr","time":804.557121443,"data":"    return future.result()\n"}
+,{"stream_name":"stderr","time":804.557125051,"data":"           ~~~~~~~~~~~~~^^\n"}
+,{"stream_name":"stderr","time":804.557128641,"data":"  File \"/usr/local/lib/python3.13/dist-packages/nbclient/client.py\", line 953, in async_execute_cell\n"}
+,{"stream_name":"stderr","time":804.557132659,"data":"    raise DeadKernelError(\"Kernel died\")\n"}
+,{"stream_name":"stderr","time":804.557136497,"data":"nbclient.exceptions.DeadKernelError: Kernel died\n"}
+,{"stream_name":"stderr","time":807.933111939,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":807.933155446,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":808.294611623,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":808.294717096,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":810.074307646,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":810.159863291,"data":"[NbConvertApp] Writing 28435 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":812.697683565,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":812.927925293,"data":"[NbConvertApp] Writing 323501 bytes to __results__.html\n"}
+]
