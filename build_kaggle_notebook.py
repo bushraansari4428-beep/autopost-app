@@ -43,6 +43,8 @@ notebook = {
                 "!nvidia-smi\n",
                 "\n",
                 "print(\"\\n=== Installing Hugging Face Diffusers & Dependencies ===\")\n",
+                "# Fix Kaggle Python 3.13 torchao conflict\n",
+                "!pip uninstall -y torchao\n",
                 "!pip install -q --upgrade \"git+https://github.com/huggingface/diffusers.git\"\n",
                 "!pip install -q transformers accelerate sentencepiece protobuf torchvision requests tqdm\n",
                 "\n",
