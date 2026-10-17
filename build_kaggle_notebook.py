@@ -227,7 +227,7 @@ notebook = {
                 "pipe = WanPipeline.from_pretrained(\n",
                 "    MODEL_ID,\n",
                 "    torch_dtype=torch.bfloat16,\n",
-                "    device_map=\"auto\",\n",
+                "    device_map=\"balanced\",\n",
                 "    max_memory=max_memory,\n",
                 "    low_cpu_mem_usage=True\n",
                 ")\n",
