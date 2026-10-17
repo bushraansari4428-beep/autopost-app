@@ -1,0 +1,96 @@
+[6.1s] /usr/local/lib/python3.13/dist-packages/nbformat/validator.py:434: MissingIDFieldWarning: Cell is missing an id field, this will become a hard error in future nbformat versions. You may want to use `normalize()` on your notebooks before validations (available since nbformat 5.1.4). Previous versions of nbformat are fixing this issue transparently, and will stop doing so in the future.
+[6.1s]   _validate(nbdict, ref, version, version_minor, relax_add_props)
+[7.0s] 0.00s - Debugger warning: It seems that frozen modules are being used, which may
+[7.0s] 0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+[7.0s] 0.00s - to python to disable frozen modules.
+[7.0s] 0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+[7.6s] 0.00s - Debugger warning: It seems that frozen modules are being used, which may
+[7.6s] 0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+[7.6s] 0.00s - to python to disable frozen modules.
+[7.6s] 0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+[8.7s] === Checking GPU Status ===
+[8.7s] Sat Oct 17 13:35:11 2026       
+[8.7s] +-----------------------------------------------------------------------------------------+
+[8.7s] | NVIDIA-SMI 580.178.04             Driver Version: 580.178.04     CUDA Version: 13.0     |
+[8.7s] +-----------------------------------------+------------------------+----------------------+
+[8.7s] | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+[8.7s] | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+[8.7s] |                                         |                        |               MIG M. |
+[8.7s] |=========================================+========================+======================|
+[8.7s] |   0  Tesla T4                       Off |   00000000:00:04.0 Off |                    0 |
+[8.7s] | N/A   37C    P8             10W /   70W |       0MiB /  15360MiB |      0%      Default |
+[8.7s] |                                         |                        |                  N/A |
+[8.7s] +-----------------------------------------+------------------------+----------------------+
+[8.7s] |   1  Tesla T4                       Off |   00000000:00:05.0 Off |                    0 |
+[8.7s] | N/A   46C    P8             10W /   70W |       0MiB /  15360MiB |      0%      Default |
+[8.7s] |                                         |                        |                  N/A |
+[8.7s] +-----------------------------------------+------------------------+----------------------+
+[8.7s] 
+[8.7s] +-----------------------------------------------------------------------------------------+
+[8.7s] | Processes:                                                                              |
+[8.7s] |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+[8.7s] |        ID   ID                                                               Usage      |
+[8.7s] |=========================================================================================|
+[8.7s] |  No running processes found                                                             |
+[8.7s] +-----------------------------------------------------------------------------------------+
+[9.1s] 
+[9.1s] === Installing Hugging Face Diffusers & Dependencies ===
+[10.4s] Found existing installation: torchao 0.10.0
+[10.5s] Uninstalling torchao-0.10.0:
+[10.8s]   Successfully uninstalled torchao-0.10.0
+[21.8s]   Installing build dependencies ... [?25l[?25hdone
+[22.0s]   Getting requirements to build wheel ... [?25l[?25hdone
+[22.3s]   Preparing metadata (pyproject.toml) ... [?25l[?25hdone
+[22.9s] [?25l   [90mââââââââââââââââââââââââââââââââââââââââ[0m [32m0.0/839.9 kB[0m [31m?[0m eta [36m-:--:--[0m[2K   [91mâââââââââââââââââââ[0m[90mâº[0m[90mââââââââââââââââââââ[0m [32m399.4/839.9 kB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K   [90mââââââââââââââââââââââââââââââââââââââââ[0m [32m839.9/839.9 kB[0m [31m12.2 MB/s[0m eta [36m0:00:00[0m
+[24.8s] [?25h  Building wheel for diffusers (pyproject.toml) ... [?25l[?25hdone
+[33.6s] [31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+[33.6s] gradio 6.26.0 requires huggingface-hub<2.0,>=1.16.0, but you have huggingface-hub 2.2.0 which is incompatible.
+[33.6s] datasets 4.8.5 requires huggingface-hub<2.0,>=0.25.0, but you have huggingface-hub 2.2.0 which is incompatible.
+[33.6s] transformers 5.16.1 requires huggingface-hub<2.0,>=1.5.0, but you have huggingface-hub 2.2.0 which is incompatible.
+[33.6s] gradio-client 2.6.1 requires huggingface-hub<2.0,>=0.19.3, but you have huggingface-hub 2.2.0 which is incompatible.
+[33.6s] tokenizers 0.23.1 requires huggingface-hub<2.0,>=0.16.4, but you have huggingface-hub 2.2.0 which is incompatible.[0m[31m
+[36.5s] [0m[?25l   [90mââââââââââââââââââââââââââââââââââââââââ[0m [32m0.0/846.4 kB[0m [31m?[0m eta [36m-:--:--[0m[2K   [91mâââââ[0m[90mâº[0m[90mââââââââââââââââââââââââââââââââââ[0m [32m112.6/846.4 kB[0m [31m3.2 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââ[0m[90mâº[0m[90mââââââââââââââââââââââââââââââ[0m [32m194.6/846.4 kB[0m [31m2.9 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââ[0m[90mâº[0m[90mâââââââââââââââââââââââââââ[0m [32m256.0/846.4 kB[0m [31m2.5 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââ[0m[91mâ¸[0m[90mâââââââââââââââââââââââââ[0m [32m307.2/846.4 kB[0m [31m2.2 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââ[0m[91mâ¸[0m[90mâââââââââââââââââââââââ[0m [32m358.4/846.4 kB[0m [31m2.1 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââ[0m[91mâ¸[0m[90mâââââââââââââââââââââ[0m [32m399.4/846.4 kB[0m [31m2.0 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââ[0m[90mâº[0m[90mââââââââââââââââââ[0m [32m450.6/846.4 kB[0m [31m1.9 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââ[0m[91mâ¸[0m[90mâââââââââââââââââ[0m [32m481.3/846.4 kB[0m [31m1.7 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââ[0m[91mâ¸[0m[90mâââââââââââââââ[0m [32m522.2/846.4 kB[0m [31m1.7 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââââââ[0m[90mâº[0m[90mââââââââââââââ[0m [32m532.5/846.4 kB[0m [31m1.5 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââ[0m[90mâº[0m[90mâââââââââââââ[0m [32m553.0/846.4 kB[0m [31m1.5 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââ[0m[91mâ¸[0m[90mâââââââââââââ[0m [32m563.2/846.4 kB[0m [31m1.4 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââ[0m[91mâ¸[0m[90mâââââââââââ[0m [32m604.2/846.4 kB[0m [31m1.3 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââââââââââ[0m[90mâº[0m[90mââââââââââ[0m [32m614.4/846.4 kB[0m [31m1.3 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââââ[0m[90mâº[0m[90mâââââââââ[0m [32m634.9/846.4 kB[0m [31m1.3 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââââââââââââ[0m[90mâº[0m[90mââââââââ[0m [32m665.6/846.4 kB[0m [31m1.2 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââââââ[0m[91mâ¸[0m[90mâââââââ[0m [32m696.3/846.4 kB[0m [31m1.2 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââââââââââââââ[0m[91mâ¸[0m[90mââââââ[0m [32m716.8/846.4 kB[0m [31m1.2 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââââââââ[0m[90mâº[0m[90mâââââ[0m [32m727.0/846.4 kB[0m [31m1.1 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââââââââââââââââ[0m[90mâº[0m[90mââââ[0m [32m747.5/846.4 kB[0m [31m1.1 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââââââââââ[0m[90mâº[0m[90mâââ[0m [32m768.0/846.4 kB[0m [31m1.1 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââââââââââ[0m[91mâ¸[0m[90mâââ[0m [32m778.2/846.4 kB[0m [31m1.0 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââââââââââââââââââ[0m[91mâ¸[0m[90mââ[0m [32m798.7/846.4 kB[0m [31m1.0 MB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââââââââââââ[0m[90mâº[0m [32m829.4/846.4 kB[0m [31m993.0 kB/s[0m eta [36m0:00:01[0m[2K   [91mââââââââââââââââââââââââââââââââââââââ[0m[91mâ¸[0m [32m839.7/846.4 kB[0m [31m976.8 kB/s[0m eta [36m0:00:01[0m[2K   [90mâââââââââââââââââââââââââââââââââââââââ[0m [32m846.4/846.4 kB[0m [31m940.7 kB/s[0m eta [36m0:00:00[0m
+[40.7s] [?25h[?25l   [90mââââââââââââââââââââââââââââââââââââââââ[0m [32m0.0/3.3 MB[0m [31m?[0m eta [36m-:--:--[0m[2K   [91mâââââ[0m[90mâº[0m[90mââââââââââââââââââââââââââââââââââ[0m [32m0.4/3.3 MB[0m [31m12.6 MB/s[0m eta [36m0:00:01[0m[2K   [91mâââââââââââââââââââââââââââââââââââââââ[0m[91mâ¸[0m [32m3.3/3.3 MB[0m [31m50.1 MB/s[0m eta [36m0:00:01[0m[2K   [90mââââââââââââââââââââââââââââââââââââââââ[0m [32m3.3/3.3 MB[0m [31m37.6 MB/s[0m eta [36m0:00:00[0m
+[43.2s] [?25h
+[0.0s] {"stream_name":"stdout","time":43.201002922,"data":"â[43.2s] Configured for AutoPost Backend: https://autopost-app-1.onrender.com
+[43.2s] Target Page: Beyond Edge Abodes
+[43.2s] Model: Wan-AI/Wan2.1-T2V-14B-Diffusers (14-Billion Foundation Model)
+[0.0s] {"stream_name":"stdout","time":43.316587608,"data":"â[74.9s] â¡ Activating Turing T4 Chunked Fused Attention Engine...
+[0.0s] {"stream_name":"stdout","time":74.893647783,"data":"â[74.9s] â³ Loading full Wan 2.1 (14B) Dual-GPU Pipeline: Wan-AI/Wan2.1-T2V-14B-Diffusers...
+[75.0s] /usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.
+[75.0s]   warnings.warn(
+[75.0s] 
+[75.0s] /usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.
+[75.0s]   warnings.warn(
+[562.8s] /usr/local/lib/python3.13/dist-packages/accelerate/utils/modeling.py:1615: UserWarning: The following device_map keys do not match any submodules in the model: ['scale_shift_table']
+[562.8s]   warnings.warn(
+[562.8s] 
+[562.8s] /usr/local/lib/python3.13/dist-packages/accelerate/utils/modeling.py:1615: UserWarning: The following device_map keys do not match any submodules in the model: ['scale_shift_table']
+[562.8s]   warnings.warn(
+[563.0s] Some parameters are on the meta device because they were offloaded to the cpu.
+[563.0s] 
+[563.0s] Some parameters are on the meta device because they were offloaded to the cpu.
+[563.2s] /usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.
+[563.2s]   warnings.warn(
+[563.2s] 
+[563.2s] /usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.
+[563.2s]   warnings.warn(
+[563.2s] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[563.2s] 
+[563.2s] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[571.1s] /usr/local/lib/python3.13/dist-packages/diffusers/utils/deprecation_utils.py:23: FutureWarning: `torch_dtype` is deprecated and will be removed in version 1.0.0. Please use `dtype` instead.
+[571.1s]   deprecate("torch_dtype", "1.0.0", _TORCH_DTYPE_DEPRECATION_MESSAGE)
+[571.1s] 
+[571.1s] /usr/local/lib/python3.13/dist-packages/diffusers/utils/deprecation_utils.py:23: FutureWarning: `torch_dtype` is deprecated and will be removed in version 1.0.0. Please use `dtype` instead.
+[571.1s]   deprecate("torch_dtype", "1.0.0", _TORCH_DTYPE_DEPRECATION_MESSAGE)
+[772.8s] 
+[772.8s] ð Alibaba Wan 2.1 (14B) Dual-GPU Loaded Successfully!
+[775.6s] 
+[775.6s] === Starting Wan 2.1 (14B) Video Generation for: 'Beyond Edge Abodes' ===
+[775.6s] Cloud Queue Target ID: eccb130f-167a-4afa-abac-86f31e5e8cba
+[775.6s] 
+[775.6s] ==================================================
+[775.6s] ð¬ [1/5] Wan 2.1 (14B) Generating: 'Luxury Architectural Villa Nestled Deep Within A Secluded, Wind-Swept Sahara Sand'
+[775.6s] Resolution: 480x832 (9:16) | Steps: 30
+[775.6s] Prompt: Cinematic 10-second multi-angle drone sequence of a luxury architectural villa nestled deep within a secluded, wind-swep...
+[775.6s] ==================================================
