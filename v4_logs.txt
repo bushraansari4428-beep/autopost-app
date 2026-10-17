@@ -1,0 +1,138 @@
+[{"stream_name":"stderr","time":5.314654691,"data":"/usr/local/lib/python3.13/dist-packages/nbformat/validator.py:434: MissingIDFieldWarning: Cell is missing an id field, this will become a hard error in future nbformat versions. You may want to use `normalize()` on your notebooks before validations (available since nbformat 5.1.4). Previous versions of nbformat are fixing this issue transparently, and will stop doing so in the future.\n"}
+,{"stream_name":"stderr","time":5.314700141,"data":"  _validate(nbdict, ref, version, version_minor, relax_add_props)\n"}
+,{"stream_name":"stderr","time":6.075065995,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.075090576,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.075093946,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.07509648,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":6.621924518,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.621948919,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.621967647,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.621970331,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":7.71733226,"data":"=== Checking GPU Status ===\n"}
+,{"stream_name":"stdout","time":7.717382622,"data":"Sat Oct 17 08:31:42 2026       \r\n"}
+,{"stream_name":"stdout","time":7.717388469,"data":"+-----------------------------------------------------------------------------------------+\r\n"}
+,{"stream_name":"stdout","time":7.717392832,"data":"| NVIDIA-SMI 580.178.04             Driver Version: 580.178.04     CUDA Version: 13.0     |\r\n"}
+,{"stream_name":"stdout","time":7.717397258,"data":"+-----------------------------------------+------------------------+----------------------+\r\n"}
+,{"stream_name":"stdout","time":7.717401413,"data":"| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\r\n"}
+,{"stream_name":"stdout","time":7.717404881,"data":"| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\r\n"}
+,{"stream_name":"stdout","time":7.717408252,"data":"|                                         |                        |               MIG M. |\r\n"}
+,{"stream_name":"stdout","time":7.717411622,"data":"|=========================================+========================+======================|\r\n"}
+,{"stream_name":"stdout","time":7.767888287,"data":"|   0  Tesla T4                       Off |   00000000:00:04.0 Off |                    0 |\r\n"}
+,{"stream_name":"stdout","time":7.767910225,"data":"| N/A   57C    P8             12W /   70W |       0MiB /  15360MiB |      0%      Default |\r\n"}
+,{"stream_name":"stdout","time":7.767916104,"data":"|                                         |                        |                  N/A |\r\n"}
+,{"stream_name":"stdout","time":7.767920071,"data":"+-----------------------------------------+------------------------+----------------------+\r\n"}
+,{"stream_name":"stdout","time":7.767923746,"data":"|   1  Tesla T4                       Off |   00000000:00:05.0 Off |                    0 |\r\n"}
+,{"stream_name":"stdout","time":7.767927437,"data":"| N/A   55C    P8             10W /   70W |       0MiB /  15360MiB |      0%      Default |\r\n"}
+,{"stream_name":"stdout","time":7.767945699,"data":"|                                         |                        |                  N/A |\r\n"}
+,{"stream_name":"stdout","time":7.767948552,"data":"+-----------------------------------------+------------------------+----------------------+\r\n"}
+,{"stream_name":"stdout","time":7.767950957,"data":"\r\n"}
+,{"stream_name":"stdout","time":7.767953239,"data":"+-----------------------------------------------------------------------------------------+\r\n"}
+,{"stream_name":"stdout","time":7.767955775,"data":"| Processes:                                                                              |\r\n"}
+,{"stream_name":"stdout","time":7.767958171,"data":"|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\r\n"}
+,{"stream_name":"stdout","time":7.767960527,"data":"|        ID   ID                                                               Usage      |\r\n"}
+,{"stream_name":"stdout","time":7.767962904,"data":"|=========================================================================================|\r\n"}
+,{"stream_name":"stdout","time":7.767965321,"data":"|  No running processes found                                                             |\r\n"}
+,{"stream_name":"stdout","time":7.767967696,"data":"+-----------------------------------------------------------------------------------------+\r\n"}
+,{"stream_name":"stdout","time":8.222093412,"data":"\n"}
+,{"stream_name":"stdout","time":8.222134363,"data":"=== Installing Hugging Face Diffusers \u0026 Dependencies ===\n"}
+,{"stream_name":"stdout","time":9.293074615,"data":"Found existing installation: torchao 0.10.0\r\n"}
+,{"stream_name":"stdout","time":9.343569167,"data":"Uninstalling torchao-0.10.0:\r\n"}
+,{"stream_name":"stdout","time":9.646853396000001,"data":"  Successfully uninstalled torchao-0.10.0\r\n"}
+,{"stream_name":"stdout","time":19.757459546,"data":"  Installing build dependencies ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":20.061230515,"data":"  Getting requirements to build wheel ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":20.314823903,"data":"  Preparing metadata (pyproject.toml) ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":20.669149554,"data":"\u001b[?25l   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m0.0/839.9 kB\u001b[0m \u001b[31m?\u001b[0m eta \u001b[36m-:--:--\u001b[0m\r\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m839.9/839.9 kB\u001b[0m \u001b[31m30.5 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\r\n"}
+,{"stream_name":"stdout","time":22.792529208,"data":"\u001b[?25h  Building wheel for diffusers (pyproject.toml) ... \u001b[?25l\u001b[?25hdone\r\n"}
+,{"stream_name":"stdout","time":31.292050652,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":31.292081573,"data":"gradio 6.26.0 requires huggingface-hub\u003c2.0,\u003e=1.16.0, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":31.292085236,"data":"datasets 4.8.5 requires huggingface-hub\u003c2.0,\u003e=0.25.0, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":31.292087936,"data":"transformers 5.16.1 requires huggingface-hub\u003c2.0,\u003e=1.5.0, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":31.292090536,"data":"gradio-client 2.6.1 requires huggingface-hub\u003c2.0,\u003e=0.19.3, but you have huggingface-hub 2.2.0 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":31.292101199,"data":"tokenizers 0.23.1 requires huggingface-hub\u003c2.0,\u003e=0.16.4, but you have huggingface-hub 2.2.0 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":33.158537559,"data":"\u001b[0m\u001b[?25l   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m0.0/846.4 kB\u001b[0m \u001b[31m?\u001b[0m eta \u001b[36m-:--:--\u001b[0m\r\u001b[2K   \u001b[91m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[91m╸\u001b[0m \u001b[32m839.7/846.4 kB\u001b[0m \u001b[31m77.4 MB/s\u001b[0m eta \u001b[36m0:00:01\u001b[0m\r\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m846.4/846.4 kB\u001b[0m \u001b[31m23.6 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\r\n"}
+,{"stream_name":"stdout","time":36.016823291,"data":"\u001b[?25h\n"}
+,{"stream_name":"stdout","time":36.016854383,"data":"✅ Dependencies installed successfully!\n"}
+,{"stream_name":"stdout","time":36.032050865,"data":"Configured for AutoPost Backend: https://autopost-app-1.onrender.com\n"}
+,{"stream_name":"stdout","time":36.032071373,"data":"Target Page: Beyond Edge Abodes\n"}
+,{"stream_name":"stdout","time":36.03207655,"data":"Model: Wan-AI/Wan2.1-T2V-14B-Diffusers (14-Billion Foundation Model)\n"}
+,{"stream_name":"stdout","time":36.116484945,"data":"✅ Helper functions loaded successfully!\n"}
+,{"stream_name":"stdout","time":62.534237888,"data":"⏳ Loading full Wan 2.1 (14B) Dual-GPU Pipeline: Wan-AI/Wan2.1-T2V-14B-Diffusers...\n"}
+,{"stream_name":"stderr","time":62.535166038,"data":"/usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.\n"}
+,{"stream_name":"stderr","time":62.535188956,"data":"  warnings.warn(\n"}
+,{"stream_name":"stderr","time":62.535194715,"data":"\n"}
+,{"stream_name":"stderr","time":62.535199378,"data":"/usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.\n"}
+,{"stream_name":"stderr","time":62.53520452,"data":"  warnings.warn(\n"}
+,{"stream_name":"stderr","time":62.551745805,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":62.55176388,"data":"\n"}
+,{"stream_name":"stderr","time":62.551768778,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":551.072027841,"data":"/usr/local/lib/python3.13/dist-packages/accelerate/utils/modeling.py:1615: UserWarning: The following device_map keys do not match any submodules in the model: ['scale_shift_table']\n"}
+,{"stream_name":"stderr","time":551.072101315,"data":"  warnings.warn(\n"}
+,{"stream_name":"stderr","time":551.072121476,"data":"\n"}
+,{"stream_name":"stderr","time":551.072127977,"data":"/usr/local/lib/python3.13/dist-packages/accelerate/utils/modeling.py:1615: UserWarning: The following device_map keys do not match any submodules in the model: ['scale_shift_table']\n"}
+,{"stream_name":"stderr","time":551.072132869,"data":"  warnings.warn(\n"}
+,{"stream_name":"stderr","time":551.143936136,"data":"/usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.\n"}
+,{"stream_name":"stderr","time":551.143969819,"data":"  warnings.warn(\n"}
+,{"stream_name":"stderr","time":551.143975998,"data":"\n"}
+,{"stream_name":"stderr","time":551.143980072,"data":"/usr/local/lib/python3.13/dist-packages/huggingface_hub/utils/_validators.py:206: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `hf_hub_download`. Downloading to a local directory does not use symlinks anymore.\n"}
+,{"stream_name":"stderr","time":551.143985003,"data":"  warnings.warn(\n"}
+,{"stream_name":"stderr","time":555.195350937,"data":"/usr/local/lib/python3.13/dist-packages/diffusers/utils/deprecation_utils.py:23: FutureWarning: `torch_dtype` is deprecated and will be removed in version 1.0.0. Please use `dtype` instead.\n"}
+,{"stream_name":"stderr","time":555.19539146,"data":"  deprecate(\"torch_dtype\", \"1.0.0\", _TORCH_DTYPE_DEPRECATION_MESSAGE)\n"}
+,{"stream_name":"stderr","time":555.195396746,"data":"\n"}
+,{"stream_name":"stderr","time":555.195400493,"data":"/usr/local/lib/python3.13/dist-packages/diffusers/utils/deprecation_utils.py:23: FutureWarning: `torch_dtype` is deprecated and will be removed in version 1.0.0. Please use `dtype` instead.\n"}
+,{"stream_name":"stderr","time":555.195404679,"data":"  deprecate(\"torch_dtype\", \"1.0.0\", _TORCH_DTYPE_DEPRECATION_MESSAGE)\n"}
+,{"stream_name":"stdout","time":747.280372079,"data":"\n"}
+,{"stream_name":"stdout","time":747.280911479,"data":"👑 Alibaba Wan 2.1 (14B) Dual-GPU Loaded Successfully!\n"}
+,{"stream_name":"stdout","time":749.67241146,"data":"\n"}
+,{"stream_name":"stdout","time":749.672443852,"data":"=== Starting Wan 2.1 (14B) Video Generation for: 'Beyond Edge Abodes' ===\n"}
+,{"stream_name":"stdout","time":749.672449797,"data":"Cloud Queue Target ID: eccb130f-167a-4afa-abac-86f31e5e8cba\n"}
+,{"stream_name":"stdout","time":749.672454782,"data":"\n"}
+,{"stream_name":"stdout","time":749.672459374,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":749.672464155,"data":"🎬 [1/5] Wan 2.1 (14B) Generating: 'Luxury Architectural Villa Nestled Deep Within A Secluded, Wind-Swept Sahara Sand'\n"}
+,{"stream_name":"stdout","time":749.672469905,"data":"Resolution: 480x832 (9:16) | Steps: 30\n"}
+,{"stream_name":"stdout","time":749.67247478,"data":"Prompt: Cinematic 10-second multi-angle drone sequence of a luxury architectural villa nestled deep within a secluded, wind-swep...\n"}
+,{"stream_name":"stdout","time":749.672479838,"data":"==================================================\n"}
+,{"stream_name":"stderr","time":749.6755066,"data":"/tmp/ipykernel_23/3110505972.py:60: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.\n"}
+,{"stream_name":"stderr","time":749.675534665,"data":"  with torch.cuda.amp.autocast(dtype=torch.bfloat16):\n"}
+,{"stream_name":"stderr","time":749.675540875,"data":"\n"}
+,{"stream_name":"stderr","time":749.675545987,"data":"/tmp/ipykernel_23/3110505972.py:60: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.\n"}
+,{"stream_name":"stderr","time":749.675551691,"data":"  with torch.cuda.amp.autocast(dtype=torch.bfloat16):\n"}
+,{"stream_name":"stdout","time":959.653230055,"data":"❌ Error generating prompt 1: CUDA out of memory. Tried to allocate 640.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 158.81 MiB is free. Including non-PyTorch memory, this process has 14.40 GiB memory in use. Of the allocated memory 14.00 GiB is allocated by PyTorch, and 282.50 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)\n"}
+,{"stream_name":"stdout","time":959.653309355,"data":"\n"}
+,{"stream_name":"stdout","time":959.653315553,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":959.653320637,"data":"🎬 [2/5] Wan 2.1 (14B) Generating: 'Luxury Architectural Villa Perched On The Jagged Basalt Sea Cliffs Of The Faroe'\n"}
+,{"stream_name":"stdout","time":959.653325725,"data":"Resolution: 480x832 (9:16) | Steps: 30\n"}
+,{"stream_name":"stdout","time":959.653331125,"data":"Prompt: Cinematic 10-second multi-angle drone sequence of a luxury architectural villa perched on the jagged basalt sea cliffs o...\n"}
+,{"stream_name":"stdout","time":959.653336424,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":1169.544153632,"data":"❌ Error generating prompt 2: CUDA out of memory. Tried to allocate 640.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 478.81 MiB is free. Including non-PyTorch memory, this process has 14.09 GiB memory in use. Of the allocated memory 13.38 GiB is allocated by PyTorch, and 602.08 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)\n"}
+,{"stream_name":"stdout","time":1169.544225099,"data":"\n"}
+,{"stream_name":"stdout","time":1169.544233606,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":1169.544240808,"data":"🎬 [3/5] Wan 2.1 (14B) Generating: 'Luxury Architectural Villa Situated Deep Within An Ancient, Towering Redwood Forest'\n"}
+,{"stream_name":"stdout","time":1169.544248471,"data":"Resolution: 480x832 (9:16) | Steps: 30\n"}
+,{"stream_name":"stdout","time":1169.544255389,"data":"Prompt: Cinematic 10-second multi-angle drone sequence of a luxury architectural villa situated deep within an ancient, towering...\n"}
+,{"stream_name":"stdout","time":1169.544262829,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":1376.252180884,"data":"❌ Error generating prompt 3: CUDA out of memory. Tried to allocate 640.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 158.81 MiB is free. Including non-PyTorch memory, this process has 14.40 GiB memory in use. Of the allocated memory 14.00 GiB is allocated by PyTorch, and 281.93 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)\n"}
+,{"stream_name":"stdout","time":1376.252243667,"data":"\n"}
+,{"stream_name":"stdout","time":1376.252250755,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":1376.252256794,"data":"🎬 [4/5] Wan 2.1 (14B) Generating: 'Luxury Architectural Villa Located In The Center Of The Infinite Salar De Uyuni Salt'\n"}
+,{"stream_name":"stdout","time":1376.252263319,"data":"Resolution: 480x832 (9:16) | Steps: 30\n"}
+,{"stream_name":"stdout","time":1376.252269184,"data":"Prompt: Cinematic 10-second multi-angle drone sequence of a luxury architectural villa located in the center of the infinite Sal...\n"}
+,{"stream_name":"stdout","time":1376.252289685,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":1581.946845993,"data":"❌ Error generating prompt 4: CUDA out of memory. Tried to allocate 640.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 158.81 MiB is free. Including non-PyTorch memory, this process has 14.40 GiB memory in use. Of the allocated memory 14.00 GiB is allocated by PyTorch, and 281.93 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)\n"}
+,{"stream_name":"stdout","time":1581.94690264,"data":"\n"}
+,{"stream_name":"stdout","time":1581.946911137,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":1581.946917777,"data":"🎬 [5/5] Wan 2.1 (14B) Generating: 'Luxury Architectural Villa Balanced On The Rim Of A Massive, Hidden Jungle Waterfall'\n"}
+,{"stream_name":"stdout","time":1581.946923861,"data":"Resolution: 480x832 (9:16) | Steps: 30\n"}
+,{"stream_name":"stdout","time":1581.946930392,"data":"Prompt: Cinematic 10-second multi-angle drone sequence of a luxury architectural villa balanced on the rim of a massive, hidden ...\n"}
+,{"stream_name":"stdout","time":1581.946936698,"data":"==================================================\n"}
+,{"stream_name":"stdout","time":1786.887044475,"data":"❌ Error generating prompt 5: CUDA out of memory. Tried to allocate 640.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 158.81 MiB is free. Including non-PyTorch memory, this process has 14.40 GiB memory in use. Of the allocated memory 14.00 GiB is allocated by PyTorch, and 281.93 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)\n"}
+,{"stream_name":"stdout","time":1788.667265585,"data":"\n"}
+,{"stream_name":"stdout","time":1788.667303603,"data":"🎉 All done! Uploaded 0 Wan 2.1 14B videos to Beyond Edge Abodes. WhatsApp summary sent.\n"}
+,{"stream_name":"stderr","time":1794.711497214,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":1794.711526041,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":1794.954360551,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":1794.954385582,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":1796.105502086,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":1796.214161963,"data":"[NbConvertApp] Writing 267531 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":1798.672637451,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":1799.553086679,"data":"[NbConvertApp] Writing 518103 bytes to __results__.html\n"}
+]
