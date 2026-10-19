@@ -1970,4 +1970,139 @@ export class SyncService {
       return [];
     }
   }
+
+  /**
+   * Directly uploads and publishes a photo with caption to a Facebook Page (or queues it).
+   * Supports UUID, numeric Facebook Page ID, or exact Page Name.
+   */
+  async processPhotoUpload(
+    pageIdentifier: string,
+    imageBuffer: Buffer,
+    caption: string,
+    originalFilename = 'photo.jpg',
+  ) {
+    const cleanId = (pageIdentifier || '').trim();
+    if (!cleanId) {
+      throw new Error('Page identifier must be provided.');
+    }
+
+    // Support internal UUID, Meta numeric pageId, or exact page name
+    const page = await this.prisma.facebookPage.findFirst({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { id: cleanId },
+          { pageId: cleanId },
+          { name: { equals: cleanId, mode: 'insensitive' } },
+        ],
+      },
+    });
+
+    if (!page) {
+      throw new Error(`Active Facebook Page '${pageIdentifier}' not found.`);
+    }
+
+    if (!page.accessToken) {
+      throw new Error(`Facebook Page '${page.name}' has no active Access Token.`);
+    }
+
+    this.logsService.log('INFO', `Starting Photo Upload for page: ${page.name}`);
+
+    // Publish to Facebook Graph API
+    const fbResult = await this.facebookService.uploadPhoto(
+      page.pageId,
+      page.accessToken,
+      imageBuffer,
+      caption,
+      originalFilename,
+    );
+
+    const postId = fbResult.post_id || fbResult.id;
+    this.logsService.log('INFO', `Success! Facebook Photo Post ID: ${postId} for page ${page.name}`);
+
+    // Ensure dedicated Photo Source exists
+    let photoSource = await this.prisma.source.findFirst({
+      where: { platform: 'MEGA_CLOUD', url: `photo://${page.pageId}` },
+    });
+    if (!photoSource) {
+      photoSource = await this.prisma.source.create({
+        data: {
+          platform: 'MEGA_CLOUD',
+          name: `Photo Posts (${page.name})`,
+          url: `photo://${page.pageId}`,
+          userId: page.userId,
+        },
+      });
+    }
+
+    const cleanCaption = (caption || '').trim();
+    const shortTitle = cleanCaption.split('\n')[0].substring(0, 100) || `Photo Post ${new Date().toLocaleDateString()}`;
+
+    // Record in Video table
+    const photoRecord = await this.prisma.video.create({
+      data: {
+        sourceId: photoSource.id,
+        originalId: `photo_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        title: shortTitle,
+        description: cleanCaption,
+        url: `https://www.facebook.com/${postId}`,
+        publishedAt: new Date(),
+      },
+    });
+
+    // Record in UploadHistory
+    await this.prisma.uploadHistory.create({
+      data: {
+        videoId: photoRecord.id,
+        facebookPageId: page.id,
+        status: 'COMPLETED',
+        facebookPostId: postId,
+        errorMessage: null,
+      },
+    });
+
+    // Real-Time WhatsApp Alert
+    this.whatsappService.sendVideoActivityAlert({
+      pageName: page.name,
+      videoTitle: shortTitle,
+      sourcePlatform: 'MEGA_CLOUD',
+      action: 'Photo Successfully Published to Facebook! 📸',
+      details: `Post ID: ${postId}\n\nCaption Preview: "${shortTitle.slice(0, 80)}"`,
+    }).catch(() => {});
+
+    return {
+      success: true,
+      message: 'Photo successfully published to Facebook!',
+      postId: postId,
+      pageId: page.pageId,
+      pageName: page.name,
+      facebookUrl: `https://www.facebook.com/${postId}`,
+    };
+  }
+
+  /**
+   * Returns list of all active Facebook pages with their recommended folder aliases for VPS photo syncing.
+   */
+  async getPhotoTargets() {
+    const pages = await this.prisma.facebookPage.findMany({
+      where: { status: 'ACTIVE' },
+      select: {
+        id: true,
+        pageId: true,
+        name: true,
+        status: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return pages.map(p => {
+      const alias = 'folder_' + p.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      return {
+        id: p.id,
+        pageId: p.pageId,
+        pageName: p.name,
+        folderAlias: alias,
+      };
+    });
+  }
 }

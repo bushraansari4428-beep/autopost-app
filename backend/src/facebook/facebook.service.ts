@@ -128,6 +128,56 @@ export class FacebookService {
   }
 
   /**
+   * Upload and publish a photo with caption directly to a Facebook Page.
+   * @param pageId The Facebook Page ID
+   * @param accessToken The Page Access Token
+   * @param imageBuffer The binary buffer of the image
+   * @param caption The post caption / message
+   * @param filename The original or generated file name
+   */
+  async uploadPhoto(
+    pageId: string,
+    accessToken: string,
+    imageBuffer: Buffer,
+    caption?: string,
+    filename = 'photo.jpg'
+  ): Promise<{ id: string; post_id?: string }> {
+    this.logger.log(`Uploading photo to Facebook Page ID: ${pageId}, Size: ${imageBuffer.length} bytes`);
+
+    const url = `${this.graphApiBase}/${pageId}/photos`;
+    const formData = new FormData();
+    formData.append('access_token', accessToken);
+    if (caption && caption.trim()) {
+      formData.append('message', caption.trim());
+    }
+    formData.append('published', 'true');
+
+    let mimeType = 'image/jpeg';
+    if (filename.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+    else if (filename.toLowerCase().endsWith('.webp')) mimeType = 'image/webp';
+
+    formData.append(
+      'source',
+      new Blob([new Uint8Array(imageBuffer)], { type: mimeType }),
+      filename
+    );
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      this.logger.error(`Error uploading photo to Facebook: ${JSON.stringify(data.error)}`);
+      throw new Error(data.error?.message || 'Failed to publish photo to Facebook');
+    }
+
+    this.logger.log(`Successfully published photo. FB Photo ID: ${data.id}, Post ID: ${data.post_id || data.id}`);
+    return data;
+  }
+
+  /**
    * A helper method to fetch Page details to verify the access token.
    */
   async verifyPageToken(pageId: string, accessToken: string): Promise<any> {

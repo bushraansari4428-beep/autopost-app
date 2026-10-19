@@ -10,6 +10,77 @@ import * as os from 'os';
 export class LocalUploadController {
   constructor(private readonly syncService: SyncService) {}
 
+  @Get('photo-targets')
+  @UseGuards(AuthGuard('jwt'))
+  async getPhotoTargets() {
+    try {
+      return await this.syncService.getPhotoTargets();
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Post('photo-upload')
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 25 * 1024 * 1024 },
+    }),
+  )
+  async uploadPhotoDirect(
+    @Body('pageId') pageId: string,
+    @UploadedFile() file: any,
+    @Body('caption') caption: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No photo file provided');
+    }
+    if (!pageId) {
+      throw new BadRequestException('pageId must be provided in body');
+    }
+
+    try {
+      return await this.syncService.processPhotoUpload(
+        pageId,
+        file.buffer,
+        caption || '',
+        file.originalname,
+      );
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Post(':id/photo-upload')
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 25 * 1024 * 1024 },
+    }),
+  )
+  async uploadPhoto(
+    @Param('id') pageId: string,
+    @UploadedFile() file: any,
+    @Body('caption') caption: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No photo file provided');
+    }
+
+    try {
+      return await this.syncService.processPhotoUpload(
+        pageId,
+        file.buffer,
+        caption || '',
+        file.originalname,
+      );
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
   @Post(':id/local-upload')
   @UseGuards(AuthGuard('jwt'))
   @UseInterceptors(
