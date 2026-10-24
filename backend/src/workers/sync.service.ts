@@ -696,6 +696,7 @@ export class SyncService {
         const candidateVideos = await this.prisma.video.findMany({
           where: {
             sourceId: source.id,
+            ...(source.platform === 'TIKTOK' ? { url: { contains: 'tiktok.com' } } : {}),
             uploads: {
               none: {
                 facebookPageId: mapping.facebookPageId,
@@ -1499,32 +1500,25 @@ export class SyncService {
            throw new Error(`Failed to extract MP4 video stream from RedNote / Xiaohongshu URL: ${targetUrl}`);
        }
     } else {
-      this.logger.log(`Requesting loader.to for YouTube video: ${ytId}`);
-      const loaderRes = await fetch(`https://loader.to/ajax/download.php?format=720&url=${encodedUrl}`);
-      const loaderData = await loaderRes.json();
-      
-      if (!loaderData || !loaderData.id) {
-        throw new Error(`Failed to initialize loader.to download. Response: ${JSON.stringify(loaderData)}`);
+      this.logger.log(`Downloading YouTube video via yt-dlp: ${targetUrl}`);
+      this.logsService.log('INFO', `Downloading YouTube video directly using yt-dlp...`);
+      const ytDlpCmd = await this.getYtDlpCmd();
+      const ytTempPath = path.join(os.tmpdir(), `yt_${Date.now()}_${Math.floor(Math.random()*10000)}.mp4`);
+      const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+      const cmd = `${ytDlpCmd} -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --no-playlist ${cookieArg} -o "${ytTempPath}" "${targetUrl}"`;
+      try {
+        await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
+      } catch (err: any) {
+        const fallbackCmd = `${ytDlpCmd} --no-playlist ${cookieArg} -o "${ytTempPath}" "${targetUrl}"`;
+        await execPromise(fallbackCmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
       }
-      
-      const downloadId = loaderData.id;
-      this.logsService.log('INFO', `Processing video format, please wait...`);
-      
-      // Poll for up to 60 seconds
-      for (let i = 0; i < 30; i++) {
-        await this.delay(2000);
-        const progRes = await fetch(`https://lto2.affadaffa.com/api/progress?id=${downloadId}`);
-        try {
-          const progData = await progRes.json();
-          this.logger.log(`Loader status: ${progData.text}`);
-          if (progData.success === 1 || progData.success === '1') {
-            videoUrl = progData.download_url;
-            break;
-          }
-        } catch (e) {
-          this.logger.error(`Error parsing progress: ${e.message}`);
-        }
+
+      if (!fs.existsSync(ytTempPath) || fs.statSync(ytTempPath).size < 10240) {
+        const size = fs.existsSync(ytTempPath) ? fs.statSync(ytTempPath).size : 0;
+        throw new Error(`YouTube video download failed with yt-dlp. File not found or too small (${size} bytes).`);
       }
+
+      videoUrl = 'local://' + ytTempPath;
     }
     
     if (!videoUrl) {
@@ -1537,9 +1531,9 @@ export class SyncService {
     let fbRes: any;
     let fbData: any;
 
-    const isMegaLocal = videoUrl.startsWith('local://');
+    const isLocalFile = videoUrl.startsWith('local://');
     const isTiktokOrCdn = targetUrl.includes('tiktok.com') || videoUrl.includes('tiktok.com') || videoUrl.includes('akamai') || videoUrl.includes('byte') || videoUrl.includes('snssdk');
-    const isXhsOrRedNote = (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote.com') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu')) && !isMegaLocal;
+    const isXhsOrRedNote = (targetUrl.includes('xiaohongshu.com') || targetUrl.includes('xhslink.com') || targetUrl.includes('rednote.com') || videoUrl.includes('sns-video') || videoUrl.includes('xiaohongshu')) && !isLocalFile;
 
     let customHashtags: string | undefined = undefined;
     if (uploadHistory.video?.sourceId && uploadHistory.facebookPageId) {
@@ -1559,9 +1553,15 @@ export class SyncService {
     const sourcePlatform = uploadHistory.video?.source?.platform;
     const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl, customHashtags);
 
-    if (isMegaLocal) {
+    if (isLocalFile) {
       const localFilePath = videoUrl.replace('local://', '');
-      this.logsService.log('INFO', `Uploading physical video from Mega directly to Facebook...`);
+      this.logsService.log('INFO', `Uploading physical video directly to Facebook via cURL stream...`);
+
+      if (!fs.existsSync(localFilePath) || fs.statSync(localFilePath).size < 10240) {
+        const size = fs.existsSync(localFilePath) ? fs.statSync(localFilePath).size : 0;
+        throw new Error(`Physical video file is empty or corrupted (${size} bytes). Minimum 10 KB required.`);
+      }
+
       fbData = await new Promise((resolve, reject) => {
          const { spawn } = require('child_process');
          const curl = spawn('curl', [
@@ -1581,33 +1581,37 @@ export class SyncService {
                   const parsed = JSON.parse(out);
                   if (parsed.error) reject(new Error(parsed.error.message));
                   else resolve(parsed); 
-               } catch(e) { reject(new Error('Failed to parse Facebook response')); }
+               } catch(e) { reject(new Error('Failed to parse Facebook response: ' + out)); }
             } else reject(new Error(`cURL failed. ${errOut}`));
          });
       });
       // Cleanup local temp file
-      if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+      if (fs.existsSync(localFilePath)) {
+        try { fs.unlinkSync(localFilePath); } catch (_) {}
+      }
       
       // Auto-Delete from Mega.nz Cloud Storage (unless linked to a YouTube Channel for parallel Shorts upload)
-      if (uploadHistory.facebookPage?.youtubeChannelId) {
-        this.logsService.log('INFO', `Retaining Mega.nz video temporarily for parallel YouTube Shorts upload...`);
-      } else {
-        this.logsService.log('INFO', `Auto-Cleaning: Deleting video from Mega.nz to free up space...`);
-        
-        let megaEmail, megaPassword;
-        if (uploadHistory.facebookPage?.userId) {
-          const pageUser = await this.prisma.user.findUnique({ where: { id: uploadHistory.facebookPage.userId } });
-          if (pageUser) {
-            if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
-              this.logsService.log('ERROR', `Mega Cloud credentials missing for user ${pageUser.id}. Cannot auto-delete.`);
-            } else {
-              megaEmail = pageUser.megaEmail;
-              megaPassword = pageUser.megaPassword;
+      if (targetUrl.includes('mega.nz') || targetUrl.includes('mega.io') || uploadHistory.video?.source?.platform === 'MEGA_CLOUD') {
+        if (uploadHistory.facebookPage?.youtubeChannelId) {
+          this.logsService.log('INFO', `Retaining Mega.nz video temporarily for parallel YouTube Shorts upload...`);
+        } else {
+          this.logsService.log('INFO', `Auto-Cleaning: Deleting video from Mega.nz to free up space...`);
+          
+          let megaEmail, megaPassword;
+          if (uploadHistory.facebookPage?.userId) {
+            const pageUser = await this.prisma.user.findUnique({ where: { id: uploadHistory.facebookPage.userId } });
+            if (pageUser) {
+              if (pageUser.role !== 'ADMIN' && (!pageUser.megaEmail || !pageUser.megaPassword)) {
+                this.logsService.log('ERROR', `Mega Cloud credentials missing for user ${pageUser.id}. Cannot auto-delete.`);
+              } else {
+                megaEmail = pageUser.megaEmail;
+                megaPassword = pageUser.megaPassword;
+              }
             }
           }
+          
+          await this.megaService.deleteFile(targetUrl, megaEmail || undefined, megaPassword || undefined);
         }
-        
-        await this.megaService.deleteFile(targetUrl, megaEmail || undefined, megaPassword || undefined);
       }
     } else if (isTiktokOrCdn || isXhsOrRedNote) {
       this.logsService.log('INFO', `Downloading CDN MP4 stream locally with anti-403 headers before uploading to Facebook...`);
@@ -1619,14 +1623,15 @@ export class SyncService {
           try {
             await downloadTikTokVideo(videoUrl, tempPath);
           } catch (err: any) {
-            if (err.response?.status === 403 || err.message.includes('403') || err.message.includes('status code 403')) {
-               this.logsService.log('WARN', 'TikTok CDN returned 403 Forbidden. Falling back to yt-dlp direct download...');
-               const ytDlpCmd = await this.getYtDlpCmd();
-               const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
-               const cmd = `${ytDlpCmd} --impersonate chrome -i ${cookieArg} -o "${tempPath}" "${targetUrl}"`;
-               await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
-            } else {
-               throw err;
+            this.logsService.log('WARN', `TikTok CDN stream failed (${err.message}). Falling back to yt-dlp direct download...`);
+            const ytDlpCmd = await this.getYtDlpCmd();
+            const cookieArg = fs.existsSync('cookies.txt') ? '--cookies cookies.txt' : '';
+            const cmd = `${ytDlpCmd} --impersonate chrome ${cookieArg} -o "${tempPath}" "${targetUrl}"`;
+            try {
+              await execPromise(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
+            } catch (ytErr: any) {
+              const fallbackCmd = `${ytDlpCmd} ${cookieArg} -o "${tempPath}" "${targetUrl}"`;
+              await execPromise(fallbackCmd, { maxBuffer: 1024 * 1024 * 50, timeout: 5 * 60 * 1000 });
             }
           }
 
@@ -1658,7 +1663,11 @@ export class SyncService {
              }
           }
         }
-        this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath}. Uploading physical video directly to Facebook using highly reliable cURL stream...`);
+        if (!fs.existsSync(tempPath) || fs.statSync(tempPath).size < 10240) {
+          const actualSize = fs.existsSync(tempPath) ? fs.statSync(tempPath).size : 0;
+          throw new Error(`TikTok downloaded video file is empty or corrupt (${actualSize} bytes). Minimum 10 KB required.`);
+        }
+        this.logsService.log('INFO', `Downloaded MP4 file to ${tempPath} (${(fs.statSync(tempPath).size / (1024*1024)).toFixed(2)} MB). Uploading physical video directly to Facebook using highly reliable cURL stream...`);
 
         fbData = await new Promise((resolve, reject) => {
            const { spawn } = require('child_process');

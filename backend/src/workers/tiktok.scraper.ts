@@ -325,9 +325,21 @@ export async function downloadTikTokVideo(videoUrl: string, outputPath: string):
   response.data.pipe(writer);
 
   return new Promise((resolve, reject) => {
-    writer.on('finish', () => resolve(outputPath));
+    writer.on('finish', () => {
+      try {
+        const stat = fs.statSync(outputPath);
+        if (stat.size < 10240) {
+          try { fs.unlinkSync(outputPath); } catch (_) {}
+          return reject(new Error(`Downloaded TikTok video is too small (${stat.size} bytes)`));
+        }
+      } catch (e) {
+        return reject(e);
+      }
+      resolve(outputPath);
+    });
     writer.on('error', (err) => {
       writer.close();
+      try { fs.unlinkSync(outputPath); } catch (_) {}
       reject(err);
     });
   });
