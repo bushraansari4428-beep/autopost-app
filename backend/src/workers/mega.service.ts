@@ -81,14 +81,12 @@ export class MegaService {
       stream.pipe(writeStream);
       
       stream.on('end', () => {
-        clearTimeout(timeout);
-        this.logger.log(`Download stream ended: ${tempPath}`);
-        resolve(tempPath);
+        this.logger.log(`Download stream ended (network read complete): ${tempPath}`);
       });
       
       writeStream.on('finish', () => {
         clearTimeout(timeout);
-        this.logger.log(`File write finished: ${tempPath}`);
+        this.logger.log(`File write finished (flushed to disk): ${tempPath}`);
         resolve(tempPath);
       });
 

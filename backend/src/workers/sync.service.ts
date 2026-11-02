@@ -1554,12 +1554,35 @@ export class SyncService {
     const finalDescription = this.formatFacebookCaption(video.description || video.title, sourcePlatform, targetUrl || videoUrl, customHashtags);
 
     if (isLocalFile) {
-      const localFilePath = videoUrl.replace('local://', '');
-      this.logsService.log('INFO', `Uploading physical video directly to Facebook via cURL stream...`);
+      let localFilePath = videoUrl.replace('local://', '');
+      this.logsService.log('INFO', `Validating physical video: ${path.basename(localFilePath)}...`);
 
       if (!fs.existsSync(localFilePath) || fs.statSync(localFilePath).size < 10240) {
         const size = fs.existsSync(localFilePath) ? fs.statSync(localFilePath).size : 0;
         throw new Error(`Physical video file is empty or corrupted (${size} bytes). Minimum 10 KB required.`);
+      }
+
+      // Root-Level Fix: Normalize video for 100% Meta/Facebook Reels compliance
+      // Raw AI videos (Google Flow / Veo / XHS / etc.) frequently contain non-standard NTSC/Rec.601 color matrix (smpte170m),
+      // conflicting color primaries, C2PA manifest boxes, or Level 3.1 buffer mismatches that cause Meta's transcoding
+      // servers to fail with neon green and magenta macroblock decoding corruption across the bottom half of the video.
+      // Re-encoding through standard FFmpeg (libx264, yuv420p, Rec.709, faststart moov) permanently eliminates all green/pink corruption!
+      const normalizedPath = path.join(os.tmpdir(), `norm_${Date.now()}_${Math.floor(Math.random() * 10000)}.mp4`);
+      try {
+        const ffmpegPath = require('ffmpeg-static');
+        if (ffmpegPath) {
+          this.logsService.log('INFO', `Normalizing video stream for 100% Meta Reels compliance (Rec.709 SDR, yuv420p, faststart)...`);
+          const normCmd = `"${ffmpegPath}" -y -i "${localFilePath}" -c:v libx264 -preset veryfast -crf 20 -profile:v high -level 4.1 -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -movflags +faststart -c:a aac -b:a 128k -ar 48000 "${normalizedPath}"`;
+          await execPromise(normCmd, { maxBuffer: 1024 * 1024 * 50, timeout: 3 * 60 * 1000 });
+          if (fs.existsSync(normalizedPath) && fs.statSync(normalizedPath).size > 10240) {
+            try { fs.unlinkSync(localFilePath); } catch (_) {}
+            localFilePath = normalizedPath;
+            this.logsService.log('INFO', `Successfully normalized video (${(fs.statSync(localFilePath).size / (1024 * 1024)).toFixed(2)} MB). Ready for Facebook.`);
+          }
+        }
+      } catch (normErr: any) {
+        this.logger.warn(`Video normalization warning: ${normErr.message}. Proceeding with original file.`);
+        this.logsService.log('WARN', `Video normalization skipped: ${normErr.message}`);
       }
 
       fbData = await new Promise((resolve, reject) => {
